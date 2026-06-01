@@ -1018,6 +1018,17 @@ let nextOid=1, nextPaId=83, nextInvNum=1, nextInvoiceNum=590;
 let filt='all', editOid=null, editInvId=null, ovOid=null, pdPartyId=null;
 let prodSort='qty-desc'; // default sort for Today's Work
 
+// Date format helper - converts YYYY-MM-DD to DDMon format e.g. 01Jun
+function fmtDate(d){
+  if(!d) return '';
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const parts=d.split('-');
+  if(parts.length<3) return d;
+  const day=parts[2];
+  const mon=months[parseInt(parts[1])-1]||'';
+  return day+mon;
+}
+
 // ============================================================
 // SETUP
 // ============================================================
@@ -1271,7 +1282,7 @@ function renderOrders(){
       const total=o.items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
       return `<div style="padding:8px 0;border-bottom:1px solid #f5f5f5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
         <div style="flex:1">
-          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">${invLabel(o.invNum)} · <span style="color:#888;font-weight:400">${o.date}</span></div>
+          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">${invLabel(o.invNum)} · <span style="color:#888;font-weight:400">${fmtDate(o.date)}</span></div>
           <div>${itemsStr}</div>
           ${total>0?`<div style="font-size:11px;color:#888;margin-top:3px">${fmt(total)}</div>`:''}
         </div>
@@ -1831,7 +1842,7 @@ function renderInvoiceList(){
       <td style="color:#bbb;font-size:12px">${idx+1}</td>
       <td style="color:#888;font-size:12px">${invNumLabel(inv.serial)}</td>
       <td style="font-weight:600">${inv.party}</td>
-      <td style="color:#888">${inv.date}</td>
+      <td style="color:#888">${fmtDate(inv.date)}</td>
       <td>${fmt(amt)}</td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
@@ -1867,7 +1878,7 @@ function viewInvoice(invId){
       <div class="inv-to-name" style="font-size:22px;font-weight:700;color:#1a1a1a;margin-bottom:4px">${inv.party}</div>
       <div class="inv-meta" style="text-align:left;font-size:13px;color:#888;line-height:1.8">
         <span><strong>Invoice#</strong> ${invNumLabel(inv.serial)}</span> &nbsp;·&nbsp;
-        <span>Date: ${inv.date}</span>
+        <span>Date: ${fmtDate(inv.date)}</span>
       </div>
     </div>
     <table class="inv-table">
@@ -1935,7 +1946,7 @@ function openPartyDetail(id){
       const amt=(inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0);
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0">
         <div>
-          <div style="font-size:13px">${invNumLabel(inv.serial)} &nbsp;<span style="font-size:12px;color:#999">${inv.date}</span></div>
+          <div style="font-size:13px">${invNumLabel(inv.serial)} &nbsp;<span style="font-size:12px;color:#999">${fmtDate(inv.date)}</span></div>
           <div style="font-size:12px;color:#999">${(inv.items||[]).map(i=>i.color+' '+i.shape+' '+fmtKg(i.kg)).join(' · ')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -1962,7 +1973,7 @@ function printPartyLedger(){
   </tr>`).join('');
   const invRows=pInvoices.map(inv=>{
     const amt=(inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0);
-    return `<tr><td>${inv.date}</td><td>${invNumLabel(inv.serial)}</td>
+    return `<tr><td>${fmtDate(inv.date)}</td><td>${invNumLabel(inv.serial)}</td>
       <td>${(inv.items||[]).map(i=>i.color+' '+i.shape).join(', ')}</td>
       <td style="text-align:right">${(inv.items||[]).map(i=>fmtKg(i.kg)).join(', ')}</td>
       <td style="text-align:right">${fmt(amt)}</td></tr>`;
@@ -2372,7 +2383,7 @@ function printPendingPOS(mode){
     </div>`).join('');
     posContent=`
       <hr class="pos-divider">
-      <div class="pos-row"><span>Item Pending</span><span>${today().slice(5)}</span></div>
+      <div class="pos-row"><span>Item Pending</span><span>${fmtDate(today())}</span></div>
       <hr class="pos-divider">
       ${rows}
       <hr class="pos-divider">
@@ -2415,7 +2426,7 @@ function printPendingPOS(mode){
 
     posContent=`
       <hr class="pos-divider">
-      <div class="pos-row"><span>Party Pending</span><span>${today().slice(5)}</span></div>
+      <div class="pos-row"><span>Party Pending</span><span>${fmtDate(today())}</span></div>
       <hr class="pos-divider">
       ${partySections}
       <div class="pos-row bold"><span>GRAND TOTAL</span><span>${grandTotal.toFixed(2)}</span></div>
@@ -2466,7 +2477,7 @@ function printOrderPOS(id){
   const posContent=`
     <div class="pos-title">${o.party}</div>
     <hr class="pos-divider">
-    <div class="pos-row"><span>${serialNum}</span><span>${o.date.slice(5)}</span></div>
+    <div class="pos-row"><span>${serialNum}</span><span>${fmtDate(o.date)}</span></div>
     <hr class="pos-divider">
     ${rows}
     <hr class="pos-divider">
@@ -2505,12 +2516,12 @@ function printPOS(){
     const hasAmt=parseFloat(i.price||0)>0;
     const kg=parseFloat(i.kg).toFixed(2);
     const rate=parseFloat(i.price||0).toFixed(0);
-    return `<div style="margin:6px 0;border-bottom:1px dotted #ccc;padding-bottom:4px">
-      <div style="font-size:15px;font-weight:700">${i.color} ${i.shape}</div>
-      ${alias?`<div style="font-size:14px;font-weight:700;color:#000">${alias}</div>`:''}
-      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin-top:2px">
-        <span>Kg: ${kg}</span>
-        ${hasAmt?`<span>@${rate} = ${amt}</span>`:''}
+    const colorAlias=alias?i.color+'/'+alias:i.color;
+    return `<div style="margin:2px 0">
+      <div style="font-size:15px;font-weight:700">${colorAlias} ${i.shape}</div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700">
+        <span>${kg}kg</span>
+        ${hasAmt?`<span>@${rate}=${amt}</span>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2520,7 +2531,7 @@ function printPOS(){
   document.getElementById('pos-inv-content').innerHTML=`
     <div class="pos-title">${inv.party}</div>
     <hr class="pos-divider">
-    <div class="pos-row"><span>${serialNum}</span><span>${inv.date.slice(5)}</span></div>
+    <div class="pos-row"><span>${serialNum}</span><span>${fmtDate(inv.date)}</span></div>
     <hr class="pos-divider">
     ${itemRows}
     <hr class="pos-divider">
@@ -2531,9 +2542,9 @@ function printPOS(){
     <div style="height:20mm"></div>
   `;
   const posContent=document.getElementById('pos-inv-content').innerHTML;
-  const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
+  const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:72mm;padding:2mm 3mm}div{word-break:break-word}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:74mm;padding:2mm 4mm 2mm 2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
@@ -3185,7 +3196,7 @@ function shareInvWhatsApp(invId){
   const line='- - - - - - - - - - - - - -';
   let msg=inv.party+'\n';
   msg+=line+'\n';
-  msg+=serialNum+'     '+inv.date.slice(5)+'\n';
+  msg+=serialNum+'     '+fmtDate(inv.date)+'\n';
   msg+=line+'\n';
   items.forEach(i=>{
     const kg=parseFloat(i.kg).toFixed(2);
@@ -3212,7 +3223,7 @@ function shareInvoiceWhatsApp(){
   const line = '- - - - - - - - - - - - - -';
   let msg = inv.party+'\n';
   msg += line+'\n';
-  msg += serialNum+'     '+inv.date.slice(5)+'\n';
+  msg += serialNum+'     '+fmtDate(inv.date)+'\n';
   msg += line+'\n';
   items.forEach(i=>{
     const kg=parseFloat(i.kg).toFixed(2);
@@ -3263,7 +3274,7 @@ function shareOrderWhatsApp(orderId){
   const line = '- - - - - - - - - - - - - -';
   let msg = o.party+'\n';
   msg += line+'\n';
-  msg += serialNum+'     '+o.date.slice(5)+'\n';
+  msg += serialNum+'     '+fmtDate(o.date)+'\n';
   msg += line+'\n';
   sortedItems.forEach(i=>{
     msg += i.color+' '+i.shape+'  '+parseFloat(i.kg).toFixed(2)+'\n';
@@ -3387,7 +3398,7 @@ function sharePendingWhatsApp(mode){
       return net>0.001?{color:v.color,shape:v.shape,net}:null;
     }).filter(Boolean).sort(numSort);
     const totalNet=items.reduce((s,i)=>s+i.net,0);
-    msg='*Item Pending*  '+today().slice(5)+'\n'+line+'\n';
+    msg='*Item Pending*  '+fmtDate(today())+'\n'+line+'\n';
     items.forEach(i=>{ msg+=i.color+' '+i.shape+'  '+i.net.toFixed(2)+'\n'; });
     msg+=line+'\nTOTAL  '+totalNet.toFixed(2)+'\n';
   } else {
@@ -3401,7 +3412,7 @@ function sharePendingWhatsApp(mode){
       });
     });
     let grandTotal=0;
-    msg='*Party Pending*  '+today().slice(5)+'\n';
+    msg='*Party Pending*  '+fmtDate(today())+'\n';
     Object.entries(partyMap).forEach(([party,itemMap])=>{
       const pi=invByPartyItem[party]||{};
       const netItems=Object.values(itemMap).map(it=>{
