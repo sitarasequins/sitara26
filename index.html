@@ -2502,15 +2502,13 @@ function printPOS(){
     const amt=Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0));
     const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
     const alias=cObj&&typeof cObj==='object'&&cObj.alias?cObj.alias:'';
-    return `<div class="pos-item-row" style="display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0">
-      <div style="flex:1">
-        <div style="font-size:15px;font-weight:700">${i.color} ${i.shape}</div>
-        ${alias?`<div style="font-size:12px;color:#555">${alias}</div>`:''}
+    const hasAmt=parseFloat(i.price||0)>0;
+    return `<div style="margin:5px 0">
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700">
+        <span>${i.color} ${i.shape}</span>
+        <span style="white-space:nowrap;margin-left:6px">${parseFloat(i.kg).toFixed(2)}${hasAmt?' '+parseFloat(i.price||0).toFixed(0)+' '+amt:''}</span>
       </div>
-      <div style="text-align:right;flex-shrink:0;min-width:120px">
-        <span style="font-size:15px">${parseFloat(i.kg).toFixed(2)}</span>
-        ${parseFloat(i.price||0)>0?`<span style="font-size:15px"> ${parseFloat(i.price||0).toFixed(0)} </span><span style="font-size:15px;font-weight:700">${amt}</span>`:''}
-      </div>
+      ${alias?`<div style="font-size:14px;font-weight:600;color:#333">${alias}</div>`:''}
     </div>`;
   }).join('');
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
@@ -2532,7 +2530,7 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-items-hdr{display:flex;font-size:19px;font-weight:700;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:4px}.pos-item-row{display:flex;font-size:15px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-item-row{display:flex;font-size:15px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:52px;text-align:right;flex-shrink:0}.pos-col-rate{width:58px;text-align:right;flex-shrink:0}.pos-col-amt{width:66px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin:5px 0}.pos-col-item{flex:1;padding-right:6px}.pos-col-kg{text-align:right;flex-shrink:0}.pos-col-rate{text-align:right;flex-shrink:0;padding:0 4px}.pos-col-amt{text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
