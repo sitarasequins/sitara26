@@ -51,33 +51,6 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#1a1a1a;font-size:14px}
 :root{--bg:#fff;--bg2:#f5f5f5;--bg3:#ececec;--border:#e0e0e0;--border2:#ccc;--text:#1a1a1a;--text2:#555;--text3:#999;--blue:#2563eb;--blue-bg:#eff6ff;--blue-border:#bfdbfe;--radius:8px;--radius-lg:12px}
-/* Setup screen */
-#setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:#f5f5f5}
-.setup-box{background:#fff;border-radius:16px;padding:32px;max-width:440px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,0.10)}
-.setup-logo{font-size:22px;font-weight:700;margin-bottom:4px}
-.setup-logo span{font-weight:400;color:#999}
-.setup-sub{font-size:13px;color:#888;margin-bottom:24px}
-.setup-step{background:#f8f8f8;border-radius:10px;padding:14px 16px;margin-bottom:12px;font-size:13px;line-height:1.6;color:#444}
-.setup-step b{color:#1a1a1a}
-.setup-step code{background:#e8e8e8;padding:1px 6px;border-radius:4px;font-size:12px;font-family:monospace}
-.setup-field{margin-bottom:14px}
-.setup-field label{display:block;font-size:12px;font-weight:500;color:#666;margin-bottom:5px}
-.setup-field input{width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none;transition:border .2s}
-.setup-field input:focus{border-color:#2563eb}
-.setup-btn{width:100%;padding:11px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px}
-.setup-btn:hover{background:#1d4ed8}
-.setup-err{color:#dc2626;font-size:12px;margin-top:8px;display:none}
-/* Setup screen */
-#setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%)}
-.setup-box{background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);text-align:center}
-.setup-logo{font-size:26px;font-weight:800;color:#1e3a5f;margin-bottom:4px}
-.setup-logo span{color:#2563eb}
-.setup-sub{font-size:13px;color:#999;margin-bottom:28px}
-.setup-field input{width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px;outline:none;text-align:center;letter-spacing:4px;box-sizing:border-box;transition:border .2s}
-.setup-field input:focus{border-color:#2563eb}
-.setup-btn{width:100%;padding:13px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px;letter-spacing:1px}
-.setup-btn:hover{background:#1d4ed8}
-.setup-err{color:#dc2626;font-size:13px;margin-top:10px;display:none}
 /* App */
 #app{display:none;max-width:1100px;margin:0 auto;padding:16px}
 .topbar-app{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
@@ -285,21 +258,8 @@ tr:hover td{background:#fafafa}
 </head>
 <body>
 
-<!-- ===== SETUP SCREEN ===== -->
-<div id="setup-screen">
-  <div class="setup-box">
-    <div class="setup-logo">Sitara <span>Sequins</span></div>
-    <div class="setup-sub">Enter password to continue</div>
-    <div class="setup-field">
-      <input type="password" id="setup-pw" placeholder="••••••" onkeydown="if(event.key==='Enter')doSetup()">
-    </div>
-    <button class="setup-btn" onclick="doSetup()">OPEN APP →</button>
-    <div class="setup-err" id="setup-err">❌ Wrong password. Try again.</div>
-  </div>
-</div>
-
 <!-- ===== MAIN APP ===== -->
-<div id="app" style="display: none;">
+<div id="app" style="display: block;">
   <div class="topbar-app">
     <div style="display:flex;align-items:center;gap:10px">
       <div class="app-title">Sitara <span>Sequins</span></div>
@@ -1120,8 +1080,6 @@ function saveAll(){
 // APP START
 // ============================================================
 function startApp(){
-  const ss=document.getElementById('setup-screen');
-  if(ss) ss.style.display='none';
   document.getElementById('app').style.display='block';
   renderAll();
   setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
@@ -1130,16 +1088,14 @@ function startApp(){
 window.onload = function(){
   ADMIN_PW = '786';
   // FORCE CLEAR old data - version stamp
-  const DATA_VER = 'v20260601_v2';
+  const DATA_VER = 'v20260601_v3';
   if(localStorage.getItem('sitara_ver') !== DATA_VER){
     localStorage.clear();
     localStorage.setItem('sitara_ver', DATA_VER);
   }
   loadFromStorage();
   // Show password screen
-  document.getElementById('setup-screen').style.display='flex';
-  document.getElementById('app').style.display='none';
-  setTimeout(()=>{ const el=document.getElementById('setup-pw'); if(el)el.focus(); }, 300);
+  startApp();
   setTimeout(async function(){
     if(window._firebaseReady && window._firestore){
       try{
