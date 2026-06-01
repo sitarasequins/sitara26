@@ -1790,7 +1790,10 @@ function renderInvoiceList(){
       <td style="font-weight:600">${inv.party}</td>
       <td style="color:#888">${fmtDate(inv.date)}</td>
       <td>${fmt(amt)}</td>
-      <td><input type="text" value="${(inv.courier||'').replace(/"/g,'&quot;')}" placeholder="courier..." data-invid="${inv.id}" style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:120px" onblur="saveCourier(this.dataset.invid,this.value)"></td>
+      <td style="white-space:nowrap">
+  <input type="text" value="${(inv.courier||'').replace(/"/g,'&quot;')}" placeholder="courier..." id="courier-${inv.id}" style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:110px">
+  <button onclick="saveCourier(${inv.id},document.getElementById('courier-'+${inv.id}).value)" style="font-size:13px;padding:3px 7px;border:1px solid #16a34a;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;margin-left:2px">✓</button>
+</td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
         <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">Print</button>
