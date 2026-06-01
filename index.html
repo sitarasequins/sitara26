@@ -1088,13 +1088,12 @@ function startApp(){
 window.onload = function(){
   ADMIN_PW = '786';
   // FORCE CLEAR old data - version stamp
-  const DATA_VER = 'v20260601_v3';
+  const DATA_VER = 'v20260601_v4';
   if(localStorage.getItem('sitara_ver') !== DATA_VER){
     localStorage.clear();
     localStorage.setItem('sitara_ver', DATA_VER);
   }
   loadFromStorage();
-  // Show password screen
   startApp();
   setTimeout(async function(){
     if(window._firebaseReady && window._firestore){
