@@ -1790,7 +1790,7 @@ function renderInvoiceList(){
       <td style="font-weight:600">${inv.party}</td>
       <td style="color:#888">${fmtDate(inv.date)}</td>
       <td>${fmt(amt)}</td>
-      <td><input type="text" value="${inv.courier||''}" placeholder="courier..." style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:120px" onchange="saveCourier(${inv.id},this.value)" onblur="saveCourier(${inv.id},this.value)"></td>
+      <td><input type="text" value="${(inv.courier||'').replace(/"/g,'&quot;')}" placeholder="courier..." data-invid="${inv.id}" style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:120px" onblur="saveCourier(this.dataset.invid,this.value)"></td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
         <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">Print</button>
