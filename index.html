@@ -1786,11 +1786,11 @@ function renderInvoiceList(){
     const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
     grand+=amt;
     return `<tr>
-      <td style="color:#bbb;font-size:12px">${idx+1}</td>
       <td style="color:#888;font-size:12px">${invNumLabel(inv.serial)}</td>
       <td style="font-weight:600">${inv.party}</td>
       <td style="color:#888">${fmtDate(inv.date)}</td>
       <td>${fmt(amt)}</td>
+      <td><input type="text" value="${inv.courier||''}" placeholder="courier..." style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:120px" onchange="saveCourier(${inv.id},this.value)" onblur="saveCourier(${inv.id},this.value)"></td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
         <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">Print</button>
@@ -2316,7 +2316,7 @@ function printPendingPOS(mode){
     });
     const items=Object.values(ordByItem).map(v=>{
       const net=v.totalKg-(invByItem[v.color+'||'+v.shape]||0);
-      return net>0.001?{color:v.color,shape:v.shape,net}:null;
+      return net>=1.0?{color:v.color,shape:v.shape,net}:null;
     }).filter(Boolean).sort(numSort);
     const totalNet=items.reduce((s,i)=>s+i.net,0);
     function colorDisplayP(colorCode){
@@ -2354,7 +2354,7 @@ function printPendingPOS(mode){
       const pi=invByPartyItem[party]||{};
       const netItems=Object.values(itemMap).map(it=>{
         const net=it.ordKg-(pi[it.color+'||'+it.shape]||0);
-        return net>0.001?{color:it.color,shape:it.shape,net}:null;
+        return net>=1.0?{color:it.color,shape:it.shape,net}:null;
       }).filter(Boolean).sort(numSort);
       if(!netItems.length)return '';
       const partyTotal=netItems.reduce((s,i)=>s+i.net,0);
@@ -2469,7 +2469,7 @@ function printPOS(){
     ${itemRows}
     <hr class="pos-divider">
     <hr class="pos-divider">
-    <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.remarks?' / '+inv.remarks:''}</div>
+    <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
     <hr class="pos-divider">
     <div style="height:20mm"></div>
   `;
@@ -3327,7 +3327,7 @@ function sharePendingWhatsApp(mode){
     }));
     const items=Object.values(ordByItem).map(v=>{
       const net=v.totalKg-(invByItem[v.color+'||'+v.shape]||0);
-      return net>0.001?{color:v.color,shape:v.shape,net}:null;
+      return net>=1.0?{color:v.color,shape:v.shape,net}:null;
     }).filter(Boolean).sort(numSort);
     const totalNet=items.reduce((s,i)=>s+i.net,0);
     msg='*Item Pending*  '+fmtDate(today())+'\n'+line+'\n';
@@ -3349,7 +3349,7 @@ function sharePendingWhatsApp(mode){
       const pi=invByPartyItem[party]||{};
       const netItems=Object.values(itemMap).map(it=>{
         const net=it.ordKg-(pi[it.color+'||'+it.shape]||0);
-        return net>0.001?{color:it.color,shape:it.shape,net}:null;
+        return net>=1.0?{color:it.color,shape:it.shape,net}:null;
       }).filter(Boolean).sort(numSort);
       if(!netItems.length)return;
       const partyTotal=netItems.reduce((s,i)=>s+i.net,0);
