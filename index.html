@@ -1709,11 +1709,11 @@ function delOrder(id){
 function addInvItemRow(item=null){
   const c=document.getElementById('inv-items-container');
   const d=document.createElement('div');d.className='item-row';
-  const selC=item?item.color:(colors.length?colorName(colors[0]):'');
-  const selS=item?item.shape:(shapes.length?shapes[0]:'');
+  const selC=item?item.color:'';
+  const selS=item?item.shape:'';
   d.innerHTML=makeCombo(colors,selC,'color-combo')+makeCombo(shapes,selS,'shape-combo')+
-    `<input type="number" min="0" step="0.01" value="${item?item.kg:1}" oninput="updateInvFormTotal()">
-    <input type="number" min="0" value="${item?item.price:0}" oninput="updateInvFormTotal()">
+    `<input type="number" min="0" step="0.01" value="${item?item.kg:''}" placeholder="kg" oninput="updateInvFormTotal()">
+    <input type="number" min="0" value="${item?item.price:''}" placeholder="rate" oninput="updateInvFormTotal()">
     <button class="item-del" onclick="this.parentElement.remove();updateInvFormTotal()">✕</button>`;
   c.appendChild(d);updateInvFormTotal();
 }
@@ -1753,7 +1753,7 @@ function pickPartyCombo(idx,e){
 
 function updateInvFormTotal(){
   const items=getInvItems();
-  const t=items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
+  const t=Math.round(items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0));
   const w=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
   document.getElementById('inv-form-total').textContent=fmt(t);
   const wEl=document.getElementById('inv-form-weight');
@@ -1764,7 +1764,7 @@ function resetInvForm(){
   document.getElementById('inv-form-title').textContent='New Invoice';
   document.getElementById('save-inv-btn').textContent='Save invoice';
   const pInput=document.getElementById('if-party-input');
-  if(pInput){pInput.value=parties.length?parties[0].name:'';pInput.disabled=false;}
+  if(pInput){pInput.value='';pInput.disabled=false;}
   document.getElementById('if-date').value=today();
   document.getElementById('inv-items-container').innerHTML='';
   const rem=document.getElementById('if-remarks');
@@ -1797,7 +1797,7 @@ function saveInvoice(){
   if(!party||!items.length){alert('Select a party and add at least one item.');return;}
   if(editInvId){
     const inv=invoices.find(x=>x.id===editInvId);
-    if(inv){inv.date=date;inv.items=items;inv.remarks=remarks;}
+    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;}
   } else {
     // Always use max serial + 1 to avoid duplicates
     const maxSerial=invoices.reduce((m,i)=>Math.max(m,i.serial||0),0);
@@ -1825,7 +1825,7 @@ function renderInvoiceList(){
   const sorted=[...filtInvoices].sort((a,b)=>a.serial-b.serial);
   let grand=0;
   tbody.innerHTML=sorted.map((inv,idx)=>{
-    const amt=(inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0);
+    const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
     grand+=amt;
     return `<tr>
       <td style="color:#bbb;font-size:12px">${idx+1}</td>
@@ -1844,7 +1844,7 @@ function renderInvoiceList(){
   document.getElementById('si-total').textContent=filtInvoices.length;
   document.getElementById('si-amount').textContent=fmt(grand);
   const partyInput=document.getElementById('if-party-input');
-  if(partyInput&&!editInvId) partyInput.value=parties.length?parties[0].name:'';
+  if(partyInput&&!editInvId) partyInput.value='';
 }
 
 // ============================================================
@@ -1861,7 +1861,7 @@ function viewInvoice(invId){
     <td style="text-align:right">${fmt(i.price)}/kg</td>
     <td style="text-align:right">${fmt(i.kg*i.price)}</td>
   </tr>`).join('');
-  const grand=items.reduce((s,i)=>s+(i.kg*i.price),0);
+  const grand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
   document.getElementById('inv-content').innerHTML=`
     <div style="margin-bottom:18px">
       <div class="inv-to-name" style="font-size:22px;font-weight:700;color:#1a1a1a;margin-bottom:4px">${inv.party}</div>
@@ -2490,7 +2490,7 @@ function printPOS(){
   const inv=invoices.find(x=>x.id===currentPosInvId);if(!inv)return;
   // Build POS content
   const items=inv.items||[];
-  const grand=items.reduce((s,i)=>s+(i.kg*i.price),0);
+  const grand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
   const dashes='--------------------------------';
   // Helper to get color display name with alias
   function colorDisplay(colorCode){
@@ -2503,12 +2503,15 @@ function printPOS(){
     const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
     const alias=cObj&&typeof cObj==='object'&&cObj.alias?cObj.alias:'';
     const hasAmt=parseFloat(i.price||0)>0;
-    return `<div style="margin:5px 0">
-      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700">
-        <span>${i.color} ${i.shape}</span>
-        <span style="white-space:nowrap;margin-left:6px">${parseFloat(i.kg).toFixed(2)}${hasAmt?' '+parseFloat(i.price||0).toFixed(0)+' '+amt:''}</span>
+    const kg=parseFloat(i.kg).toFixed(2);
+    const rate=parseFloat(i.price||0).toFixed(0);
+    return `<div style="margin:6px 0;border-bottom:1px dotted #ccc;padding-bottom:4px">
+      <div style="font-size:15px;font-weight:700">${i.color} ${i.shape}</div>
+      ${alias?`<div style="font-size:14px;font-weight:700;color:#000">${alias}</div>`:''}
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin-top:2px">
+        <span>Kg: ${kg}</span>
+        ${hasAmt?`<span>@${rate} = ${amt}</span>`:''}
       </div>
-      ${alias?`<div style="font-size:14px;font-weight:600;color:#333">${alias}</div>`:''}
     </div>`;
   }).join('');
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
@@ -2530,7 +2533,7 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin:5px 0}.pos-col-item{flex:1;padding-right:6px}.pos-col-kg{text-align:right;flex-shrink:0}.pos-col-rate{text-align:right;flex-shrink:0;padding:0 4px}.pos-col-amt{text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:72mm;padding:2mm 3mm}div{word-break:break-word}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
