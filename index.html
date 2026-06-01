@@ -1766,6 +1766,14 @@ function saveInvoice(){
   resetInvForm();
   saveAll();renderInvoiceList();
 }
+function saveCourier(id,val){
+  const inv=invoices.find(x=>x.id==id);
+  if(inv){
+    inv.courier=val.trim();
+    saveAll();
+    renderInvoiceList();
+  }
+}
 function delInvoice(invId){
   if(!confirm('Delete this invoice?'))return;
   invoices=invoices.filter(x=>x.id!==invId);
