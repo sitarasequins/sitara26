@@ -1037,16 +1037,8 @@ function showReconnect(){}
 const APP_PW = '786';
 
 function doSetup(){
-  const pw = document.getElementById('setup-pw').value;
-  if(pw === APP_PW){
-    document.getElementById('setup-screen').style.display='none';
-    startApp();
-  } else {
-    const err = document.getElementById('setup-err');
-    err.style.display='block';
-    document.getElementById('setup-pw').value='';
-    document.getElementById('setup-pw').focus();
-  }
+  document.getElementById('setup-screen').style.display='none';
+  startApp();
 }
 
 // ============================================================
