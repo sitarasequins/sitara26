@@ -2517,13 +2517,8 @@ function printPOS(){
     const kg=parseFloat(i.kg).toFixed(2);
     const rate=parseFloat(i.price||0).toFixed(0);
     const colorAlias=alias?i.color+'/'+alias:i.color;
-    return `<div style="margin:2px 0">
-      <div style="font-size:15px;font-weight:700">${colorAlias} ${i.shape}</div>
-      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700">
-        <span>${kg}kg</span>
-        ${hasAmt?`<span>@${rate}=${amt}</span>`:''}
-      </div>
-    </div>`;
+    const calc=hasAmt?` ${kg}x${rate}=${amt}`:` ${kg}`;
+    return `<div style="font-size:14px;font-weight:700;margin:2px 0;word-break:break-all">${colorAlias} ${i.shape}${calc}</div>`;
   }).join('');
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
   // Format serial as plain number only e.g. 0001
@@ -2544,7 +2539,7 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:74mm;padding:2mm 4mm 2mm 2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:14px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:18px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin:3px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
