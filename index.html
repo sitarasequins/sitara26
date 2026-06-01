@@ -1709,8 +1709,8 @@ function delOrder(id){
 function addInvItemRow(item=null){
   const c=document.getElementById('inv-items-container');
   const d=document.createElement('div');d.className='item-row';
-  const selC=item?item.color:(colors[0]||'');
-  const selS=item?item.shape:(shapes[0]||'');
+  const selC=item?item.color:(colors.length?colorName(colors[0]):'');
+  const selS=item?item.shape:(shapes.length?shapes[0]:'');
   d.innerHTML=makeCombo(colors,selC,'color-combo')+makeCombo(shapes,selS,'shape-combo')+
     `<input type="number" min="0" step="0.01" value="${item?item.kg:1}" oninput="updateInvFormTotal()">
     <input type="number" min="0" value="${item?item.price:0}" oninput="updateInvFormTotal()">
@@ -2450,10 +2450,17 @@ function printOrderPOS(id){
     if(c && typeof c==='object' && c.alias) return colorCode+' ('+c.alias+')';
     return colorCode;
   }
-  const rows=sortedItems.map(i=>`<div class="pos-item-row">
-    <div class="pos-col-item">${colorDisplayO(i.color)} ${i.shape}</div>
-    <div class="pos-col-kg">${parseFloat(i.kg).toFixed(2)}</div>
-  </div>`).join('');
+  const rows=sortedItems.map(i=>{
+    const cObj2=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
+    const alias2=cObj2&&typeof cObj2==='object'&&cObj2.alias?cObj2.alias:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0">
+      <div style="flex:1">
+        <div style="font-size:20px;font-weight:700">${i.color} ${i.shape}</div>
+        ${alias2?`<div style="font-size:14px;color:#555">${alias2}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;font-size:20px;font-weight:700">${parseFloat(i.kg).toFixed(2)}</div>
+    </div>`;
+  }).join('');
   const totalKg=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
   const serialNum=String(o.invNum).padStart(4,'0');
   const posContent=`
@@ -2493,11 +2500,17 @@ function printPOS(){
   }
   const itemRows=items.map(i=>{
     const amt=Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0));
-    return `<div class="pos-item-row">
-      <div class="pos-col-item">${colorDisplay(i.color)} ${i.shape}</div>
-      <div class="pos-col-kg">${parseFloat(i.kg).toFixed(2)}</div>
-      <div class="pos-col-rate">${parseFloat(i.price||0).toFixed(0)}</div>
-      <div class="pos-col-amt">${amt>0?amt:''}</div>
+    const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
+    const alias=cObj&&typeof cObj==='object'&&cObj.alias?cObj.alias:'';
+    return `<div class="pos-item-row" style="display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:700">${i.color} ${i.shape}</div>
+        ${alias?`<div style="font-size:12px;color:#555">${alias}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;min-width:120px">
+        <span style="font-size:15px">${parseFloat(i.kg).toFixed(2)}</span>
+        ${parseFloat(i.price||0)>0?`<span style="font-size:15px"> ${parseFloat(i.price||0).toFixed(0)} </span><span style="font-size:15px;font-weight:700">${amt}</span>`:''}
+      </div>
     </div>`;
   }).join('');
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
