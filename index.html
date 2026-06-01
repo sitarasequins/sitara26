@@ -3152,7 +3152,8 @@ function shareInvWhatsApp(invId){
   if(totalAmt>0) msg+='AMT    '+Math.round(totalAmt)+'\n';
   msg+=line+'\n';
   if(inv.remarks) msg+=inv.remarks+'\n';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  if(inv.courier) msg+=inv.courier+'\n';
+  ps://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
 
 function shareInvoiceWhatsApp(){
