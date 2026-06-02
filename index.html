@@ -1,0 +1,3520 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sitara Sequins</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCCowfX1uhxB4UMGmeV5fUhnw-KBGrrUxA",
+    authDomain: "sitara-sequins.firebaseapp.com",
+    projectId: "sitara-sequins",
+    storageBucket: "sitara-sequins.firebasestorage.app",
+    messagingSenderId: "177449046833",
+    appId: "1:177449046833:web:146a9f8e0719593e06d610"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const DATA_DOC = doc(db, 'sitara26', 'appdata');
+  const INV_DOC  = doc(db, 'sitara26', 'invoices_backup');
+
+  // Expose to global scope for use by app JS
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, DATA_DOC, INV_DOC };
+  window._firebaseReady = true;
+
+  // Listen for real-time updates from other devices
+  onSnapshot(DATA_DOC, (snap) => {
+    if(!snap.exists()) return;
+    if(window._skipNextSnapshot){ window._skipNextSnapshot=false; return; }
+    const data = snap.data();
+    if(data){
+      window.colors       = data.colors       || window.colors;
+      window.shapes       = data.shapes       || window.shapes;
+      window.orders       = data.orders       || window.orders;
+      window.parties      = data.parties      || window.parties;
+      window.invoices     = data.invoices     || window.invoices;
+      window.nextOid      = data.nextOid      || window.nextOid;
+      window.nextPaId     = data.nextPaId     || window.nextPaId;
+      window.nextInvNum   = data.nextInvNum   || window.nextInvNum;
+      window.nextInvoiceNum = data.nextInvoiceNum || window.nextInvoiceNum;
+      if(window.renderAll) window.renderAll();
+      window.setSyncStatus('saved','☁ Synced');
+      setTimeout(()=>window.setSyncStatus('','☁ Cloud'), 2000);
+    }
+  });
+</script>
+<link rel="stylesheet" href="./Sitara Sequins_files/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#1a1a1a;font-size:17px}
+:root{--bg:#fff;--bg2:#f5f5f5;--bg3:#ececec;--border:#e0e0e0;--border2:#ccc;--text:#1a1a1a;--text2:#555;--text3:#999;--blue:#2563eb;--blue-bg:#eff6ff;--blue-border:#bfdbfe;--radius:8px;--radius-lg:12px}
+/* App */
+#app{display:none;max-width:1100px;margin:0 auto;padding:16px}
+.topbar-app{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.app-title{font-size:16px;font-weight:700}
+.app-title span{font-weight:400;color:#999}
+.sync-status{font-size:11px;padding:3px 10px;border-radius:99px;background:#f0f0f0;color:#888}
+.sync-status.saving{background:#fffbeb;color:#92400e}
+.sync-status.saved{background:#f0fdf4;color:#166534}
+.sync-status.error{background:#fef2f2;color:#dc2626}
+.tabs{display:flex;border-bottom:1.5px solid #e0e0e0;margin-bottom:16px;overflow-x:auto;gap:0}
+.tab{font-size:13px;padding:9px 16px;cursor:pointer;color:#888;border-bottom:2.5px solid transparent;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap;font-weight:500;transition:color .15s}
+.tab.active{color:#2563eb;border-bottom-color:#2563eb}
+.tab:hover{color:#1a1a1a}
+.view{display:none}
+.view.active{display:block}
+/* Buttons */
+.btn{height:32px;padding:0 14px;font-size:13px;border-radius:7px;border:1.5px solid #ddd;background:#fff;color:#333;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-weight:500;transition:background .15s}
+.btn:hover{background:#f5f5f5}
+.btn-primary{background:#2563eb;border-color:#2563eb;color:#fff}
+.btn-primary:hover{background:#1d4ed8}
+.btn-danger{color:#dc2626;border-color:#fecaca}
+.btn-danger:hover{background:#fef2f2}
+.btn-sm{height:26px;font-size:11px;padding:0 10px}
+/* Stats */
+.stat{background:#fff;border-radius:8px;padding:10px 13px;border:1px solid #e8e8e8}
+.stat-label{font-size:11px;color:#999;margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em}
+.stat-val{font-size:18px;font-weight:700;color:#1a1a1a}
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1.5px solid #e8e8e8}
+td{padding:9px 8px;border-bottom:1px solid #f0f0f0;color:#1a1a1a;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+/* Badges */
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px}
+.badge-pending{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+.badge-delivered{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+/* Split layout */
+.split{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+@media(max-width:720px){.split{grid-template-columns:1fr}}
+.form-panel{background:#fff;border-radius:12px;padding:16px;position:sticky;top:12px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.form-panel h4{font-size:14px;font-weight:600;margin-bottom:14px;color:#1a1a1a}
+/* Form fields */
+.field{margin-bottom:11px}
+.field label{display:block;font-size:12px;font-weight:500;color:#666;margin-bottom:4px}
+.field input,.field select{width:100%;font-size:13px;padding:7px 10px;border-radius:7px;border:1.5px solid #ddd;background:#fff;color:#1a1a1a;outline:none;transition:border .15s}
+.field input:focus,.field select:focus{border-color:#2563eb}
+/* Item rows */
+.item-hdr{display:grid;grid-template-columns:1fr 1fr 58px 58px 60px 24px;gap:5px;margin-bottom:4px}
+.item-hdr span{font-size:11px;color:#999;font-weight:500}
+.item-row{display:grid;grid-template-columns:1fr 1fr 62px 62px 24px;gap:5px;margin-bottom:6px;align-items:center}
+.item-row select,.item-row input{font-size:12px;padding:5px 7px;border-radius:7px;border:1.5px solid #ddd;background:#fff;color:#1a1a1a;width:100%}
+.item-del{background:none;border:none;cursor:pointer;color:#bbb;font-size:14px;padding:2px;border-radius:4px}
+.item-del:hover{color:#dc2626;background:#fef2f2}
+.add-item-btn{font-size:12px;color:#2563eb;background:none;border:none;cursor:pointer;padding:3px 0;margin-top:2px;font-weight:500}
+/* Filter buttons */
+.fbtn{font-size:12px;padding:4px 12px;border-radius:99px;border:1.5px solid #ddd;background:none;color:#888;cursor:pointer;font-weight:500}
+.fbtn.active{border-color:#2563eb;color:#2563eb;background:#eff6ff}
+/* Tags */
+.tag-section{margin-bottom:22px}
+.tag-section h4{font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:10px}
+.tag-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;min-height:28px}
+.tag{display:inline-flex;align-items:center;gap:5px;background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:99px;padding:4px 12px;font-size:13px;color:#333;font-weight:500}
+.tag-del{background:none;border:none;cursor:pointer;color:#bbb;font-size:11px;line-height:1;padding:0;margin-left:2px}
+.tag-del:hover{color:#dc2626}
+.tag-add-row{display:flex;gap:7px}
+.tag-add-row input{flex:1;font-size:13px;padding:7px 10px;border-radius:7px;border:1.5px solid #ddd;background:#fff;color:#1a1a1a;outline:none}
+.tag-add-row input:focus{border-color:#2563eb}
+/* Party rows */
+.party-row-item{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:8px;padding:10px 13px;border:1px solid #e8e8e8;margin-bottom:7px}
+/* Cards */
+.prod-card{background:#fff;border-radius:8px;padding:13px 15px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;border:1px solid #e8e8e8}
+.prod-item-label{font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:3px}
+.prod-meta{font-size:12px;color:#888}
+.prod-kg{font-size:20px;font-weight:700;color:#1a1a1a}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:14px;padding:20px 22px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18)}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:14px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+/* Detail rows */
+.detail-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:#999}
+.detail-val{color:#1a1a1a;font-weight:600}
+.detail-items-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+.detail-items-table th{text-align:left;font-size:11px;color:#999;padding:4px 6px;border-bottom:1px solid #f0f0f0;font-weight:600}
+.detail-items-table td{padding:7px 6px;border-bottom:1px solid #f0f0f0}
+.detail-items-table tr:last-child td{border-bottom:none}
+/* Invoice print */
+.inv-wrap{background:#f5f5f5;border-radius:12px;padding:16px}
+.inv{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:28px 32px;max-width:560px;margin:0 auto}
+.inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px}
+.inv-factory{font-size:20px;font-weight:700}
+.inv-sub{font-size:12px;color:#888;margin-top:2px}
+.inv-addr{font-size:12px;color:#aaa;margin-top:1px}
+.inv-meta{text-align:right;font-size:13px;color:#888;line-height:1.8}
+.inv-meta strong{color:#1a1a1a}
+.inv-to-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#aaa;margin-bottom:3px}
+.inv-to-name{font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:18px}
+.inv-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
+.inv-table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#aaa;padding:6px 0;border-bottom:1px solid #e0e0e0;text-align:left}
+.inv-table td{padding:8px 0;border-bottom:1px solid #f0f0f0}
+.inv-table tr:last-child td{border-bottom:none}
+.inv-total-box{display:flex;justify-content:flex-end}
+.inv-total-inner{min-width:180px;border-top:1px solid #e0e0e0;padding-top:10px}
+.inv-total-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#888}
+.inv-total-row.grand{font-size:15px;font-weight:700;color:#1a1a1a;padding-top:6px;border-top:1.5px solid #1a1a1a;margin-top:4px}
+.inv-footer{margin-top:26px;font-size:11px;color:#bbb;text-align:center;border-top:1px solid #f0f0f0;padding-top:12px}
+.inv-actions{display:flex;gap:9px;justify-content:flex-end;margin-bottom:12px}
+/* Admin panel */
+.admin-panel{background:#fff;border-radius:12px;padding:16px;border:1px solid #fecaca;margin-top:20px}
+.admin-panel h4{font-size:13px;font-weight:600;color:#dc2626;margin-bottom:12px}
+/* Misc */
+.empty{text-align:center;color:#bbb;font-size:13px;padding:28px 0}
+.save-ind{font-size:11px}
+/* Sort buttons */
+.sort-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center}
+.sort-bar-label{font-size:11px;color:#999;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
+.sbtn{font-size:11px;padding:4px 11px;border-radius:99px;border:1.5px solid #ddd;background:#fff;color:#666;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:4px;transition:all .15s}
+.sbtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff}
+.sbtn.active{border-color:#2563eb;color:#fff;background:#2563eb}
+.sbtn .arr{font-size:10px}
+/* Report view buttons */
+.rpt-vbtn{padding:7px 14px;border-radius:8px;border:1.5px solid #ddd;background:#fff;color:#666;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.rpt-vbtn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff}
+.rpt-vbtn.active{border-color:#2563eb;color:#fff;background:#2563eb}
+/* Report table */
+.rpt-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.rpt-tbl th{text-align:left;padding:9px 12px;background:#f0f4ff;border-bottom:2px solid #dbeafe;font-size:11px;color:#2563eb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;font-weight:700}
+.rpt-tbl td{padding:9px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap}
+.rpt-tbl tr:last-child td{border-bottom:none}
+.rpt-tbl tr:hover td{background:#fafbff}
+.rpt-card{background:#fff;border-radius:10px;border:1px solid #e8e8e8;overflow:hidden;margin-bottom:12px}
+.rpt-card-hdr{background:#f0f4ff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dbeafe}
+.rpt-card-title{font-size:14px;font-weight:700;color:#1e3a5f}
+.rpt-card-body{padding:0;overflow-x:auto}
+.rpt-badge-p{background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.rpt-badge-d{background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.rpt-badge-i{background:#dbeafe;color:#2563eb;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+/* Combo input — type or pick */
+.combo-wrap{position:relative;flex:1;min-width:0}
+.combo-input{width:100%;padding:5px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:12px;outline:none;box-sizing:border-box;background:#fff}
+.combo-input:focus{border-color:#2563eb;background:#f8fbff}
+.combo-drop{position:fixed;background:#fff;border:1.5px solid #2563eb;border-radius:8px;z-index:9999;max-height:120px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);display:none;min-width:120px}
+.combo-drop.open{display:block}
+.combo-opt{padding:10px 14px;font-size:14px;cursor:pointer;white-space:nowrap;border-bottom:1px solid #f5f5f5;-webkit-tap-highlight-color:transparent}
+.combo-opt:last-child{border-bottom:none}
+.combo-opt:hover,.combo-opt:active{background:#eff6ff;color:#2563eb;font-weight:600}
+.party-pending-card{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px;border:1px solid #e8e8e8;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.party-pending-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.party-pending-name{font-size:14px;font-weight:700;color:#1a1a1a}
+.party-pending-meta{font-size:11px;color:#999}
+.party-pending-table{width:100%;border-collapse:collapse;font-size:12px}
+.party-pending-table th{font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:3px 6px;border-bottom:1px solid #f0f0f0;text-align:left}
+.party-pending-table td{padding:6px 6px;border-bottom:1px solid #f8f8f8;vertical-align:middle}
+.party-pending-table tr:last-child td{border-bottom:none}
+.party-order-ref{display:inline-block;font-size:10px;color:#999;background:#f5f5f5;border-radius:4px;padding:1px 5px;margin-right:3px}
+/* POS print */
+@media print{
+  .pos-print #setup-screen,.pos-print #app>.topbar-app,.pos-print #app>.tabs,.pos-print .inv-actions,.pos-print .split .form-panel,.pos-print #tab-orders,.pos-print #tab-invoices,.pos-print #tab-catalog,.pos-print #tab-production,.pos-print .modal-bg,.pos-print #admin-btn{display:none!important}
+  .pos-print #view-invoice,.pos-print #view-ledger{display:block!important}
+  .pos-print .inv-wrap{background:white;padding:0}
+  .pos-print body{background:white}
+}
+@media print{
+  #setup-screen,#app>.topbar-app,#app>.tabs,.inv-actions,.split .form-panel,#tab-orders,#tab-invoices,#tab-catalog,#tab-production,.modal-bg,#admin-btn{display:none!important}
+  #view-invoice,#view-ledger{display:block!important}
+  .inv-wrap{background:white;padding:0}
+  body{background:white}
+}
+/* POS 80mm invoice — large bold font for thermal clarity */
+.pos-inv{width:76mm;margin:0 auto;padding:0 2mm;font-family:'Courier New',monospace;font-size:21px;font-weight:700;color:#000;background:#fff;box-sizing:border-box}
+.pos-inv .pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}
+.pos-inv .pos-sub{text-align:center;font-size:19px;font-weight:600;margin-bottom:3px;color:#333}
+.pos-inv .pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}
+.pos-inv .pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}
+.pos-inv .pos-row.bold{font-weight:700;font-size:21px}
+.pos-inv .pos-items-hdr{display:flex;font-size:19px;font-weight:700;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:4px}
+.pos-inv .pos-item-row{display:flex;font-size:21px;font-weight:700;margin:6px 0;align-items:center;white-space:nowrap}
+.pos-inv .pos-col-item{flex:1;padding-right:4px}
+.pos-inv .pos-col-kg{width:52px;text-align:right;flex-shrink:0}
+.pos-inv .pos-col-rate{width:58px;text-align:right;flex-shrink:0}
+.pos-inv .pos-col-amt{width:66px;text-align:right;flex-shrink:0}
+.pos-inv .pos-col-item{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos-inv .pos-footer{text-align:center;font-size:15px;font-weight:600;margin-top:8px;color:#333}
+@media print{
+  body.pos-mode{background:white!important}
+  body.pos-mode #view-invoice{display:block!important}
+  body.pos-mode .inv-actions{display:none!important}
+  body.pos-mode .inv-wrap{background:white!important;padding:0!important;border-radius:0!important}
+  body.pos-mode .inv{display:none!important}
+  body.pos-mode .pos-inv{display:block!important}
+  body.pos-mode #setup-screen,body.pos-mode #app>.topbar-app,body.pos-mode #app>.tabs,body.pos-mode #tab-orders,body.pos-mode #tab-invoices,body.pos-mode #tab-catalog,body.pos-mode #tab-production,body.pos-mode .modal-bg,body.pos-mode #admin-btn{display:none!important}
+  /* Remove browser header/footer (date, URL, page number) */
+  @page{
+    margin:0mm;
+    size:80mm auto;
+  }
+  body.pos-mode{margin:0;padding:0}
+  body.pos-mode .pos-inv{margin:0;padding:2mm}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app" style="display: block;">
+  <div class="topbar-app">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="app-title">Sitara <span>Sequins</span></div>
+      <span class="sync-status " id="sync-status">☁ Cloud</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-sm" onclick="exportBackup()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8" title="Download backup JSON">📤 Backup</button>
+      <button class="btn btn-sm" onclick="document.getElementById('restore-file-input').click()" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534" title="Restore from backup">📥 Restore</button>
+      <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="importBackup(this)">
+      <button class="btn btn-sm" onclick="document.getElementById('xls-file-input').click()" style="background:#fffbeb;border-color:#fde68a;color:#92400e">📥 Import XLS</button>
+      <input type="file" id="xls-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFromXLS(this)">
+      <button class="btn btn-sm" id="admin-btn" onclick="openAdmin()">⚙ Admin</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab" onclick="switchTab(&#39;orders&#39;,this)">Orders</button>
+    <button class="tab active" onclick="switchTab(&#39;invoices&#39;,this)">Invoices</button>
+    <button class="tab" onclick="switchTab(&#39;catalog&#39;,this)">Create</button>
+    <button class="tab" onclick="switchTab('production',this)">Pending Work</button>
+    <button class="tab" onclick="switchTab('reports',this)">📊 Reports</button>
+  </div>
+
+  <!-- ORDERS -->
+  <div id="tab-orders" class="view">
+    <div class="split">
+      <div class="form-panel">
+        <h4 id="order-form-title">New Order</h4>
+        <div class="field"><label>Party name</label>
+          <input id="f-party" list="party-dl" type="text" placeholder="Type or select party">
+          <datalist id="party-dl"></datalist>
+        </div>
+        <div class="field"><label>Order date</label><input id="f-date" type="date"></div>
+        <div style="margin-top:4px">
+          <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Items</div>
+          <div class="item-hdr"><span>Color</span><span>Shape</span><span>Kg</span><span>Rate</span><span>Amt</span><span></span></div>
+          <div id="items-container"></div>
+          <button class="add-item-btn" onclick="addItemRow()">+ Add item</button>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:13px">
+          <button class="btn" onclick="cancelOrderForm()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveOrder()" id="save-order-btn">Save order</button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#bbb" id="form-status-note">Status: Pending (auto)</div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div class="stat"><div class="stat-label">Pending Orders</div><div class="stat-val" id="s-pending" style="color:#d97706">0</div></div>
+            <div class="stat"><div class="stat-label">Parties</div><div class="stat-val" id="s-parties">0</div></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="font-size:12px;color:#888;font-weight:500">Filter by date:</label>
+            <input type="date" id="order-date-filter" onchange="renderOrders()"
+              style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+            <button class="btn btn-sm" onclick="document.getElementById('order-date-filter').value='';renderOrders()">All</button>
+          </div>
+        </div>
+        <div id="pending-orders-list"></div>
+        <div id="empty-orders" class="empty" style="display: none;">No pending orders.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVOICES -->
+  <div id="tab-invoices" class="view active">
+    <div class="split">
+      <div class="form-panel">
+        <h4 id="inv-form-title">New Invoice</h4>
+        <div class="field"><label>Party name</label>
+          <div class="combo-wrap" style="width:100%">
+            <input class="combo-input" id="if-party-input" type="text" placeholder="Type or pick party..." autocomplete="off"
+              onfocus="openPartyCombo(this)"
+              oninput="openPartyCombo(this)"
+              onkeydown="comboKeyDown(event,'inv-party-drop','party-combo')">
+            <div class="combo-drop" id="inv-party-drop"></div>
+          </div>
+        </div>
+        <div class="field"><label>Invoice date</label><input id="if-date" type="date"></div>
+        <div style="margin-top:4px">
+          <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Items</div>
+          <div class="item-hdr"><span>Color</span><span>Shape</span><span>Kg</span><span></span></div>
+          <div id="inv-items-container"></div>
+          <button class="add-item-btn" onclick="addInvItemRow()">+ Add item</button>
+        </div>
+        <div style="margin-top:10px;margin-bottom:6px;padding:8px 12px;background:#f0f4ff;border-radius:8px;font-size:13px;font-weight:600;color:#1e3a5f">
+          Total Weight: <span id="inv-form-weight" style="color:#2563eb">0.00 kg</span>
+        </div>
+        <div class="field" style="margin-top:6px">
+          <label>Remarks <span style="font-size:11px;color:#aaa">(optional — printed at bottom)</span></label>
+          <textarea id="if-remarks" placeholder="e.g. Payment received, Delivery by courier, Special instructions..."
+            style="width:100%;padding:8px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:13px;outline:none;resize:vertical;min-height:60px;box-sizing:border-box;font-family:inherit"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:13px">
+          <span style="font-size:13px;color:#888">Total: <strong id="inv-form-total" style="color:#1a1a1a">₹0</strong></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="cancelInvForm()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveInvoice()" id="save-inv-btn">Save invoice</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+          <div style="display:flex;gap:8px">
+            <div class="stat"><div class="stat-label">Total</div><div class="stat-val" id="si-total">0</div></div>
+            <div class="stat"><div class="stat-label">Amount</div><div class="stat-val" id="si-amount" style="font-size:15px">₹0</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <input type="date" id="inv-date-filter" onchange="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+            <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';renderInvoiceList()" style="font-size:11px">All</button>
+            <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th style="width:5%">#</th><th style="width:12%">Inv#</th>
+            <th style="width:20%">Party</th><th style="width:13%">Date</th>
+            <th style="width:13%">Amount</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="inv-body"></tbody>
+        </table>
+        <div id="empty-invlist" class="empty" style="display: none;">No invoices yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE -->
+  <div id="tab-catalog" class="view">
+    <div class="tag-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <h4 style="margin:0">Colors <span id="color-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
+          <button class="btn btn-sm" onclick="toggleSection('color-tags','color-toggle-btn','color-search-wrap')" id="color-toggle-btn"
+            style="font-size:11px;padding:3px 10px">▼ Show</button>
+        </div>
+        <div id="color-search-wrap" style="display:none">
+          <input type="text" id="color-search" placeholder="🔍 Search colors..." oninput="renderCatalog()"
+            style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:160px">
+        </div>
+      </div>
+      <div class="tag-grid" id="color-tags" style="display:none"></div>
+      <div class="tag-add-row" style="flex-wrap:wrap;gap:6px">
+        <input id="new-color" type="text" placeholder="Color code e.g. og100" style="flex:1;min-width:100px">
+        <input id="new-color-alias" type="text" placeholder="Alias e.g. Golden (optional)" style="flex:1;min-width:120px">
+        <button class="btn btn-primary" onclick="addColor()">Add</button>
+      </div>
+    </div>
+    <div class="tag-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <h4 style="margin:0">Shapes <span id="shape-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
+          <button class="btn btn-sm" onclick="toggleSection('shape-tags','shape-toggle-btn','shape-search-wrap')" id="shape-toggle-btn"
+            style="font-size:11px;padding:3px 10px">▼ Show</button>
+        </div>
+        <div id="shape-search-wrap" style="display:none">
+          <input type="text" id="shape-search" placeholder="🔍 Search shapes..." oninput="renderCatalog()"
+            style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:160px">
+        </div>
+      </div>
+      <div class="tag-grid" id="shape-tags" style="display:none"></div>
+      <div class="tag-add-row">
+        <input id="new-shape" type="text" placeholder="e.g. Round">
+        <button class="btn btn-primary" onclick="addShape()">Add</button>
+      </div>
+    </div>
+    <div class="tag-section">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <h4 style="margin:0">Parties <span id="party-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
+        <button class="btn btn-sm" onclick="toggleSection('party-tags','party-toggle-btn',null)" id="party-toggle-btn"
+          style="font-size:11px;padding:3px 10px">▼ Show</button>
+      </div>
+      <div id="party-tags" style="display:none"></div>
+      <div id="empty-parties" class="empty" style="display:none">No parties yet.</div>
+      <div class="tag-add-row" style="margin-top:8px">
+        <input id="new-party" type="text" placeholder="e.g. Riya Crafts">
+        <button class="btn btn-primary" onclick="addParty()">Add</button>
+      </div>
+    </div>
+    <div style="padding:12px;background:#f5f5f5;border-radius:8px;font-size:12px;color:#888">
+      Colors, shapes and parties are case-insensitive. Click View on a party to see all their orders &amp; invoices.
+    </div>
+  </div>
+
+  <!-- PENDING WORK -->
+  <div id="tab-production" class="view">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:16px;font-weight:700;color:#1a1a1a">Pending Work</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <!-- View toggle -->
+        <div style="display:flex;border:1.5px solid #ddd;border-radius:8px;overflow:hidden">
+          <button id="pw-btn-item" onclick="setProdView('item')"
+            style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#2563eb;color:#fff">
+            Item-wise
+          </button>
+          <button id="pw-btn-party" onclick="setProdView('party')"
+            style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">
+            Party-wise
+          </button>
+        </div>
+        <!-- Sort -->
+        <button class="sbtn active" id="sb-qty-desc" onclick="setProdSort('qty-desc',this)">Qty <span class="arr">↓</span></button>
+        <button class="sbtn" id="sb-qty-asc" onclick="setProdSort('qty-asc',this)">Qty <span class="arr">↑</span></button>
+        <!-- Export & Print -->
+        <button class="btn btn-sm" onclick="exportPendingXLS()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8">📊 Export XLS</button>
+        <button class="btn btn-sm" onclick="printPendingPOS('item')" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 Item POS</button>
+        <button class="btn btn-sm" onclick="printPendingPOS('party')" style="background:#374151;color:#fff;border-color:#374151">🧾 Party POS</button>
+        <button class="btn btn-sm" onclick="sharePendingWhatsApp('item')" style="background:#25D366;color:#fff;border-color:#25D366">💬 Item WA</button>
+        <button class="btn btn-sm" onclick="sharePendingWhatsApp('party')" style="background:#128C7E;color:#fff;border-color:#128C7E">💬 Party WA</button>
+        <!-- Search -->
+        <input id="prod-search" type="text" placeholder="🔍 Search item / party…"
+          oninput="renderProduction()"
+          style="padding:6px 12px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:190px;outline:none">
+      </div>
+    </div>
+    <div id="prod-summary"></div>
+    <div id="empty-prod" class="empty" style="display:none">No orders for this date.</div>
+  </div>
+
+  <!-- INVOICE PRINT VIEW -->
+  <div id="view-invoice" style="display:none">
+    <div class="inv-actions">
+      <button class="btn" onclick="closeInvoice()">← Back</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨 Print A4</button>
+      <button class="btn" onclick="printPOS()" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 POS 80mm</button>
+      <button class="btn" onclick="shareInvoiceWhatsApp()" style="background:#25D366;color:#fff;border-color:#25D366">💬 WhatsApp</button>
+    </div>
+    <div class="inv-wrap"><div class="inv" id="inv-content"></div></div>
+    <div class="inv-wrap" style="display:none" id="pos-inv-wrap"><div class="pos-inv" id="pos-inv-content"></div></div>
+  </div>
+
+  <!-- LEDGER PRINT VIEW -->
+  <div id="view-ledger" style="display:none">
+    <div class="inv-actions">
+      <button class="btn" onclick="closeLedger()">← Back</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨 Print / PDF</button>
+    </div>
+    <div class="inv-wrap"><div class="inv" id="ledger-content"></div></div>
+  </div>
+
+  <!-- PARTY DETAIL MODAL -->
+  <div class="modal-bg" id="modal-party-detail">
+    <div class="modal" style="max-width:500px">
+      <h3 id="pd-title">Party</h3>
+      <div id="pd-body"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal(&#39;modal-party-detail&#39;)">Close</button>
+        <button class="btn btn-primary" onclick="printPartyLedger()">🖨 Print ledger</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDER VIEW MODAL -->
+  <div class="modal-bg" id="modal-order-view">
+    <div class="modal">
+      <h3 id="ov-title">Order</h3>
+      <div id="ov-body"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal(&#39;modal-order-view&#39;)">Close</button>
+        <button class="btn btn-primary" onclick="editFromOrderView()">Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN MODAL -->
+  <div class="modal-bg" id="modal-admin">
+    <div class="modal">
+      <h3>⚙ Admin Panel</h3>
+      <div id="admin-locked">
+        <div class="field"><label>Admin Password</label><input type="password" id="admin-pw-input" placeholder="Enter admin password"></div>
+        <div id="admin-pw-err" style="color:#dc2626;font-size:12px;display:none;margin-top:-6px;margin-bottom:8px">Wrong password</div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal(&#39;modal-admin&#39;)">Cancel</button>
+          <button class="btn btn-primary" onclick="unlockAdmin()">Unlock</button>
+        </div>
+      </div>
+            <div id="admin-unlocked" style="display:none">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Change Password</div>
+        <div class="field">
+          <label>New Password</label>
+          <input type="password" id="admin-new-pw" placeholder="Enter new password">
+        </div>
+        <button class="btn btn-primary" onclick="changeAdminPw()" style="width:100%;justify-content:center;margin-bottom:8px">Update Password</button>
+        <div id="admin-pw-changed" style="color:#166534;font-size:12px;display:none;margin-bottom:12px">&#10003; Password updated</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#16a34a;margin-top:12px">Recovery</div>
+        <button class="btn" onclick="recoverInvoices()" style="justify-content:center;background:#f0fdf4;border-color:#bbf7d0;color:#166534;margin-bottom:12px;width:100%">🔄 Recover Invoices from Backup</button>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#dc2626">Danger Zone</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-danger" onclick="adminClearOrders()" style="justify-content:center">&#128465; Delete ALL orders</button>
+          <button class="btn btn-danger" onclick="adminClearInvoices()" style="justify-content:center">&#128465; Delete ALL invoices</button>
+          <button class="btn btn-danger" onclick="adminResetAll()" style="justify-content:center">&#9888; Reset everything</button>
+        </div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal(&#39;modal-admin&#39;)">Close</button></div>
+      </div>
+    </div>
+  </div>
+  <!-- IMPORT MODAL -->
+  <div class="modal-bg" id="modal-import">
+    <div class="modal" style="max-width:480px">
+      <h3 id="import-title">📥 Import XLS Data</h3>
+      <div id="import-body" style="font-size:13px;color:#555;line-height:1.7"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal('modal-import')">Close</button>
+      </div>
+    </div>
+  </div>
+  <!-- REPORTS -->
+  <div id="tab-reports" class="view">
+
+    <!-- FILTER BAR -->
+    <div style="background:#f8f9fa;border-radius:10px;padding:12px 14px;margin-bottom:14px;border:1px solid #e8e8e8">
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Filters</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+
+        <!-- Date Range -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#888">From</span>
+          <input type="date" id="rpt-from" onchange="renderReport()"
+            style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+          <span style="font-size:12px;color:#888">To</span>
+          <input type="date" id="rpt-to" onchange="renderReport()"
+            style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+        </div>
+
+        <!-- Party -->
+        <select id="rpt-party" onchange="renderReport()"
+          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+          <option value="">All Parties</option>
+        </select>
+
+        <!-- Color -->
+        <select id="rpt-color" onchange="renderReport()"
+          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+          <option value="">All Colors</option>
+        </select>
+
+        <!-- Shape -->
+        <select id="rpt-shape" onchange="renderReport()"
+          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+          <option value="">All Shapes</option>
+        </select>
+
+        <button class="btn btn-sm" onclick="clearRptFilter()" style="font-size:12px">✕ Clear</button>
+        <button class="btn btn-sm" onclick="exportReportXLS()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;font-size:12px">📊 Export XLS</button>
+        <button class="btn btn-sm" onclick="printReport()" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a;font-size:12px">🖨 Print</button>
+        <button class="btn btn-sm" onclick="shareReportWhatsApp()" style="background:#25D366;color:#fff;border-color:#25D366;font-size:12px">💬 WhatsApp</button>
+      </div>
+    </div>
+
+    <!-- VIEW TOGGLE -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="rpt-vbtn active" id="rvb-summary"   onclick="setRptView('summary',this)">📋 Summary</button>
+      <button class="rpt-vbtn"        id="rvb-orders"    onclick="setRptView('orders',this)">📦 Orders</button>
+      <button class="rpt-vbtn"        id="rvb-invoices"  onclick="setRptView('invoices',this)">🧾 Invoices</button>
+      <button class="rpt-vbtn"        id="rvb-pending"   onclick="setRptView('pending',this)">⏳ Pending</button>
+      <button class="rpt-vbtn"        id="rvb-partywise" onclick="setRptView('partywise',this)">👥 Party-wise</button>
+      <button class="rpt-vbtn"        id="rvb-itemwise"  onclick="setRptView('itemwise',this)">🎨 Item-wise</button>
+    </div>
+
+    <!-- STATS BAR -->
+    <div id="rpt-stats" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+
+    <!-- REPORT CONTENT -->
+    <div id="rpt-content"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// CONFIG & STATE
+// ============================================================
+const LS_KEY = 'sitara_data';
+const LS_PW_KEY = 'sitara_pw';
+let ADMIN_PW = '';
+let saveTimer = null;
+
+// ── PRE-LOADED DATA (from uploaded files) ──────────────
+let colors = [{"name": "PAANI DD", "alias": "PAANI"}, {"name": "WD1", "alias": "DD12"}, {"name": "WD5", "alias": "DD23"}, {"name": "ND1", "alias": "DD45"}, {"name": "BD1", "alias": "DD29"}, {"name": "BD5", "alias": "DD33"}, {"name": "BD7", "alias": "DD32"}, {"name": "BD9", "alias": "DD16"}, {"name": "CD1", "alias": "DD39"}, {"name": "CD3", "alias": "DD38"}, {"name": "CD5", "alias": "DD41"}, {"name": "CD8", "alias": "DD48"}, {"name": "CD10", "alias": "DD43"}, {"name": "CD13", "alias": "DD37"}, {"name": "PD1", "alias": "DD15"}, {"name": "PD4", "alias": "DD44"}, {"name": "PD7", "alias": "DD47"}, {"name": "PD9", "alias": "DD27"}, {"name": "PD11", "alias": "DD3"}, {"name": "PD14", "alias": "DD4"}, {"name": "PD16", "alias": "DD14"}, {"name": "MD13", "alias": "DD5"}, {"name": "MD6", "alias": "DD49"}, {"name": "MD8", "alias": "DD35"}, {"name": "MD10", "alias": "DD24"}, {"name": "MD15", "alias": "DD6"}, {"name": "MD17", "alias": "DD30"}, {"name": "RD7", "alias": "DD34"}, {"name": "RD89", "alias": "DD1"}, {"name": "YD1", "alias": "DD10"}, {"name": "YD3", "alias": "DD36"}, {"name": "YD5", "alias": "DD28"}, {"name": "YD7", "alias": "DD2"}, {"name": "LD3", "alias": "DD22"}, {"name": "LD8", "alias": "DD42"}, {"name": "LD10", "alias": "DD17"}, {"name": "GD1", "alias": "DD9"}, {"name": "GD5", "alias": "DD18"}, {"name": "GD35", "alias": "DD26"}, {"name": "GD38", "alias": "DD50"}, {"name": "FD7", "alias": "DD40"}, {"name": "FD11", "alias": "DD46"}, {"name": "FD54", "alias": "DD25"}, {"name": "FD9", "alias": "DD19"}, {"name": "FD5", "alias": "DD8"}, {"name": "FD13", "alias": "DD20"}, {"name": "FD15", "alias": "DD7"}, {"name": "FD18", "alias": "DD21"}, {"name": "SD1", "alias": "DD31"}, {"name": "SD15", "alias": "DD11"}, {"name": "PG16", "alias": "OG41"}, {"name": "MG3", "alias": "OG42"}, {"name": "MG13", "alias": "OG48"}, {"name": "PG7", "alias": "OG59"}, {"name": "WG1", "alias": "OG10"}, {"name": "BG5", "alias": "OG100"}, {"name": "FG1", "alias": "OG105"}, {"name": "PG2", "alias": "OG106"}, {"name": "GG19", "alias": "OG107"}, {"name": "MG19", "alias": "OG108"}, {"name": "RG13", "alias": "OG109"}, {"name": "CG5", "alias": "OG11"}, {"name": "GG29", "alias": "OG110"}, {"name": "RG15", "alias": "OG111"}, {"name": "FG35", "alias": "OG112"}, {"name": "FG37", "alias": "OG113"}, {"name": "MG21", "alias": "OG116"}, {"name": "GG17", "alias": "OG118"}, {"name": "GG33", "alias": "OG123"}, {"name": "SG15", "alias": "OG124"}, {"name": "MG17", "alias": "OG125"}, {"name": "MG15", "alias": "OG126"}, {"name": "CG11", "alias": "OG127"}, {"name": "CG7", "alias": "OG128"}, {"name": "WG9", "alias": "OG129"}, {"name": "LG8", "alias": "OG13"}, {"name": "SG5", "alias": "OG130"}, {"name": "CG13", "alias": "OG133"}, {"name": "GG15", "alias": "OG135"}, {"name": "GG31", "alias": "OG137"}, {"name": "GG11", "alias": "OG139"}, {"name": "NG5", "alias": "OG144"}, {"name": "CG1", "alias": "OG145"}, {"name": "WG7", "alias": "OG148"}, {"name": "PG26", "alias": "OG149"}, {"name": "FG21", "alias": "OG15"}, {"name": "PG5", "alias": "OG152"}, {"name": "YG5", "alias": "OG153"}, {"name": "GG25", "alias": "OG154"}, {"name": "PG45", "alias": "OG156"}, {"name": "FG8", "alias": "OG156"}, {"name": "BG6", "alias": "OG157"}, {"name": "PG4", "alias": "OG16"}, {"name": "LG5", "alias": "OG161"}, {"name": "PG33", "alias": "OG164"}, {"name": "SG1", "alias": "OG168"}, {"name": "RG7", "alias": "OG17"}, {"name": "WG5", "alias": "OG18"}, {"name": "BG11", "alias": "OG19"}, {"name": "BG7", "alias": "OG21"}, {"name": "LG3", "alias": "OG23"}, {"name": "SG3", "alias": "OG24"}, {"name": "CG9", "alias": "OG25"}, {"name": "FG3", "alias": "OG26"}, {"name": "MG6", "alias": "OG27"}, {"name": "FG11", "alias": "OG28"}, {"name": "CG3", "alias": "OG3"}, {"name": "GG21", "alias": "OG30"}, {"name": "BG12", "alias": "OG33"}, {"name": "RG5", "alias": "OG34"}, {"name": "GG5", "alias": "OG35"}, {"name": "NG1", "alias": "OG36"}, {"name": "MG9", "alias": "OG37"}, {"name": "MG11", "alias": "OG39"}, {"name": "PG40", "alias": "OG4"}, {"name": "GG23", "alias": "OG43"}, {"name": "SG11", "alias": "OG44"}, {"name": "BG2", "alias": "OG46"}, {"name": "FG29", "alias": "OG47"}, {"name": "FG23", "alias": "OG50"}, {"name": "YG2", "alias": "OG51"}, {"name": "FG5", "alias": "OG51"}, {"name": "FG26", "alias": "OG53"}, {"name": "LG1", "alias": "OG55"}, {"name": "MG5", "alias": "OG56"}, {"name": "FG15", "alias": "OG57"}, {"name": "CG8", "alias": "OG6"}, {"name": "GG1", "alias": "OG62"}, {"name": "GG13", "alias": "OG64"}, {"name": "BG15", "alias": "OG66"}, {"name": "MG1", "alias": "OG69"}, {"name": "MG7", "alias": "OG76"}, {"name": "FG25", "alias": "OG77"}, {"name": "PG1", "alias": "OG80"}, {"name": "GG37", "alias": "OG81"}, {"name": "FG54", "alias": "OG86"}, {"name": "GG35", "alias": "OG87"}, {"name": "BG3", "alias": "OG88"}, {"name": "PG50", "alias": "OG92"}, {"name": "BG1", "alias": "OG94"}, {"name": "CG15", "alias": "OG97"}, {"name": "CG17", "alias": "OG98"}, {"name": "WT81", "alias": "RCZ PAANI"}, {"name": "PT85", "alias": "TG1"}, {"name": "RT89", "alias": "TG10"}, {"name": "RT91", "alias": "TG11"}, {"name": "FT82", "alias": "TG12"}, {"name": "LT84", "alias": "TG13"}, {"name": "BT81", "alias": "TG15"}, {"name": "FT87", "alias": "TG151"}, {"name": "LT88", "alias": "TG16"}, {"name": "GT86", "alias": "TG3"}, {"name": "FT90", "alias": "TG5"}, {"name": "CT81", "alias": "TG6"}, {"name": "PT83", "alias": "TG75"}, {"name": "FT92", "alias": "TG76"}, {"name": "RT87", "alias": "TG9"}, "SLG", "Mgold", "Dgold"];
+let shapes = ["1n", "2n", "3n", "4n", "5n", "6n", "8n", "10n", "12n", "14n", "16n", "19n", "25n", "32n", "38n", "2K", "3K", "4K", "5K", "6K", "3FC", "4FC", "5FC", "6FC", "8FC", "6/1", "8/1", "10/1", "12/1", "14/1", "16/1", "19/1", "25/1", "32/1", "38/1", "2/0", "3/0", "4/0", "5/0", "6/0", "8/0", "10/0", "12/0", "14/0", "16/0", "19/0", "25/0", "32/0", "38/0", "6/2", "8/2", "10/2", "14/2", "16/2", "19/2", "25/2", "32/2", "38/2", "1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010", "1011", "1012", "1013", "1014", "1015", "1016", "1017", "1018", "1019", "1020", "1021", "1022", "1023", "1024", "1025", "1026", "1027", "1028", "1029", "1030", "1031", "1032", "1033", "1034", "1035", "1036", "1037", "1038", "1039", "1040", "1041", "1042", "1043", "1044", "1045", "1046", "1047", "1048", "1049", "1050", "1051", "1052", "1053", "1054", "1055", "1056", "1057", "1058", "1059", "1060", "1061", "1062", "1063", "1064", "1065", "1066", "1067", "1068", "1069", "1070", "1071", "1072", "1073", "1074", "1075", "1076", "1077", "1078", "1079", "1080", "1081", "1082", "15mmTS", "15mmFS", "XT", "Bell", "4x23 D", "5x32 D", "33 Tri", "15 Tri", "Uncut", "15x12 D Barfi", "15x25 Barfi", "20x25 Barfi", "4x 25 Barfi", "4 Dot", "5 Dot", "6 Dot", "6 TH", "4 Topi", "5 Topi", "6 Topi", "8 Topi", "10 Topi", "4x4 Chips", "5x5 Chips", "6x6 Chips", "8x8 Chips", "4mm Chips", "5mm Chips", "Small Kitty", "Kitty", "Bull", "Cat", "Fairy", "Pumkin", "Candy", "1111", "1112", "1113", "1114", "1115", "1116", "1117", "1118", "1119", "1120", "1121", "1122", "1124", "1125", "1126", "1127", "1139", "1136", "1137", "1138", "1140", "1156", "1162", "1164", "1168", "1171", "1170", "1167", "9m Mqs", "6x15 Mqs", "3x14 OL", "9X13 OL", "14X20 OL/2D", "14X20 OL/D", "5M DIL", "10M DIL", "13M DIL", "13M DIL/D", "15M DIL", "15M DIL/D", "20M DIL", "20M DIL/D", "5m Lamp", "6m Lamp", "8m Lamp", "10m Lamp", "1283", "1285", "1287", "1289", "1291", "1293", "1295", "1296 Big", "28m DF", "1305", "1307", "1308", "1309", "1310", "1311", "1312", "1300", "1302", "1304", "1315", "1317", "1401", "1402", "1404", "1405", "1410", "1411", "1412", "1415", "1416", "1510", "1502", "1505", "1508", "3 Fs", "4 FS", "5 FS", "10 FS", "20 FS", "30 FS", "10 TS", "1135", "1128", "1403"];
+let parties = [
+  {
+    "id": 1,
+    "name": "A M Zari Lko"
+  },
+  {
+    "id": 2,
+    "name": "A to Z Lko"
+  },
+  {
+    "id": 3,
+    "name": "A Y Zari Lko"
+  },
+  {
+    "id": 4,
+    "name": "Ad Monu Mumbai"
+  },
+  {
+    "id": 5,
+    "name": "Adil Lko"
+  },
+  {
+    "id": 6,
+    "name": "Ajay Kishor Zari Lko"
+  },
+  {
+    "id": 7,
+    "name": "Ak Beads Kolkata"
+  },
+  {
+    "id": 8,
+    "name": "Akhil Seelampur"
+  },
+  {
+    "id": 9,
+    "name": "Arham Kolkata"
+  },
+  {
+    "id": 10,
+    "name": "Ashapura Jodhpur"
+  },
+  {
+    "id": 11,
+    "name": "Aslam Barelly"
+  },
+  {
+    "id": 12,
+    "name": "Atiq Kinari"
+  },
+  {
+    "id": 13,
+    "name": "Avinash"
+  },
+  {
+    "id": 14,
+    "name": "Bhagat Moti"
+  },
+  {
+    "id": 15,
+    "name": "Bilal Loni"
+  },
+  {
+    "id": 16,
+    "name": "Birju Raksol"
+  },
+  {
+    "id": 17,
+    "name": "Chandni Zari Rampur"
+  },
+  {
+    "id": 18,
+    "name": "Devi Saran Lko"
+  },
+  {
+    "id": 19,
+    "name": "Dipiya Beads Subodh"
+  },
+  {
+    "id": 20,
+    "name": "Dipiya Store Pramod"
+  },
+  {
+    "id": 21,
+    "name": "F K Seelampur"
+  },
+  {
+    "id": 22,
+    "name": "FARHAN SIKANDRABAD"
+  },
+  {
+    "id": 23,
+    "name": "Genda Ram Mumbai"
+  },
+  {
+    "id": 24,
+    "name": "Golden Star"
+  },
+  {
+    "id": 25,
+    "name": "Gulmohar Surat"
+  },
+  {
+    "id": 26,
+    "name": "Guptaji Kolkata"
+  },
+  {
+    "id": 27,
+    "name": "Hira Kinari"
+  },
+  {
+    "id": 28,
+    "name": "Honey Moti"
+  },
+  {
+    "id": 29,
+    "name": "Jalarm Patel Vadodra"
+  },
+  {
+    "id": 30,
+    "name": "Jamil Bhai Lko"
+  },
+  {
+    "id": 31,
+    "name": "Jaspal Bhai Mumbai"
+  },
+  {
+    "id": 32,
+    "name": "Javed Bhai Lko"
+  },
+  {
+    "id": 33,
+    "name": "Khusbu General Store"
+  },
+  {
+    "id": 34,
+    "name": "KP Groups Kolkata"
+  },
+  {
+    "id": 35,
+    "name": "KR Impex"
+  },
+  {
+    "id": 36,
+    "name": "Krishna Impex"
+  },
+  {
+    "id": 37,
+    "name": "KTC Surat"
+  },
+  {
+    "id": 38,
+    "name": "M K Kolkata"
+  },
+  {
+    "id": 39,
+    "name": "Mahavir Kolkata"
+  },
+  {
+    "id": 40,
+    "name": "Manita Store"
+  },
+  {
+    "id": 41,
+    "name": "Marudhar Mumbai Sitara"
+  },
+  {
+    "id": 42,
+    "name": "Mashal Dhaga"
+  },
+  {
+    "id": 43,
+    "name": "Mega Agency"
+  },
+  {
+    "id": 44,
+    "name": "Mehtabh Bhai Barelly"
+  },
+  {
+    "id": 45,
+    "name": "Modern Enterprise Lko"
+  },
+  {
+    "id": 46,
+    "name": "Mushir Bhai Lko"
+  },
+  {
+    "id": 47,
+    "name": "Nand Kishore Jain Lko"
+  },
+  {
+    "id": 48,
+    "name": "Nawaz Button"
+  },
+  {
+    "id": 49,
+    "name": "Nemi Nath Surat"
+  },
+  {
+    "id": 50,
+    "name": "NTC Ldh"
+  },
+  {
+    "id": 51,
+    "name": "Pooja Collection Kolkata"
+  },
+  {
+    "id": 52,
+    "name": "Pragati Creation"
+  },
+  {
+    "id": 53,
+    "name": "PTC Kolkata"
+  },
+  {
+    "id": 54,
+    "name": "Rab Zari Barelly"
+  },
+  {
+    "id": 55,
+    "name": "Radhe Beads Seelampur"
+  },
+  {
+    "id": 56,
+    "name": "Rahul Gonda"
+  },
+  {
+    "id": 57,
+    "name": "Rampur Abdul Matin"
+  },
+  {
+    "id": 58,
+    "name": "Rangeela Zari Kolkata"
+  },
+  {
+    "id": 59,
+    "name": "RD Enterprise Mumbai"
+  },
+  {
+    "id": 60,
+    "name": "Rehan Zari Lucknow"
+  },
+  {
+    "id": 61,
+    "name": "Sakeel Khairabad"
+  },
+  {
+    "id": 62,
+    "name": "Salman Barelly"
+  },
+  {
+    "id": 63,
+    "name": "Sandeep Ji Seelampur"
+  },
+  {
+    "id": 64,
+    "name": "Sanjay Aggarwal Kolkata"
+  },
+  {
+    "id": 65,
+    "name": "Sara Jari Store"
+  },
+  {
+    "id": 66,
+    "name": "Sarafarz Bhai Siknadrabad"
+  },
+  {
+    "id": 67,
+    "name": "SG Mumbai Sitara"
+  },
+  {
+    "id": 68,
+    "name": "Shop"
+  },
+  {
+    "id": 69,
+    "name": "Shop Avinash"
+  },
+  {
+    "id": 70,
+    "name": "SK Gonda"
+  },
+  {
+    "id": 71,
+    "name": "Sonu Rampur"
+  },
+  {
+    "id": 72,
+    "name": "Suman Enterprise Ravi"
+  },
+  {
+    "id": 73,
+    "name": "Surajmal Kolkata"
+  },
+  {
+    "id": 74,
+    "name": "Trimurti Enterprise"
+  },
+  {
+    "id": 75,
+    "name": "Unique India"
+  },
+  {
+    "id": 76,
+    "name": "Unsa Zari"
+  },
+  {
+    "id": 77,
+    "name": "Unzila Barelly"
+  },
+  {
+    "id": 78,
+    "name": "Vimal Jain Lucknow"
+  },
+  {
+    "id": 79,
+    "name": "VT Paras Impex"
+  },
+  {
+    "id": 80,
+    "name": "Warsi Barelly"
+  },
+  {
+    "id": 81,
+    "name": "Wasim MGB"
+  },
+  {
+    "id": 82,
+    "name": "Yashi Store"
+  }
+];
+let orders = [];
+let invoices = [];
+let nextOid=1, nextPaId=83, nextInvNum=1, nextInvoiceNum=590;
+// ─────────────────────────────────────────────────────────────────────────
+
+let filt='all', editOid=null, editInvId=null, ovOid=null, pdPartyId=null;
+let prodSort='qty-desc'; // default sort for Today's Work
+
+// Date format helper - converts YYYY-MM-DD to DDMon format e.g. 01Jun
+function fmtDate(d){
+  if(!d) return '';
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const parts=d.split('-');
+  if(parts.length<3) return d;
+  const day=parts[2];
+  const mon=months[parseInt(parts[1])-1]||'';
+  return day+mon;
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+function showReconnect(){}
+
+const APP_PW = '786';
+
+function doSetup(){
+  document.getElementById('setup-screen').style.display='none';
+  startApp();
+}
+
+// ============================================================
+// JSONBIN STORAGE
+// ============================================================
+function setSyncStatus(s, msg){
+  const el = document.getElementById('sync-status');
+  el.className = 'sync-status ' + s;
+  el.textContent = msg;
+}
+
+function saveToBin(){
+  // Always save to localStorage as backup
+  try{
+    const payload={colors,shapes,orders,parties,invoices,
+      nextOid,nextPaId,nextInvNum,nextInvoiceNum};
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
+    // Also save invoices separately in localStorage
+    localStorage.setItem('sitara_invoices_safe', JSON.stringify({
+      invoices, nextInvoiceNum, savedAt: new Date().toISOString()
+    }));
+  } catch(e){}
+
+  // Save to Firebase if ready
+  if(window._firebaseReady && window._firestore){
+    setSyncStatus('saving','☁ Saving...');
+    const {setDoc, DATA_DOC, INV_DOC} = window._firestore;
+    const payload={colors,shapes,orders,parties,invoices,
+      nextOid,nextPaId,nextInvNum,nextInvoiceNum,
+      updatedAt: new Date().toISOString()};
+    window._skipNextSnapshot = true;
+    // Save main data
+    setDoc(DATA_DOC, payload)
+      .then(()=>{
+        setSyncStatus('saved','☁ Saved');
+        setTimeout(()=>setSyncStatus('','☁ Cloud'), 2000);
+      })
+      .catch(e=>{
+        setSyncStatus('error','☁ Save failed');
+        console.error(e);
+      });
+    // Save invoices separately for extra protection
+    if(invoices.length>0 && INV_DOC){
+      setDoc(INV_DOC, {
+        invoices, nextInvoiceNum,
+        savedAt: new Date().toISOString()
+      }).catch(e=>console.error('Invoice backup failed:',e));
+    }
+  } else {
+    setSyncStatus('saved','✓ Saved locally');
+    setTimeout(()=>setSyncStatus('','Ready'), 1800);
+  }
+}
+
+function loadFromStorage(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const data=JSON.parse(raw);
+    colors       = data.colors       || colors;
+    shapes       = data.shapes       || shapes;
+    orders       = data.orders       || orders;
+    parties      = data.parties      || parties;
+    invoices     = data.invoices     || invoices;
+    nextOid      = data.nextOid      || nextOid;
+    nextPaId     = data.nextPaId     || nextPaId;
+    nextInvNum   = data.nextInvNum   || nextInvNum;
+    nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+    return true;
+  } catch(e){ return false; }
+}
+
+function saveAll(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToBin, 400);
+}
+
+// ============================================================
+// APP START
+// ============================================================
+function startApp(){
+  document.getElementById('app').style.display='block';
+  renderAll();
+  setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
+}
+
+window.onload = function(){
+  ADMIN_PW = '786';
+  // FORCE CLEAR old data - version stamp
+  const DATA_VER = 'v20260601_v4';
+  if(localStorage.getItem('sitara_ver') !== DATA_VER){
+    localStorage.clear();
+    localStorage.setItem('sitara_ver', DATA_VER);
+  }
+  loadFromStorage();
+  startApp();
+  setTimeout(async function(){
+    if(window._firebaseReady && window._firestore){
+      try{
+        const {getDoc, DATA_DOC} = window._firestore;
+        const snap = await getDoc(DATA_DOC);
+        if(snap.exists()){
+          const data = snap.data();
+          if(data){
+            if((data.colors||[]).length > colors.length) colors = data.colors;
+            if((data.shapes||[]).length > shapes.length) shapes = data.shapes;
+            if((data.parties||[]).length > parties.length) parties = data.parties;
+            orders = data.orders || orders;
+            if((data.invoices||[]).length >= invoices.length) invoices = data.invoices || invoices;
+            nextOid = data.nextOid || nextOid;
+            nextPaId = data.nextPaId || nextPaId;
+            nextInvNum = data.nextInvNum || nextInvNum;
+            nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+            const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
+            if(needsUpdate) saveToBin();
+            renderAll();
+            setSyncStatus('saved','☁ Cloud ready');
+            setTimeout(()=>setSyncStatus('','☁ Cloud'),2000);
+          }
+        } else { saveToBin(); }
+      } catch(e){ console.error(e); }
+    }
+  }, 1000);
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function fmt(n){return '₹'+Number(n).toLocaleString('en-IN');}
+function fmtKg(n){return parseFloat(n||0).toFixed(2)+' kg';}
+function invLabel(n){return 'SIT-'+String(n).padStart(4,'0');}
+function invNumLabel(n){return 'INV-'+String(n).padStart(4,'0');}
+function today(){return new Date().toISOString().split('T')[0];}
+function totalAmt(o){return o.items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);}
+function normalizeStr(s){return s.trim();}
+function ciIncludes(arr,val){return arr.some(x=>x.toLowerCase()===val.toLowerCase().trim());}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderParties();setToday();renderReport();}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(t,el){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  ['orders','invoices','catalog','production','reports'].forEach(id=>{
+    document.getElementById('tab-'+id).classList.toggle('active',id===t);
+  });
+  if(t==='reports') renderReport();
+}
+function setF(f,el){
+  // kept for compatibility but no longer used in orders tab
+}
+
+// Build net-pending map: for each party+color+shape, orderedKg minus invoicedKg (across ALL dates)
+function buildPendingMap(){
+  // ordered[party][color||shape] = totalKg from all pending orders
+  const ordered={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    if(!ordered[o.party])ordered[o.party]={};
+    o.items.forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      if(!ordered[o.party][k])ordered[o.party][k]={ordKg:0,orderRefs:[],price:i.price};
+      ordered[o.party][k].ordKg+=parseFloat(i.kg||0);
+      ordered[o.party][k].orderRefs.push({id:o.id,invNum:o.invNum,date:o.date,kg:parseFloat(i.kg||0)});
+      // use latest price seen
+      if(i.price>0)ordered[o.party][k].price=i.price;
+    });
+  });
+  // invoiced[party][color||shape] = totalKg invoiced
+  const invoiced={};
+  invoices.forEach(inv=>{
+    if(!invoiced[inv.party])invoiced[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      invoiced[inv.party][k]=(invoiced[inv.party][k]||0)+parseFloat(i.kg||0);
+    });
+  });
+  // net
+  const result={};
+  Object.keys(ordered).forEach(party=>{
+    const partyItems=[];
+    Object.entries(ordered[party]).forEach(([k,v])=>{
+      const invKg=(invoiced[party]&&invoiced[party][k])||0;
+      const netKg=v.ordKg-invKg;
+      if(netKg>0.001){
+        const [color,shape]=k.split('||');
+        partyItems.push({color,shape,ordKg:v.ordKg,invKg,netKg,price:v.price,refs:v.orderRefs});
+      }
+    });
+    if(partyItems.length)result[party]=partyItems;
+  });
+  return result;
+}
+
+function renderOrders(){
+  const dateFilter=(document.getElementById('order-date-filter')||{value:''}).value;
+  // Filter pending orders by date if selected
+  let filteredOrders=orders.filter(o=>o.status==='Pending');
+  if(dateFilter) filteredOrders=filteredOrders.filter(o=>o.date===dateFilter);
+
+  const container=document.getElementById('pending-orders-list');
+  const empty=document.getElementById('empty-orders');
+  const allPending=orders.filter(o=>o.status==='Pending');
+  document.getElementById('s-pending').textContent=allPending.length;
+  // count unique parties in filtered set
+  const filtParties=[...new Set(filteredOrders.map(o=>o.party))];
+  document.getElementById('s-parties').textContent=filtParties.length;
+
+  if(!filteredOrders.length){
+    container.innerHTML='';
+    empty.style.display='block';
+    empty.textContent=dateFilter?`No pending orders on ${dateFilter}.`:'No pending orders.';
+    return;
+  }
+  empty.style.display='none';
+
+  // Group by party
+  const byParty={};
+  filteredOrders.forEach(o=>{
+    if(!byParty[o.party])byParty[o.party]=[];
+    byParty[o.party].push(o);
+  });
+
+  container.innerHTML=Object.entries(byParty).map(([party,partyOrders])=>{
+    const orderRows=partyOrders.map(o=>{
+      const itemsStr=o.items.map(i=>`<span style="font-size:11px;background:#f5f5f5;border-radius:3px;padding:1px 6px;margin-right:3px">${i.color} ${i.shape} ${fmtKg(i.kg)}</span>`).join('');
+      const total=o.items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
+      return `<div style="padding:8px 0;border-bottom:1px solid #f5f5f5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">${invLabel(o.invNum)} · <span style="color:#888;font-weight:400">${fmtDate(o.date)}</span></div>
+          <div>${itemsStr}</div>
+          ${total>0?`<div style="font-size:11px;color:#888;margin-top:3px">${fmt(total)}</div>`:''}
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <button class="btn btn-sm" onclick="loadOrderIntoForm(${o.id})">✏ Edit</button>
+          <button class="btn btn-sm" onclick="printOrderPOS(${o.id})" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾</button>
+          <button class="btn btn-sm" onclick="shareOrderWhatsApp(${o.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
+          <button class="btn btn-sm btn-danger" onclick="delOrder(${o.id})">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    const totalKg=partyOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
+    return `<div class="party-pending-card" style="margin-bottom:10px">
+      <div class="party-pending-header">
+        <div class="party-pending-name">${party}</div>
+        <div class="party-pending-meta">${partyOrders.length} order(s) · ${fmtKg(totalKg)} total</div>
+      </div>
+      ${orderRows}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// CATALOG
+// ============================================================
+function colorName(c){ return typeof c==='object'?c.name:c; }
+function colorAlias(c){ return typeof c==='object'?c.alias||'':''; }
+function colorSearchStr(c){ return colorName(c)+'|'+(colorAlias(c)||''); }
+
+
+function toggleSection(gridId, btnId, searchWrapId){
+  const grid = document.getElementById(gridId);
+  const btn  = document.getElementById(btnId);
+  const sw   = searchWrapId ? document.getElementById(searchWrapId) : null;
+  const isHidden = grid.style.display === 'none';
+  grid.style.display = isHidden ? '' : 'none';
+  if(sw) sw.style.display = isHidden ? '' : 'none';
+  if(btn) btn.textContent = isHidden ? '▲ Hide' : '▼ Show';
+}
+function renderCatalog(){
+  // Colors — show as table with edit/delete like parties
+  const colorSearch=(document.getElementById('color-search')||{value:''}).value.toLowerCase();
+  const shapeSearch=(document.getElementById('shape-search')||{value:''}).value.toLowerCase();
+  const filtColors=colorSearch?colors.filter(c=>(colorName(c)+colorAlias(c)).toLowerCase().includes(colorSearch)):colors;
+  const filtShapes=shapeSearch?shapes.filter(s=>s.toLowerCase().includes(shapeSearch)):shapes;
+  const countEl=document.getElementById('color-count');
+  const sCountEl=document.getElementById('shape-count');
+  if(countEl)countEl.textContent=colorSearch?`(${filtColors.length}/${colors.length})`:`(${colors.length})`;
+  if(sCountEl)sCountEl.textContent=shapeSearch?`(${filtShapes.length}/${shapes.length})`:`(${shapes.length})`;
+  const colorEl = document.getElementById('color-tags');
+  if(filtColors.length){
+    colorEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">#</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Color Code</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Alias</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Actions</th>
+      </tr></thead>
+      <tbody>${filtColors.map((c,i)=>{
+        const name=colorName(c); const alias=colorAlias(c);
+        const realIdx=colors.findIndex(x=>colorName(x)===name);
+        return `<tr style="border-bottom:1px solid #f5f5f5;background:${i%2?'#fafafa':'#fff'}">
+          <td style="padding:7px 10px;color:#bbb;font-size:12px">${i+1}</td>
+          <td style="padding:7px 10px;font-weight:600">${name}</td>
+          <td style="padding:7px 10px;color:#888;font-size:12px">${alias||'—'}</td>
+          <td style="padding:7px 10px">
+            <div style="display:flex;gap:5px">
+              <button class="btn btn-sm" onclick="editColorAlias(${realIdx})" style="font-size:11px;padding:3px 8px">✎ Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="delColor('${name}')" style="font-size:11px;padding:3px 8px">🗑</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } else {
+    colorEl.innerHTML = '<div style="color:#bbb;font-size:13px;padding:10px 0">'+(colorSearch?'No matching colors':'No colors yet')+'</div>';
+  }
+
+  // Shapes — show as table with delete
+  const shapeEl = document.getElementById('shape-tags');
+  if(filtShapes.length){
+    shapeEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">#</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Shape</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Actions</th>
+      </tr></thead>
+      <tbody>${filtShapes.map((s,i)=>`<tr style="border-bottom:1px solid #f5f5f5;background:${i%2?'#fafafa':'#fff'}">
+        <td style="padding:7px 10px;color:#bbb;font-size:12px">${i+1}</td>
+        <td style="padding:7px 10px;font-weight:600">${s}</td>
+        <td style="padding:7px 10px">
+          <button class="btn btn-sm btn-danger" onclick="delShape('${s}')" style="font-size:11px;padding:3px 8px">🗑 Delete</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } else {
+    shapeEl.innerHTML = '<div style="color:#bbb;font-size:13px;padding:10px 0">'+(shapeSearch?'No matching shapes':'No shapes yet')+'</div>';
+  }
+}
+function editColorAlias(idx){
+  const c=colors[idx];
+  if(!c && c!==0){alert('Color not found');return;}
+  const name=colorName(c);
+  const cur=colorAlias(c);
+  const alias=window.prompt('Edit alias for "'+name+'":\n(Leave blank to remove alias)',cur||'');
+  if(alias===null)return; // cancelled
+  colors[idx]=alias.trim()?{name:name,alias:alias.trim()}:name;
+  saveAll();
+  renderCatalog();
+}
+function addColor(){
+  const inp=document.getElementById('new-color');
+  const aliasInp=document.getElementById('new-color-alias');
+  const v=normalizeStr(inp.value);
+  if(!v)return;
+  if(colors.some(c=>colorName(c).toLowerCase()===v.toLowerCase())){alert('Color already exists.');return;}
+  const alias=(aliasInp?aliasInp.value.trim():'');
+  colors.push(alias?{name:v,alias}:v);
+  inp.value=''; if(aliasInp)aliasInp.value='';
+  saveAll();renderCatalog();
+}
+function delColor(c){colors=colors.filter(x=>colorName(x)!==c);saveAll();renderCatalog();}
+function addShape(){const inp=document.getElementById('new-shape');const v=normalizeStr(inp.value);if(!v||ciIncludes(shapes,v))return;shapes.push(v);inp.value='';saveAll();renderCatalog();}
+function delShape(s){shapes=shapes.filter(x=>x!==s);saveAll();renderCatalog();}
+document.getElementById('new-color').addEventListener('keydown',e=>{if(e.key==='Enter')addColor();});
+document.getElementById('new-shape').addEventListener('keydown',e=>{if(e.key==='Enter')addShape();});
+
+// ============================================================
+// PARTIES
+// ============================================================
+function renderParties(){
+  const countEl=document.getElementById('party-count');
+  if(countEl)countEl.textContent='('+parties.length+')';
+  const container=document.getElementById('party-tags');
+  document.getElementById('empty-parties').style.display=parties.length?'none':'block';
+  container.innerHTML='';
+  parties.forEach(p=>{
+    const row=document.createElement('div');
+    row.className='party-row-item';
+    row.innerHTML=`<span style="font-size:13px;font-weight:600">${p.name}</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="openPartyDetail(${p.id})">View</button>
+        <button class="btn btn-sm" onclick="editPartyInline(${p.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="delParty(${p.id})">Delete</button>
+      </div>`;
+    container.appendChild(row);
+  });
+}
+function addParty(){
+  const inp=document.getElementById('new-party');
+  const name=normalizeStr(inp.value);
+  if(!name)return;
+  if(parties.some(p=>p.name.toLowerCase()===name.toLowerCase())){alert('Party already exists.');return;}
+  parties.push({id:nextPaId++,name});
+  inp.value='';
+  saveAll();renderParties();
+}
+function editPartyInline(id){
+  const p=parties.find(x=>x.id===id);if(!p)return;
+  const newName=prompt('Edit party name:',p.name);
+  if(!newName||!newName.trim())return;
+  const name=normalizeStr(newName);
+  if(parties.some(x=>x.id!==id&&x.name.toLowerCase()===name.toLowerCase())){alert('Party already exists.');return;}
+  const old=p.name;
+  p.name=name;
+  orders.forEach(o=>{if(o.party===old)o.party=name;});
+  invoices.forEach(inv=>{if(inv.party===old)inv.party=name;});
+  saveAll();renderParties();renderOrders();renderInvoiceList();
+}
+function delParty(id){
+  if(!confirm('Delete this party?'))return;
+  parties=parties.filter(x=>x.id!==id);
+  saveAll();renderParties();
+}
+document.getElementById('new-party').addEventListener('keydown',e=>{if(e.key==='Enter')addParty();});
+
+// ============================================================
+// ORDERS
+// ============================================================
+function colorOptions(sel){
+  return colors.map(c=>{
+    const n=colorName(c); const a=colorAlias(c);
+    const label=a?n+' ('+a+')':n;
+    return `<option value="${n}" ${n===sel?'selected':''}>${label}</option>`;
+  }).join('')||'<option>Add colors first</option>';
+}
+function shapeOptions(sel){return shapes.map(s=>`<option value="${s}" ${s===sel?'selected':''}>${s}</option>`).join('')||'<option>Add shapes first</option>';}
+
+function makeCombo(list, val, cls){
+  const uid='cb'+Math.random().toString(36).slice(2,7);
+  let comboList;
+  if(cls==='color-combo'){
+    comboList=colors.map(c=>({value:colorName(c),label:colorAlias(c)?colorName(c)+' ('+colorAlias(c)+')':colorName(c)}));
+  } else {
+    comboList=list.map(s=>({value:s,label:s}));
+  }
+  const listJson=JSON.stringify(comboList).replace(/"/g,'&quot;');
+  return `<div class="combo-wrap">
+    <input class="combo-input ${cls}" type="text" value="${val||''}" placeholder="Type or pick..." autocomplete="off"
+      onfocus="openComboObj(this,'${uid}',${listJson},'${cls}')"
+      oninput="filterComboObj(this,'${uid}',${listJson},'${cls}')"
+      onkeydown="comboKeyDown(event,'${uid}','${cls}')">
+    <div class="combo-drop" id="${uid}"></div>
+  </div>`;
+}
+function openComboObj(inp,uid,list,cls){
+  closeAllCombos();
+  const drop=document.getElementById(uid);
+  const rect=inp.getBoundingClientRect();
+  drop.style.top=(rect.bottom+2)+'px';
+  drop.style.left=rect.left+'px';
+  drop.style.width=Math.max(rect.width,160)+'px';
+  drop._activeIdx=-1;
+  filterComboObj(inp,uid,list,cls,true);
+}
+function filterComboObj(inp,uid,list,cls,forceOpen){
+  const q=inp.value.toLowerCase();
+  const drop=document.getElementById(uid);
+  const filtered=list.filter(x=>x.label.toLowerCase().includes(q)||x.value.toLowerCase().includes(q)).slice(0,8);
+  drop._data=filtered;
+  drop._activeIdx=-1;
+  drop._cls=cls||'';
+
+  let html2='';
+  if(filtered.length){
+    html2+=filtered.map((x,i)=>{
+      const safe=x.label.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      return `<div class="combo-opt" data-idx="${i}" onmousedown="pickComboObjIdx('${uid}',${i},event)">${safe}</div>`;
+    }).join('');
+  }
+  // Add "Create new" option if typed something not in list
+  const exactMatch=list.some(x=>x.value.toLowerCase()===q||x.label.toLowerCase()===q);
+  if(q && !exactMatch){
+    const createLabel=cls==='color-combo'?'+ Add color "'+inp.value+'"':'+ Add shape "'+inp.value+'"';
+    html2+=`<div class="combo-opt" style="color:#2563eb;font-style:italic;border-top:1px dashed #ddd" data-idx="${filtered.length}" onmousedown="createAndPickCombo('${uid}',event)">${createLabel}</div>`;
+  }
+  if(!html2){drop.classList.remove('open');return;}
+  drop.innerHTML=html2;
+  drop.classList.add('open');
+}
+function comboKeyDown(e,uid,cls){
+  const drop=document.getElementById(uid);
+  if(!drop||!drop.classList.contains('open'))return;
+  const opts=drop.querySelectorAll('.combo-opt');
+  if(!opts.length)return;
+  let idx=drop._activeIdx||0;
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    idx=Math.min(idx+1,opts.length-1);
+    drop._activeIdx=idx;
+    opts.forEach((o,i)=>o.style.background=i===idx?'#eff6ff':'');
+    opts[idx].scrollIntoView({block:'nearest'});
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    idx=Math.max(idx-1,0);
+    drop._activeIdx=idx;
+    opts.forEach((o,i)=>o.style.background=i===idx?'#eff6ff':'');
+    opts[idx].scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'||e.key==='Tab'){
+    if(idx>=0&&idx<opts.length){
+      e.preventDefault();
+      opts[idx].dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));
+    }
+  } else if(e.key==='Escape'){
+    drop.classList.remove('open');
+  }
+}
+function createAndPickCombo(uid,e){
+  e.preventDefault();
+  const drop=document.getElementById(uid);
+  const inp=drop.closest('.combo-wrap').querySelector('.combo-input');
+  const val=inp.value.trim();
+  if(!val)return;
+  const cls=drop._cls||'';
+  if(cls==='color-combo'){
+    if(!colors.some(c=>colorName(c).toLowerCase()===val.toLowerCase())){
+      colors.push(val);
+      saveAll();
+    }
+  } else {
+    if(!shapes.some(s=>s.toLowerCase()===val.toLowerCase())){
+      shapes.push(val);
+      saveAll();
+    }
+  }
+  inp.value=val;
+  drop.classList.remove('open');
+  if(drop.closest('#inv-items-container'))updateInvFormTotal();
+}
+function pickComboObjIdx(uid,idx,e){
+  e.preventDefault();
+  const drop=document.getElementById(uid);
+  const val=drop._data?drop._data[idx].value:'';
+  const inp=drop.closest('.combo-wrap').querySelector('.combo-input');
+  inp.value=val;
+  drop.classList.remove('open');
+  if(drop.closest('#inv-items-container'))updateInvFormTotal();
+}
+// Close all combos
+function closeAllCombos(){
+  document.querySelectorAll('.combo-drop.open').forEach(d=>d.classList.remove('open'));
+}
+document.addEventListener('click', function(e){
+  if(!e.target.classList.contains('combo-input')) closeAllCombos();
+});
+
+function openCombo(inp, uid, list){
+  closeAllCombos();
+  const drop = document.getElementById(uid);
+  // Position using fixed coords
+  const rect = inp.getBoundingClientRect();
+  drop.style.top  = (rect.bottom + 2) + 'px';
+  drop.style.left = rect.left + 'px';
+  drop.style.width = Math.max(rect.width, 130) + 'px';
+  filterCombo(inp, uid, list, true);
+}
+function filterCombo(inp, uid, list, forceOpen){
+  const q = inp.value.toLowerCase();
+  const drop = document.getElementById(uid);
+  const filtered = list.filter(x => x.toLowerCase().includes(q)).slice(0, 2);
+  if(!filtered.length){ drop.classList.remove('open'); return; }
+  drop.innerHTML = filtered.map((x,i) => {
+    const safe = x.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `<div class="combo-opt" data-val="${safe}" data-uid="${uid}" onmousedown="pickComboIdx('${uid}',${i},event)">${safe}</div>`;
+  }).join('');
+  drop._data = filtered;
+  drop.classList.add('open');
+}
+function pickComboIdx(uid, idx, e){
+  e.preventDefault();
+  const drop = document.getElementById(uid);
+  const val = drop._data ? drop._data[idx] : drop.querySelectorAll('.combo-opt')[idx].dataset.val;
+  const inp = drop.closest('.combo-wrap').querySelector('.combo-input');
+  inp.value = val;
+  drop.classList.remove('open');
+  if(drop.closest('#inv-items-container')) updateInvFormTotal();
+}
+function pickCombo(uid, val, e){
+  if(e) e.preventDefault();
+  const drop = document.getElementById(uid);
+  const inp = drop.closest('.combo-wrap').querySelector('.combo-input');
+  inp.value = val;
+  drop.classList.remove('open');
+  if(drop.closest('#inv-items-container')) updateInvFormTotal();
+}
+function closeCombo(uid){
+  const el = document.getElementById(uid);
+  if(el) el.classList.remove('open');
+}
+
+function calcOrderRowAmt(input){
+  const row=input.closest('.item-row');if(!row)return;
+  const kg=parseFloat(row.querySelector('input[placeholder="kg"]').value)||0;
+  const rate=parseFloat(row.querySelector('input[placeholder="rate"]').value)||0;
+  const amtEl=row.querySelector('.order-amt');
+  if(amtEl)amtEl.textContent=rate>0?Math.round(kg*rate):'';
+}
+function addItemRow(item=null){
+  const c=document.getElementById('items-container');
+  const d=document.createElement('div');d.className='item-row';
+  const selC=item?item.color:'';
+  const selS=item?item.shape:'';
+  const kg=item?item.kg:'';
+  const price=item?(item.price||0):'';
+  const amt=price>0?Math.round(kg*price):'';
+  d.innerHTML=makeCombo(colors,selC,'color-combo')+makeCombo(shapes,selS,'shape-combo')+
+    `<input type="number" min="0" step="0.01" value="${kg}" placeholder="kg" oninput="calcOrderRowAmt(this)">
+    <input type="number" min="0" value="${price||''}" placeholder="rate" oninput="calcOrderRowAmt(this)">
+    <span class="order-amt" style="font-size:12px;color:#2563eb;font-weight:600;text-align:right;padding:4px 2px">${amt}</span>
+    <button class="item-del" onclick="this.parentElement.remove()">✕</button>`;
+  c.appendChild(d);
+}
+function getItems(){
+  return [...document.querySelectorAll('#items-container .item-row')].map(r=>{
+    const combos=r.querySelectorAll('.combo-input');
+    const ins=r.querySelectorAll('input[type="number"]');
+    return{color:(combos[0]?.value||'').trim(),shape:(combos[1]?.value||'').trim(),
+      kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
+  }).filter(i=>i.color&&i.shape);
+}
+function resetOrderForm(){
+  editOid=null;
+  document.getElementById('order-form-title').textContent='New Order';
+  document.getElementById('f-party').value='';
+  document.getElementById('f-date').value=today();
+  document.getElementById('items-container').innerHTML='';
+  document.getElementById('party-dl').innerHTML=parties.map(p=>`<option value="${p.name}">`).join('');
+  document.getElementById('form-status-note').textContent='Status: Pending (auto)';
+  document.getElementById('save-order-btn').textContent='Save order';
+  addItemRow();
+}
+function cancelOrderForm(){resetOrderForm();}
+function loadOrderIntoForm(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  editOid=id;
+  document.getElementById('order-form-title').textContent='Edit Order — '+invLabel(o.invNum);
+  document.getElementById('f-party').value=o.party;
+  document.getElementById('f-date').value=o.date;
+  document.getElementById('items-container').innerHTML='';
+  document.getElementById('party-dl').innerHTML=parties.map(p=>`<option value="${p.name}">`).join('');
+  o.items.forEach(i=>addItemRow(i));
+  document.getElementById('form-status-note').textContent='Status: '+o.status;
+  document.getElementById('save-order-btn').textContent='Update order';
+  document.getElementById('order-form-title').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function saveOrder(){
+  const party=document.getElementById('f-party').value.trim();
+  const items=getItems();
+  if(!party||!items.length)return;
+  const dateVal=document.getElementById('f-date').value;
+  if(editOid){
+    const i=orders.findIndex(x=>x.id===editOid);
+    orders[i]={...orders[i],party,date:dateVal,items};
+    resetOrderForm();
+    saveAll();renderOrders();renderInvoiceList();
+  } else {
+    const newOrder={id:nextOid++,invNum:nextInvNum++,party,date:dateVal,status:'Pending',items};
+    orders.push(newOrder);
+    resetOrderForm();
+    saveAll();renderOrders();renderInvoiceList();
+    showOrderWhatsApp(newOrder.id);
+  }
+}
+function markDone(id){const o=orders.find(x=>x.id===id);if(o){o.status='Delivered';saveAll();renderOrders();renderProduction();}}
+function delOrder(id){
+  if(!confirm('Delete this order?'))return;
+  orders=orders.filter(x=>x.id!==id);
+  saveAll();renderOrders();renderInvoiceList();
+}
+
+// ============================================================
+// INVOICES
+// ============================================================
+function addInvItemRow(item=null){
+  const c=document.getElementById('inv-items-container');
+  const d=document.createElement('div');d.className='item-row';
+  const selC=item?item.color:'';
+  const selS=item?item.shape:'';
+  d.innerHTML=makeCombo(colors,selC,'color-combo')+makeCombo(shapes,selS,'shape-combo')+
+    `<input type="number" min="0" step="0.01" value="${item?item.kg:''}" placeholder="kg" oninput="updateInvFormTotal()">
+    <input type="number" min="0" value="${item?item.price:''}" placeholder="rate" oninput="updateInvFormTotal()">
+    <button class="item-del" onclick="this.parentElement.remove();updateInvFormTotal()">✕</button>`;
+  c.appendChild(d);updateInvFormTotal();
+}
+function getInvItems(){
+  return [...document.querySelectorAll('#inv-items-container .item-row')].map(r=>{
+    const combos=r.querySelectorAll('.combo-input');
+    const ins=r.querySelectorAll('input[type="number"]');
+    return{color:(combos[0]?.value||'').trim(),shape:(combos[1]?.value||'').trim(),kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
+  }).filter(i=>i.color&&i.shape);
+}
+function openPartyCombo(inp){
+  const uid='inv-party-drop';
+  closeAllCombos();
+  const drop=document.getElementById(uid);
+  if(!drop)return;
+  const rect=inp.getBoundingClientRect();
+  drop.style.top=(rect.bottom+2)+'px';
+  drop.style.left=rect.left+'px';
+  drop.style.width=Math.max(rect.width,200)+'px';
+  drop._activeIdx=-1;
+  drop._cls='party-combo';
+  const q=inp.value.toLowerCase();
+  const filtered=parties.filter(p=>p.name.toLowerCase().includes(q)).map(p=>({value:p.name,label:p.name}));
+  if(!filtered.length){drop.classList.remove('open');return;}
+  drop._data=filtered;
+  drop.innerHTML=filtered.map((p,i)=>`<div class="combo-opt" data-idx="${i}" onmousedown="pickPartyCombo(${i},event)">${p.label}</div>`).join('');
+  drop.classList.add('open');
+}
+function pickPartyCombo(idx,e){
+  e.preventDefault();
+  const drop=document.getElementById('inv-party-drop');
+  const val=drop._data?drop._data[idx].value:'';
+  const inp=document.getElementById('if-party-input');
+  if(inp)inp.value=val;
+  drop.classList.remove('open');
+}
+
+function updateInvFormTotal(){
+  const items=getInvItems();
+  const t=Math.round(items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0));
+  const w=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  document.getElementById('inv-form-total').textContent=fmt(t);
+  const wEl=document.getElementById('inv-form-weight');
+  if(wEl)wEl.textContent=w.toFixed(2)+' kg';
+}
+function resetInvForm(){
+  editInvId=null;
+  document.getElementById('inv-form-title').textContent='New Invoice';
+  document.getElementById('save-inv-btn').textContent='Save invoice';
+  const pInput=document.getElementById('if-party-input');
+  if(pInput){pInput.value='';pInput.disabled=false;}
+  document.getElementById('if-date').value=today();
+  document.getElementById('inv-items-container').innerHTML='';
+  const rem=document.getElementById('if-remarks');
+  if(rem)rem.value='';
+  addInvItemRow();
+}
+function cancelInvForm(){resetInvForm();}
+function loadInvIntoForm(invId){
+  const inv=invoices.find(x=>x.id===invId);if(!inv)return;
+  editInvId=invId;
+  document.getElementById('inv-form-title').textContent='Edit Invoice — '+invNumLabel(inv.serial);
+  document.getElementById('save-inv-btn').textContent='Update invoice';
+  const pInput=document.getElementById('if-party-input');
+  if(pInput){pInput.value=inv.party;pInput.disabled=false;}
+  document.getElementById('if-date').value=inv.date;
+  const remEl=document.getElementById('if-remarks');
+  if(remEl)remEl.value=inv.remarks||'';
+  document.getElementById('inv-items-container').innerHTML='';
+  (inv.items||[]).forEach(i=>addInvItemRow(i));
+  if(!(inv.items||[]).length)addInvItemRow();
+  updateInvFormTotal();
+  document.getElementById('inv-form-title').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function saveInvoice(){
+  const pInput=document.getElementById('if-party-input');
+  const party=(pInput?pInput.value:'').trim();
+  const date=document.getElementById('if-date').value;
+  const items=getInvItems();
+  const remarks=(document.getElementById('if-remarks').value||'').trim();
+  if(!party||!items.length){alert('Select a party and add at least one item.');return;}
+  if(editInvId){
+    const inv=invoices.find(x=>x.id===editInvId);
+    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;}
+  } else {
+    // Always use max serial + 1 to avoid duplicates
+    const maxSerial=invoices.reduce((m,i)=>Math.max(m,i.serial||0),0);
+    if(nextInvoiceNum<=maxSerial) nextInvoiceNum=maxSerial+1;
+    if(nextInvoiceNum<590) nextInvoiceNum=590;
+    invoices.push({id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,orderIds:[]});
+  }
+  resetInvForm();
+  saveAll();renderInvoiceList();
+}
+function saveCourier(id,val){
+  const inv=invoices.find(x=>x.id==id);
+  if(inv){
+    inv.courier=val.trim();
+    saveAll();
+    renderInvoiceList();
+  }
+}
+function delInvoice(invId){
+  if(!confirm('Delete this invoice?'))return;
+  invoices=invoices.filter(x=>x.id!==invId);
+  saveAll();renderInvoiceList();
+}
+function renderInvoiceList(){
+  const tbody=document.getElementById('inv-body');
+  const empty=document.getElementById('empty-invlist');
+  if(!invoices.length){tbody.innerHTML='';empty.style.display='block';
+    document.getElementById('si-total').textContent=0;
+    document.getElementById('si-amount').textContent='₹0';return;}
+  empty.style.display='none';
+  const invDateFilter=(document.getElementById('inv-date-filter')||{value:''}).value;
+  let filtInvoices=invDateFilter?invoices.filter(i=>i.date===invDateFilter):invoices;
+  const sorted=[...filtInvoices].sort((a,b)=>a.serial-b.serial);
+  let grand=0;
+  tbody.innerHTML=sorted.map((inv,idx)=>{
+    const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
+    grand+=amt;
+    return `<tr>
+      <td style="color:#888;font-size:12px">${invNumLabel(inv.serial)}</td>
+      <td style="font-weight:600">${inv.party}</td>
+      <td style="color:#888">${fmtDate(inv.date)}</td>
+      <td>${fmt(amt)}</td>
+      <td style="white-space:nowrap">
+  <input type="text" value="${(inv.courier||'').replace(/"/g,'&quot;')}" placeholder="courier..." id="courier-${inv.id}" style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:110px">
+  <button onclick="saveCourier(${inv.id},document.getElementById('courier-'+${inv.id}).value)" style="font-size:13px;padding:3px 7px;border:1px solid #16a34a;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;margin-left:2px">✓</button>
+</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
+        <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">Print</button>
+        <button class="btn btn-sm" onclick="shareInvWhatsApp(${inv.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
+        <button class="btn btn-sm btn-danger" onclick="delInvoice(${inv.id})">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('si-total').textContent=filtInvoices.length;
+  document.getElementById('si-amount').textContent=fmt(grand);
+  const partyInput=document.getElementById('if-party-input');
+  if(partyInput&&!editInvId) partyInput.value='';
+}
+
+// ============================================================
+// PRINT INVOICE
+// ============================================================
+let invReturnTab='invoices';
+function viewInvoice(invId){
+  currentPosInvId=invId;
+  const inv=invoices.find(x=>x.id===invId);if(!inv)return;
+  const items=inv.items||[];
+  const rows=items.map(i=>`<tr>
+    <td>${i.color}</td><td>${i.shape}</td>
+    <td style="text-align:center">${fmtKg(i.kg)}</td>
+    <td style="text-align:right">${fmt(i.price)}/kg</td>
+    <td style="text-align:right">${fmt(i.kg*i.price)}</td>
+  </tr>`).join('');
+  const grand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
+  document.getElementById('inv-content').innerHTML=`
+    <div style="margin-bottom:18px">
+      <div class="inv-to-name" style="font-size:22px;font-weight:700;color:#1a1a1a;margin-bottom:4px">${inv.party}</div>
+      <div class="inv-meta" style="text-align:left;font-size:13px;color:#888;line-height:1.8">
+        <span><strong>Invoice#</strong> ${invNumLabel(inv.serial)}</span> &nbsp;·&nbsp;
+        <span>Date: ${fmtDate(inv.date)}</span>
+      </div>
+    </div>
+    <table class="inv-table">
+      <thead><tr><th style="width:22%">Color</th><th style="width:22%">Shape</th>
+        <th style="width:18%;text-align:center">Qty (kg)</th>
+        <th style="width:20%;text-align:right">Rate</th>
+        <th style="width:18%;text-align:right">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="inv-total-box"><div class="inv-total-inner">
+      <div class="inv-total-row grand"><span>Total</span><span>${fmt(grand)}</span></div>
+    </div></div>
+    ${inv.remarks?`<div style="margin-top:24px;padding:12px 14px;background:#f8f9fa;border-radius:8px;border-left:3px solid #2563eb">
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Remarks</div>
+      <div style="font-size:13px;color:#444;line-height:1.6">${inv.remarks}</div>
+    </div>`:''}${inv.courier?`<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border-left:3px solid #16a34a"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">&#x1F69A; Courier</div><div style="font-size:13px">${inv.courier}</div></div>`:''}`;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  ['orders','invoices','catalog','production','reports'].forEach(id=>{
+    const el=document.getElementById('tab-'+id);
+    if(el) el.classList.remove('active');
+  });
+  document.getElementById('view-invoice').style.display='block';
+}
+function closeInvoice(){
+  document.getElementById('view-invoice').style.display='none';
+  document.getElementById('pos-inv-wrap').style.display='none';
+  document.getElementById('inv-content').closest('.inv-wrap').style.display='';
+  document.body.classList.remove('pos-mode');
+  currentPosInvId=null;
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',i===1));
+  ['orders','invoices','catalog','production'].forEach((id,i)=>document.getElementById('tab-'+id).classList.toggle('active',i===1));
+  renderInvoiceList();
+}
+
+// ============================================================
+// PARTY DETAIL & LEDGER
+// ============================================================
+function openPartyDetail(id){
+  const p=parties.find(x=>x.id===id);if(!p)return;
+  pdPartyId=id;
+  document.getElementById('pd-title').textContent=p.name;
+  const pOrders=orders.filter(o=>o.party===p.name);
+  const pInvoices=invoices.filter(inv=>inv.party===p.name);
+  const totalOrdered=pOrders.reduce((s,o)=>s+totalAmt(o),0);
+  const totalInvoiced=pInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+(i.kg*i.price),0),0);
+  let html=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+    <div class="stat"><div class="stat-label">Orders</div><div class="stat-val" style="font-size:16px">${pOrders.length}</div></div>
+    <div class="stat"><div class="stat-label">Ordered</div><div class="stat-val" style="font-size:13px">${fmt(totalOrdered)}</div></div>
+    <div class="stat"><div class="stat-label">Invoiced</div><div class="stat-val" style="font-size:13px;color:#16a34a">${fmt(totalInvoiced)}</div></div>
+  </div>`;
+  if(pOrders.length){
+    html+=`<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Orders</div>`;
+    html+=pOrders.map(o=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0">
+      <div>
+        <div style="font-size:13px">${o.date} &nbsp;<span class="badge badge-${o.status.toLowerCase()}">${o.status}</span></div>
+        <div style="font-size:12px;color:#999">${o.items.map(i=>i.color+' '+i.shape+' '+fmtKg(i.kg)).join(' · ')}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;font-weight:600">${fmt(totalAmt(o))}</span>
+        <button class="btn btn-sm" onclick="closeModal('modal-party-detail');openOrderView(${o.id})">View</button>
+        <button class="btn btn-sm" onclick="closeModal('modal-party-detail');editOrderFromAnywhere(${o.id})">Edit</button>
+      </div>
+    </div>`).join('');
+  }
+  if(pInvoices.length){
+    html+=`<div style="font-size:11px;font-weight:600;color:#999;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em">Invoices</div>`;
+    html+=pInvoices.map(inv=>{
+      const amt=(inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0">
+        <div>
+          <div style="font-size:13px">${invNumLabel(inv.serial)} &nbsp;<span style="font-size:12px;color:#999">${fmtDate(inv.date)}</span></div>
+          <div style="font-size:12px;color:#999">${(inv.items||[]).map(i=>i.color+' '+i.shape+' '+fmtKg(i.kg)).join(' · ')}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;font-weight:600">${fmt(amt)}</span>
+          <button class="btn btn-sm" onclick="closeModal('modal-party-detail');viewInvoice(${inv.id})">Print</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  if(!pOrders.length&&!pInvoices.length) html+='<div class="empty">No orders or invoices yet.</div>';
+  document.getElementById('pd-body').innerHTML=html;
+  document.getElementById('modal-party-detail').classList.add('open');
+}
+function printPartyLedger(){
+  const p=parties.find(x=>x.id===pdPartyId);if(!p)return;
+  const pOrders=orders.filter(o=>o.party===p.name);
+  const pInvoices=invoices.filter(inv=>inv.party===p.name);
+  const totalOrdered=pOrders.reduce((s,o)=>s+totalAmt(o),0);
+  const totalInvoiced=pInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+(i.kg*i.price),0),0);
+  const orderRows=pOrders.map(o=>`<tr>
+    <td>${o.date}</td><td>${o.items.map(i=>i.color+' '+i.shape).join(', ')}</td>
+    <td style="text-align:right">${o.items.map(i=>fmtKg(i.kg)).join(', ')}</td>
+    <td style="text-align:right">${fmt(totalAmt(o))}</td><td>${o.status}</td>
+  </tr>`).join('');
+  const invRows=pInvoices.map(inv=>{
+    const amt=(inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0);
+    return `<tr><td>${fmtDate(inv.date)}</td><td>${invNumLabel(inv.serial)}</td>
+      <td>${(inv.items||[]).map(i=>i.color+' '+i.shape).join(', ')}</td>
+      <td style="text-align:right">${(inv.items||[]).map(i=>fmtKg(i.kg)).join(', ')}</td>
+      <td style="text-align:right">${fmt(amt)}</td></tr>`;
+  }).join('');
+  document.getElementById('ledger-content').innerHTML=`
+    <div class="inv-header">
+      <div><div class="inv-factory">Sitara</div><div class="inv-sub">Sequins Manufacturer</div><div class="inv-addr">Delhi, India</div></div>
+      <div class="inv-meta"><div><strong>Party Ledger</strong></div><div>${p.name}</div><div>Printed: ${today()}</div></div>
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Orders</div>
+    <table class="inv-table">
+      <thead><tr><th>Date</th><th>Items</th><th style="text-align:right">Qty</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+      <tbody>${orderRows||'<tr><td colspan="5" style="color:#bbb;text-align:center;padding:8px">No orders</td></tr>'}</tbody>
+    </table>
+    <div style="font-size:13px;font-weight:600;margin:14px 0 8px">Invoices</div>
+    <table class="inv-table">
+      <thead><tr><th>Date</th><th>Inv#</th><th>Items</th><th style="text-align:right">Qty</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${invRows||'<tr><td colspan="5" style="color:#bbb;text-align:center;padding:8px">No invoices</td></tr>'}</tbody>
+    </table>
+    <div class="inv-total-box" style="margin-top:14px"><div class="inv-total-inner">
+      <div class="inv-total-row"><span>Total Ordered</span><span>${fmt(totalOrdered)}</span></div>
+      <div class="inv-total-row grand"><span>Total Invoiced</span><span>${fmt(totalInvoiced)}</span></div>
+    </div></div>
+    <div class="inv-footer">Sitara Sequins, Delhi</div>`;
+  closeModal('modal-party-detail');
+  document.getElementById('view-ledger').style.display='block';
+  document.getElementById('view-invoice').style.display='none';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  ['orders','invoices','catalog','production'].forEach(id=>document.getElementById('tab-'+id).classList.remove('active'));
+}
+function closeLedger(){
+  document.getElementById('view-ledger').style.display='none';
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',i===2));
+  ['orders','invoices','catalog','production'].forEach((id,i)=>document.getElementById('tab-'+id).classList.toggle('active',i===2));
+}
+
+// ============================================================
+// ORDER VIEW MODAL
+// ============================================================
+function openOrderView(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  ovOid=id;
+  document.getElementById('ov-title').textContent=`Order — ${o.party}`;
+  const rows=o.items.map(i=>`<tr>
+    <td>${i.color}</td><td>${i.shape}</td>
+    <td style="text-align:right">${fmtKg(i.kg)}</td>
+    <td style="text-align:right">${fmt(i.price)}/kg</td>
+    <td style="text-align:right;font-weight:600">${fmt(i.kg*i.price)}</td>
+  </tr>`).join('');
+  document.getElementById('ov-body').innerHTML=`
+    <div class="detail-row"><span class="detail-label">Party</span><span class="detail-val">${o.party}</span></div>
+    <div class="detail-row"><span class="detail-label">Date</span><span class="detail-val">${o.date}</span></div>
+    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-val"><span class="badge badge-${o.status.toLowerCase()}">${o.status}</span></span></div>
+    <div class="detail-row"><span class="detail-label">Total</span><span class="detail-val">${fmt(totalAmt(o))}</span></div>
+    <table class="detail-items-table">
+      <thead><tr><th>Color</th><th>Shape</th><th style="text-align:right">Kg</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  document.getElementById('modal-order-view').classList.add('open');
+}
+function editFromOrderView(){closeModal('modal-order-view');editOrderFromAnywhere(ovOid);}
+function editOrderFromAnywhere(id){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',i===0));
+  ['orders','invoices','catalog','production'].forEach((id2,i)=>document.getElementById('tab-'+id2).classList.toggle('active',i===0));
+  document.getElementById('view-invoice').style.display='none';
+  loadOrderIntoForm(id);
+}
+
+// ============================================================
+// PENDING WORK
+// ============================================================
+let prodView='item'; // 'item' or 'party'
+
+function setToday(){ renderProduction(); } // kept for renderAll compatibility
+
+function setProdView(v){
+  prodView=v;
+  document.getElementById('pw-btn-item').style.background  = v==='item'  ? '#2563eb' : '#fff';
+  document.getElementById('pw-btn-item').style.color       = v==='item'  ? '#fff'    : '#888';
+  document.getElementById('pw-btn-party').style.background = v==='party' ? '#2563eb' : '#fff';
+  document.getElementById('pw-btn-party').style.color      = v==='party' ? '#fff'    : '#888';
+  renderProduction();
+}
+
+function setProdSort(s, el){
+  prodSort=s;
+  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderProduction();
+}
+
+function sortNetCards(cards){
+  const c=[...cards];
+  switch(prodSort){
+    case 'qty-desc': return c.sort((a,b)=>b.net-a.net);
+    case 'qty-asc':  return c.sort((a,b)=>a.net-b.net);
+    default: return c;
+  }
+}
+
+function renderProduction(){
+  const search=(document.getElementById('prod-search')||{value:''}).value.trim().toLowerCase();
+
+  // ── Build net-pending across ALL pending orders (all dates) ──
+  // ordered[color||shape] = {totalKg, parties:{name->kg}, dates:[]}
+  const ordByItem={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    o.items.forEach(i=>{
+      const key=i.color+'||'+i.shape;
+      if(!ordByItem[key])ordByItem[key]={totalKg:0,parties:{},dates:[]};
+      ordByItem[key].totalKg+=parseFloat(i.kg||0);
+      ordByItem[key].parties[o.party]=(ordByItem[key].parties[o.party]||0)+parseFloat(i.kg||0);
+      if(!ordByItem[key].dates.includes(o.date)) ordByItem[key].dates.push(o.date);
+    });
+  });
+
+  // invoiced[color||shape] = totalKg invoiced (ALL invoices, ALL dates)
+  const invByItem={};
+  invoices.forEach(inv=>{
+    (inv.items||[]).forEach(i=>{
+      const key=i.color+'||'+i.shape;
+      invByItem[key]=(invByItem[key]||0)+parseFloat(i.kg||0);
+    });
+  });
+
+  // Also build per-party invoice map for party-wise view
+  const invByPartyItem={};
+  invoices.forEach(inv=>{
+    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const key=i.color+'||'+i.shape;
+      invByPartyItem[inv.party][key]=(invByPartyItem[inv.party][key]||0)+parseFloat(i.kg||0);
+    });
+  });
+
+  // ── Build raw item cards ──────────────────────────────────────
+  const rawCards=[];
+  let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
+  Object.entries(ordByItem).forEach(([key,v])=>{
+    const invKg=invByItem[key]||0;
+    const net=v.totalKg-invKg;
+    totalOrderKg+=v.totalKg; totalInvKg+=invKg;
+    if(net>0.001){
+      totalNetKg+=net;
+      const [color,shape]=key.split('||');
+      rawCards.push({color,shape,ordKg:v.totalKg,invKg,net,parties:v.parties,dates:v.dates});
+    }
+  });
+  // add invoiced-only items to total
+  Object.entries(invByItem).forEach(([key,invKg])=>{if(!ordByItem[key])totalInvKg+=invKg;});
+
+  const summary=document.getElementById('prod-summary');
+  const emptyEl=document.getElementById('empty-prod');
+
+  // Stats bar (always shown)
+  const statsBar=`<div style="display:flex;gap:8px;margin-bottom:14px">
+    <div class="stat"><div class="stat-label">Net Due (kg)</div><div class="stat-val" style="font-size:18px;color:#d97706">${totalNetKg.toFixed(2)}</div></div>
+    <div class="stat"><div class="stat-label">Items Pending</div><div class="stat-val" style="font-size:18px">${rawCards.length}</div></div>
+  </div>`;
+
+  if(!rawCards.length && !orders.filter(o=>o.status==='Pending').length){
+    emptyEl.style.display='block';
+    summary.innerHTML=statsBar;
+    return;
+  }
+  emptyEl.style.display='none';
+
+  if(prodView==='item'){
+    // ── ITEM-WISE VIEW ──────────────────────────────────────────
+    let cards=sortNetCards(rawCards);
+    if(search) cards=cards.filter(c=>
+      c.color.toLowerCase().includes(search)||
+      c.shape.toLowerCase().includes(search)||
+      Object.keys(c.parties).some(p=>p.toLowerCase().includes(search))
+    );
+    if(!cards.length){
+      summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
+      return;
+    }
+    summary.innerHTML=statsBar+
+      `<div style="font-size:11px;color:#888;margin-bottom:10px">${cards.length} item(s) · Net due = Ordered − Invoiced</div>`+
+      cards.map(c=>{
+        const partyBreakdown=Object.entries(c.parties)
+          .map(([p,kg])=>`<span style="background:#f0f4ff;border-radius:4px;padding:1px 7px;font-size:11px;color:#2563eb;margin-right:4px">${p}: ${fmtKg(kg)}</span>`)
+          .join('');
+        const datesStr=c.dates.sort().map(d=>`<span style="font-size:10px;color:#bbb;background:#f5f5f5;border-radius:3px;padding:1px 5px;margin-right:3px">${d}</span>`).join('');
+        return `<div class="prod-card">
+          <div style="flex:1">
+            <div class="prod-item-label" style="margin-bottom:5px">🎨 ${c.color} &nbsp;<span style="color:#aaa">◆</span>&nbsp; ${c.shape}</div>
+            <div style="margin-bottom:3px">${partyBreakdown}</div>
+            <div>${datesStr}</div>
+            ${c.invKg>0?`<div style="font-size:11px;color:#16a34a;margin-top:3px">Invoiced: ${fmtKg(c.invKg)}</div>`:''}
+          </div>
+          <div style="text-align:right;min-width:72px">
+            <div class="prod-kg" style="color:#d97706">${fmtKg(c.net)}</div>
+            <div style="font-size:11px;color:#aaa">net due</div>
+          </div>
+        </div>`;
+      }).join('');
+
+  } else {
+    // ── PARTY-WISE VIEW ─────────────────────────────────────────
+    // Build per-party net pending
+    const partyMap={};
+    orders.filter(o=>o.status==='Pending').forEach(o=>{
+      if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
+      o.items.forEach(i=>{
+        const key=i.color+'||'+i.shape;
+        if(!partyMap[o.party].items[key])partyMap[o.party].items[key]={ordKg:0,invKg:0,color:i.color,shape:i.shape};
+        partyMap[o.party].items[key].ordKg+=parseFloat(i.kg||0);
+      });
+      if(!partyMap[o.party].dates.includes(o.date))partyMap[o.party].dates.push(o.date);
+    });
+    // subtract invoiced per party
+    Object.keys(partyMap).forEach(party=>{
+      const pi=invByPartyItem[party]||{};
+      Object.keys(partyMap[party].items).forEach(key=>{
+        partyMap[party].items[key].invKg=pi[key]||0;
+      });
+    });
+
+    let partyNames=Object.keys(partyMap);
+    if(search) partyNames=partyNames.filter(p=>
+      p.toLowerCase().includes(search)||
+      Object.values(partyMap[p].items).some(it=>
+        it.color.toLowerCase().includes(search)||it.shape.toLowerCase().includes(search)
+      )
+    );
+    if(!partyNames.length){
+      summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No parties match your search.</div>';
+      return;
+    }
+
+    // Sort parties by total net pending
+    partyNames.sort((a,b)=>{
+      const netA=Object.values(partyMap[a].items).reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
+      const netB=Object.values(partyMap[b].items).reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
+      return prodSort==='qty-asc'?netA-netB:netB-netA;
+    });
+
+    const partyCards=partyNames.map(party=>{
+      const data=partyMap[party];
+      const itemEntries=Object.values(data.items);
+      let rows=itemEntries.map(it=>{
+        const net=it.ordKg-it.invKg;
+        if(net<=0.001)return '';
+        return `<tr>
+          <td style="padding:6px 8px;font-size:12px;font-weight:600">${it.color}</td>
+          <td style="padding:6px 8px;font-size:12px;color:#888">${it.shape}</td>
+          <td style="padding:6px 8px;font-size:12px;text-align:right;color:#888">${fmtKg(it.ordKg)}</td>
+          <td style="padding:6px 8px;font-size:12px;text-align:right;color:#16a34a">${it.invKg>0?fmtKg(it.invKg):'-'}</td>
+          <td style="padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#d97706">${fmtKg(net)}</td>
+        </tr>`;
+      }).filter(Boolean).join('');
+      if(!rows)return '';
+      const totalNet=itemEntries.reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
+      const datesStr=data.dates.sort().join(', ');
+      return `<div class="party-pending-card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <div style="font-size:14px;font-weight:700">${party}</div>
+            <div style="font-size:11px;color:#aaa">Orders dated: ${datesStr}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:20px;font-weight:700;color:#d97706">${fmtKg(totalNet)}</div>
+            <div style="font-size:11px;color:#aaa">net due</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1.5px solid #f0f0f0">
+            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:left">Color</th>
+            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:left">Shape</th>
+            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Ordered</th>
+            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Invoiced</th>
+            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Net Due</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }).filter(Boolean).join('');
+
+    summary.innerHTML=statsBar+
+      `<div style="font-size:11px;color:#888;margin-bottom:10px">${partyNames.length} part${partyNames.length===1?'y':'ies'} · Net due = Ordered − Invoiced</div>`+
+      partyCards;
+  }
+}
+
+// ============================================================
+// PENDING WORK — EXPORT XLS
+// ============================================================
+function exportPendingXLS(){
+  if(typeof XLSX==='undefined'){alert('XLSX library not loaded.');return;}
+  const wb=XLSX.utils.book_new();
+
+  // ── Item-wise sheet ──
+  const itemRows=[['Color','Shape','Ordered (kg)','Invoiced (kg)','Net Due (kg)','Parties','Dates']];
+  const ordByItem={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    o.items.forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,totalKg:0,parties:{},dates:[]};
+      ordByItem[k].totalKg+=parseFloat(i.kg||0);
+      ordByItem[k].parties[o.party]=(ordByItem[k].parties[o.party]||0)+parseFloat(i.kg||0);
+      if(!ordByItem[k].dates.includes(o.date))ordByItem[k].dates.push(o.date);
+    });
+  });
+  const invByItem={};
+  invoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+    const k=i.color+'||'+i.shape;
+    invByItem[k]=(invByItem[k]||0)+parseFloat(i.kg||0);
+  }));
+  Object.values(ordByItem).forEach(v=>{
+    const invKg=invByItem[v.color+'||'+v.shape]||0;
+    const net=v.totalKg-invKg;
+    if(net>0.001) itemRows.push([v.color,v.shape,v.totalKg,invKg,net,
+      Object.entries(v.parties).map(([p,kg])=>p+':'+kg+'kg').join(', '),
+      v.dates.sort().join(', ')]);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(itemRows),'Item-wise');
+
+  // ── Party-wise sheet ──
+  const partyRows=[['Party','Color','Shape','Ordered (kg)','Invoiced (kg)','Net Due (kg)','Order Dates']];
+  const invByPartyItem={};
+  invoices.forEach(inv=>{
+    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      invByPartyItem[inv.party][k]=(invByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
+    });
+  });
+  const partyMap={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
+    o.items.forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      if(!partyMap[o.party].items[k])partyMap[o.party].items[k]={color:i.color,shape:i.shape,ordKg:0};
+      partyMap[o.party].items[k].ordKg+=parseFloat(i.kg||0);
+    });
+    if(!partyMap[o.party].dates.includes(o.date))partyMap[o.party].dates.push(o.date);
+  });
+  Object.entries(partyMap).forEach(([party,data])=>{
+    Object.values(data.items).forEach(it=>{
+      const invKg=(invByPartyItem[party]&&invByPartyItem[party][it.color+'||'+it.shape])||0;
+      const net=it.ordKg-invKg;
+      if(net>0.001) partyRows.push([party,it.color,it.shape,it.ordKg,invKg,net,data.dates.sort().join(', ')]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(partyRows),'Party-wise');
+
+  XLSX.writeFile(wb,'Pending_Work_'+today()+'.xlsx');
+}
+
+// ============================================================
+// PENDING WORK — POS PRINT
+// ============================================================
+function printPendingPOS(mode){
+  mode=mode||'item';
+
+  // Build invoice maps
+  const invByItem={};
+  const invByPartyItem={};
+  invoices.forEach(inv=>{
+    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      invByItem[k]=(invByItem[k]||0)+parseFloat(i.kg||0);
+      invByPartyItem[inv.party][k]=(invByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
+    });
+  });
+
+  // Numeric sort helper
+  function extractNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
+  function extractPrefix(s){ return s.replace(/\d+.*$/,''); }
+  function numSort(a,b){
+    const pa=extractPrefix(a.color), pb=extractPrefix(b.color);
+    if(pa!==pb) return pa.localeCompare(pb);
+    const na=extractNum(a.color), nb=extractNum(b.color);
+    if(na!==nb) return na-nb;
+    return extractNum(a.shape)-extractNum(b.shape);
+  }
+
+  let posContent='';
+
+  if(mode==='item'){
+    // ── Item-wise POS ──────────────────────────────────────────
+    const ordByItem={};
+    orders.filter(o=>o.status==='Pending').forEach(o=>{
+      o.items.forEach(i=>{
+        const k=i.color+'||'+i.shape;
+        if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,totalKg:0};
+        ordByItem[k].totalKg+=parseFloat(i.kg||0);
+      });
+    });
+    const items=Object.values(ordByItem).map(v=>{
+      const net=v.totalKg-(invByItem[v.color+'||'+v.shape]||0);
+      return net>=1.0?{color:v.color,shape:v.shape,net}:null;
+    }).filter(Boolean).sort(numSort);
+    const totalNet=items.reduce((s,i)=>s+i.net,0);
+    function colorDisplayP(colorCode){
+      const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
+      if(c && typeof c==='object' && c.alias) return colorCode+' ('+c.alias+')';
+      return colorCode;
+    }
+    const rows=items.map(i=>`<div class="pos-item-row">
+      <div class="pos-col-item">${colorDisplayP(i.color)} ${i.shape}</div>
+      <div class="pos-col-kg">${i.net.toFixed(2)}</div>
+    </div>`).join('');
+    posContent=`
+      <hr class="pos-divider">
+      <div class="pos-row"><span>Item Pending</span><span>${fmtDate(today())}</span></div>
+      <hr class="pos-divider">
+      ${rows}
+      <hr class="pos-divider">
+      <div class="pos-row bold"><span>TOTAL</span><span>${totalNet.toFixed(2)}</span></div>
+      <hr class="pos-divider">
+      <div style="height:20mm"></div>`;
+
+  } else {
+    // ── Party-wise POS — one section per party ─────────────────
+    const partyMap={};
+    orders.filter(o=>o.status==='Pending').forEach(o=>{
+      if(!partyMap[o.party])partyMap[o.party]={};
+      o.items.forEach(i=>{
+        const k=i.color+'||'+i.shape;
+        if(!partyMap[o.party][k])partyMap[o.party][k]={color:i.color,shape:i.shape,ordKg:0};
+        partyMap[o.party][k].ordKg+=parseFloat(i.kg||0);
+      });
+    });
+    let grandTotal=0;
+    const partySections=Object.entries(partyMap).map(([party,itemMap])=>{
+      const pi=invByPartyItem[party]||{};
+      const netItems=Object.values(itemMap).map(it=>{
+        const net=it.ordKg-(pi[it.color+'||'+it.shape]||0);
+        return net>=1.0?{color:it.color,shape:it.shape,net}:null;
+      }).filter(Boolean).sort(numSort);
+      if(!netItems.length)return '';
+      const partyTotal=netItems.reduce((s,i)=>s+i.net,0);
+      grandTotal+=partyTotal;
+      const rows=netItems.map(i=>`<div class="pos-item-row">
+        <div class="pos-col-item">${i.color} ${i.shape}</div>
+        <div class="pos-col-kg">${i.net.toFixed(2)}</div>
+      </div>`).join('');
+      return `<div class="pos-title">${party}</div>
+        <hr class="pos-divider">
+        ${rows}
+        <hr class="pos-divider">
+        <div class="pos-row bold"><span>WT</span><span>${partyTotal.toFixed(2)}</span></div>
+        <hr class="pos-divider">`;
+    }).filter(Boolean).join('');
+
+    posContent=`
+      <hr class="pos-divider">
+      <div class="pos-row"><span>Party Pending</span><span>${fmtDate(today())}</span></div>
+      <hr class="pos-divider">
+      ${partySections}
+      <div class="pos-row bold"><span>GRAND TOTAL</span><span>${grandTotal.toFixed(2)}</span></div>
+      <hr class="pos-divider">
+      <div style="height:20mm"></div>`;
+  }
+
+  const posWin=window.open('','_blank','width=400,height=600,toolbar=0,menubar=0');
+  if(!posWin){alert('Please allow popups for this site.');return;}
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.close();
+  posWin.focus();
+  setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
+}
+
+// ── Print individual order as POS receipt ──
+function printOrderPOS(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  // Extract number from string for proper numeric sort e.g. DD1→1, DD10→10, DD12→12
+  function extractNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
+  function extractPrefix(s){ return s.replace(/\d+.*$/,''); }
+  const sortedItems=[...o.items].sort((a,b)=>{
+    const pa=extractPrefix(a.color), pb=extractPrefix(b.color);
+    if(pa!==pb) return pa.localeCompare(pb);
+    const na=extractNum(a.color), nb=extractNum(b.color);
+    if(na!==nb) return na-nb;
+    const sa=extractNum(a.shape), sb=extractNum(b.shape);
+    return sa-sb;
+  });
+  const rows=sortedItems.map(i=>{
+    const cObj2=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
+    const alias2=cObj2&&typeof cObj2==='object'&&cObj2.alias?cObj2.alias:'';
+    const colorAlias=alias2?i.color+'/'+alias2:i.color;
+    const kg=parseFloat(i.kg).toFixed(2);
+    return `<div class="pos-item"><span style="font-size:20px">${kg}</span>&nbsp;&nbsp;${i.shape} ${colorAlias}</div>`;
+  }).join('');
+  const totalKg=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  const serialNum=String(o.invNum).padStart(4,'0');
+  const posContent=`
+    <div class="pos-title">${o.party}</div>
+    <hr class="pos-divider">
+    <div class="pos-row"><span>${serialNum}</span><span>${fmtDate(o.date)}</span></div>
+    <hr class="pos-divider">
+    ${rows}
+    <hr class="pos-divider">
+    <div class="pos-row bold">${totalKg.toFixed(2)}</div>
+    <hr class="pos-divider">
+    <div style="height:20mm"></div>`;
+  const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
+  if(!posWin){alert('Please allow popups for this site to print.');return;}
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.close();
+  posWin.focus();
+  setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
+}
+
+// ============================================================
+// POS PRINT
+// ============================================================
+let currentPosInvId=null;
+function printPOS(){
+  if(!currentPosInvId)return;
+  const inv=invoices.find(x=>x.id===currentPosInvId);if(!inv)return;
+  // Build POS content
+  const items=inv.items||[];
+  const grand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
+  const dashes='--------------------------------';
+  // Helper to get color display name with alias
+  function colorDisplay(colorCode){
+    const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
+    if(c && typeof c==='object' && c.alias) return colorCode+' ('+c.alias+')';
+    return colorCode;
+  }
+  const itemRows=items.map(i=>{
+    const amt=Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0));
+    const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
+    const alias=cObj&&typeof cObj==='object'&&cObj.alias?cObj.alias:'';
+    const hasAmt=parseFloat(i.price||0)>0;
+    const kg=parseFloat(i.kg).toFixed(2);
+    const rate=parseFloat(i.price||0).toFixed(0);
+    const colorAlias=alias?i.color+'/'+alias:i.color;
+    const calc=hasAmt?`${kg}x${rate}`:`${kg}`;
+    return `<div class="pos-item"><span style="font-size:20px">${amt>0?amt:''}</span>&nbsp;&nbsp;${i.shape} ${colorAlias} ${calc}</div>`;
+  }).join('');
+  const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  // Format serial as plain number only e.g. 0001
+  const serialNum=String(inv.serial).padStart(4,'0');
+  document.getElementById('pos-inv-content').innerHTML=`
+    <div class="pos-title">${inv.party}</div>
+    <hr class="pos-divider">
+    <div class="pos-row"><span>${serialNum}</span><span>${fmtDate(inv.date)}</span></div>
+    <hr class="pos-divider">
+    ${itemRows}
+    <hr class="pos-divider">
+    <hr class="pos-divider">
+    <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
+    <hr class="pos-divider">
+    <div style="height:20mm"></div>
+  `;
+  const posContent=document.getElementById('pos-inv-content').innerHTML;
+  const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
+  if(!posWin){alert('Please allow popups for this site to print.');return;}
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.close();
+  posWin.focus();
+  setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
+}
+
+// ============================================================
+// XLS IMPORT
+// ============================================================
+function importFromXLS(input){
+  const file=input.files[0];
+  if(!file){return;}
+  // reset input so same file can be re-imported
+  input.value='';
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+
+      let importedOrders=0, importedInvoices=0, importedParties=0,
+          importedColors=0, importedShapes=0;
+      const log=[];
+
+      // ── ORDERS sheet ──────────────────────────────────────────
+      if(wb.SheetNames.includes('Orders')){
+        const ws=wb.Sheets['Orders'];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const newOrders=[];
+        let oid=1;
+        const grouped={};
+        rows.forEach(r=>{
+          const orderNum=String(r['Order#']||'').trim();
+          const party=String(r['Party']||'').trim();
+          const date=String(r['Date']||'').trim();
+          const color=String(r['Color']||'').trim();
+          const shape=String(r['Shape']||'').trim();
+          const kg=parseFloat(r['Qty (kg)'])||0;
+          const price=parseFloat(r['Rate (₹/kg)'])||0;
+          const status=String(r['Status']||'Pending').trim();
+          if(!orderNum||!party||!date)return;
+          if(!grouped[orderNum])grouped[orderNum]={orderNum,party,date,status,items:[]};
+          if(color&&shape&&!(color.startsWith('('))){
+            grouped[orderNum].items.push({color,shape,kg,price});
+          }
+        });
+        Object.values(grouped).forEach(g=>{
+          // extract number from SIT-XXXX
+          const num=parseInt(g.orderNum.replace(/[^0-9]/g,''))||oid;
+          newOrders.push({
+            id:oid, invNum:num, party:g.party,
+            date:g.date, status:g.status,
+            items:g.items.length?g.items:[{color:'og100',shape:'1014',kg:1,price:0}]
+          });
+          oid++;
+        });
+        if(newOrders.length){
+          orders=newOrders;
+          nextOid=oid;
+          nextInvNum=oid;
+          importedOrders=newOrders.length;
+          log.push(`✅ Orders: ${importedOrders} imported`);
+        } else {
+          log.push('⚠️ Orders sheet found but no valid rows read');
+        }
+      } else {
+        log.push('ℹ️ No "Orders" sheet found — orders unchanged');
+      }
+
+      // ── INVOICES sheet ────────────────────────────────────────
+      if(wb.SheetNames.includes('Invoices')){
+        const ws=wb.Sheets['Invoices'];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const newInvoices=[];
+        let serial=1;
+        const grouped={};
+        rows.forEach(r=>{
+          const invNum=String(r['Invoice#']||'').trim();
+          const party=String(r['Party']||'').trim();
+          const date=String(r['Date']||'').trim();
+          const color=String(r['Color']||'').trim();
+          const shape=String(r['Shape']||'').trim();
+          const kg=parseFloat(r['Qty (kg)'])||0;
+          const price=parseFloat(r['Rate (₹/kg)'])||0;
+          if(!invNum||!party||!date)return;
+          if(!grouped[invNum])grouped[invNum]={invNum,party,date,items:[]};
+          if(color&&shape){
+            grouped[invNum].items.push({color,shape,kg,price});
+          }
+        });
+        Object.values(grouped).forEach(g=>{
+          const num=parseInt(g.invNum.replace(/[^0-9]/g,''))||serial;
+          newInvoices.push({
+            id:Date.now()+serial,
+            serial:num, party:g.party,
+            date:g.date, items:g.items, orderIds:[]
+          });
+          serial++;
+        });
+        if(newInvoices.length){
+          invoices=newInvoices;
+          nextInvoiceNum=serial;
+          importedInvoices=newInvoices.length;
+          log.push(`✅ Invoices: ${importedInvoices} imported`);
+        } else {
+          log.push('⚠️ Invoices sheet found but no valid rows read');
+        }
+      } else {
+        log.push('ℹ️ No "Invoices" sheet found — invoices unchanged');
+      }
+
+      // ── PARTIES sheet ─────────────────────────────────────────
+      if(wb.SheetNames.includes('Parties')){
+        const ws=wb.Sheets['Parties'];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const newParties=[];
+        rows.forEach((r,i)=>{
+          const name=String(r['Party Name']||'').trim();
+          const id=parseInt(r['ID'])||i+1;
+          if(name) newParties.push({id,name});
+        });
+        if(newParties.length){
+          parties=newParties;
+          nextPaId=Math.max(...newParties.map(p=>p.id))+1;
+          importedParties=newParties.length;
+          log.push(`✅ Parties: ${importedParties} imported`);
+        } else {
+          log.push('⚠️ Parties sheet found but no valid rows');
+        }
+      } else {
+        log.push('ℹ️ No "Parties" sheet — parties unchanged');
+      }
+
+      // ── CATALOG sheet ─────────────────────────────────────────
+      if(wb.SheetNames.includes('Catalog')){
+        const ws=wb.Sheets['Catalog'];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const newColors=[], newShapes=[];
+        rows.forEach(r=>{
+          const c=String(r['Colors']||'').trim();
+          const s=String(r['Shapes']||'').trim();
+          if(c&&!newColors.includes(c)) newColors.push(c);
+          if(s&&!newShapes.includes(s)) newShapes.push(s);
+        });
+        if(newColors.length){colors=newColors;importedColors=newColors.length;}
+        if(newShapes.length){shapes=newShapes;importedShapes=newShapes.length;}
+        if(newColors.length||newShapes.length){
+          log.push(`✅ Catalog: ${importedColors} colors, ${importedShapes} shapes imported`);
+        } else {
+          log.push('⚠️ Catalog sheet found but no valid rows');
+        }
+      } else {
+        log.push('ℹ️ No "Catalog" sheet — colors/shapes unchanged');
+      }
+
+      // ── Done ──────────────────────────────────────────────────
+      saveAll();
+      renderAll();
+
+      document.getElementById('import-title').textContent='📥 Import Complete';
+      document.getElementById('import-body').innerHTML=
+        `<div style="margin-bottom:10px;font-weight:600;color:#166534">File: ${file.name}</div>`+
+        log.map(l=>`<div style="padding:4px 0;border-bottom:1px solid #f0f0f0">${l}</div>`).join('')+
+        `<div style="margin-top:12px;font-size:12px;color:#888">All data replaced. Changes ${BIN_ID?'saved to cloud':'saved locally'}.</div>`;
+      document.getElementById('modal-import').classList.add('open');
+
+    } catch(err){
+      document.getElementById('import-title').textContent='❌ Import Failed';
+      document.getElementById('import-body').innerHTML=
+        `<div style="color:#dc2626">Could not read the file. Make sure it is a valid .xlsx file exported from Sitara Sequins.</div>
+         <div style="margin-top:8px;font-size:12px;color:#888">Error: ${err.message}</div>`;
+      document.getElementById('modal-import').classList.add('open');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// TALLY PRIME XML EXPORT
+// ============================================================
+function exportTallyXML(){
+  if(!invoices.length){alert('No invoices to export.');return;}
+
+  // Build XML for each invoice as a Sales Voucher
+  const voucherXML = invoices.map(inv=>{
+    const items = inv.items || [];
+    const grand = items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
+    const grandRounded = Math.round(grand);
+    const invDate = (inv.date||'').replace(/-/g,''); // YYYYMMDD
+
+    // Each item becomes a stock inventory entry
+    const inventoryEntries = items.map(i=>{
+      const amt = Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0));
+      return `
+        <INVENTORYENTRY>
+          <STOCKITEMNAME>${esc(i.color+' '+i.shape)}</STOCKITEMNAME>
+          <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+          <ISLASTDEEMEDPOSITIVE>Yes</ISLASTDEEMEDPOSITIVE>
+          <ISAUTONEGATE>No</ISAUTONEGATE>
+          <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+          <RATE>${parseFloat(i.price||0).toFixed(2)}/Kg</RATE>
+          <AMOUNT>-${amt}</AMOUNT>
+          <ACTUALQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</ACTUALQTY>
+          <BILLEDQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</BILLEDQTY>
+          <BATCHALLOCATIONS.LIST>
+            <GODOWNNAME>Main Location</GODOWNNAME>
+            <BATCHNAME>Primary Batch</BATCHNAME>
+            <AMOUNT>-${amt}</AMOUNT>
+            <ACTUALQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</ACTUALQTY>
+            <BILLEDQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</BILLEDQTY>
+          </BATCHALLOCATIONS.LIST>
+        </INVENTORYENTRY>`;
+    }).join('');
+
+    // Ledger entries: party (Dr) and Sales (Cr)
+    const ledgerEntries = `
+        <ALLLEDGERENTRIES.LIST>
+          <LEDGERNAME>${esc(inv.party)}</LEDGERNAME>
+          <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+          <ISLASTDEEMEDPOSITIVE>Yes</ISLASTDEEMEDPOSITIVE>
+          <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
+          <AMOUNT>-${grandRounded}</AMOUNT>
+        </ALLLEDGERENTRIES.LIST>
+        <ALLLEDGERENTRIES.LIST>
+          <LEDGERNAME>Sales Account</LEDGERNAME>
+          <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+          <ISLASTDEEMEDPOSITIVE>No</ISLASTDEEMEDPOSITIVE>
+          <ISPARTYLEDGER>No</ISPARTYLEDGER>
+          <AMOUNT>${grandRounded}</AMOUNT>
+        </ALLLEDGERENTRIES.LIST>`;
+
+    return `
+      <VOUCHER REMOTEID="${inv.id}" VCHKEY="${inv.id}" VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View">
+        <DATE>${invDate}</DATE>
+        <GUID>SIT-${inv.serial}-${inv.id}</GUID>
+        <NARRATION>Invoice ${invNumLabel(inv.serial)} - ${esc(inv.party)}</NARRATION>
+        <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+        <VOUCHERNUMBER>${invNumLabel(inv.serial)}</VOUCHERNUMBER>
+        <PARTYLEDGERNAME>${esc(inv.party)}</PARTYLEDGERNAME>
+        <ISINVOICE>Yes</ISINVOICE>
+        <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
+        ${ledgerEntries}
+        ${inventoryEntries}
+      </VOUCHER>`;
+  }).join('');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>##SVCURRENTCOMPANY</SVCURRENTCOMPANY>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          ${voucherXML}
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`;
+
+  const blob = new Blob([xml], {type:'application/xml'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Sitara_Tally_Import_'+today()+'.xml';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+function esc(str){
+  return String(str||'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+}
+
+
+// ============================================================
+// REPORTS
+// ============================================================
+let rptView = 'summary';
+
+function setRptView(v, el){
+  rptView = v;
+  document.querySelectorAll('.rpt-vbtn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderReport();
+}
+
+function clearRptFilter(){
+  document.getElementById('rpt-from').value='';
+  document.getElementById('rpt-to').value='';
+  document.getElementById('rpt-party').value='';
+  document.getElementById('rpt-color').value='';
+  document.getElementById('rpt-shape').value='';
+  renderReport();
+}
+
+function rptFilterData(){
+  const from = (document.getElementById('rpt-from')||{value:''}).value;
+  const to   = (document.getElementById('rpt-to')||{value:''}).value;
+  const selP = (document.getElementById('rpt-party')||{value:''}).value;
+  const selC = (document.getElementById('rpt-color')||{value:''}).value;
+  const selS = (document.getElementById('rpt-shape')||{value:''}).value;
+
+  let fOrders=[...orders], fInvoices=[...invoices];
+  if(from){ fOrders=fOrders.filter(o=>o.date>=from); fInvoices=fInvoices.filter(i=>i.date>=from); }
+  if(to){   fOrders=fOrders.filter(o=>o.date<=to);   fInvoices=fInvoices.filter(i=>i.date<=to);   }
+  if(selP){ fOrders=fOrders.filter(o=>o.party===selP); fInvoices=fInvoices.filter(i=>i.party===selP); }
+  if(selC){
+    fOrders=fOrders.map(o=>({...o,items:o.items.filter(i=>i.color===selC)})).filter(o=>o.items.length);
+    fInvoices=fInvoices.map(inv=>({...inv,items:(inv.items||[]).filter(i=>i.color===selC)})).filter(inv=>inv.items.length);
+  }
+  if(selS){
+    fOrders=fOrders.map(o=>({...o,items:o.items.filter(i=>i.shape===selS)})).filter(o=>o.items.length);
+    fInvoices=fInvoices.map(inv=>({...inv,items:(inv.items||[]).filter(i=>i.shape===selS)})).filter(inv=>inv.items.length);
+  }
+  return {fOrders,fInvoices,selP,selC,selS,from,to};
+}
+
+function renderReport(){
+  if(!document.getElementById('rpt-type2') && !document.getElementById('rpt-from')) return;
+
+  // Populate dropdowns
+  const partyEl=document.getElementById('rpt-party');
+  const colorEl=document.getElementById('rpt-color');
+  const shapeEl=document.getElementById('rpt-shape');
+  if(partyEl){
+    const cur=partyEl.value;
+    const allP=[...new Set([...orders.map(o=>o.party),...invoices.map(i=>i.party)])].sort();
+    partyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
+  }
+  if(colorEl){
+    const cur=colorEl.value;
+    const allC=[...new Set([...orders.flatMap(o=>o.items.map(i=>i.color)),...invoices.flatMap(inv=>(inv.items||[]).map(i=>i.color))])].sort();
+    colorEl.innerHTML='<option value="">All Colors</option>'+allC.map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('');
+  }
+  if(shapeEl){
+    const cur=shapeEl.value;
+    const allS=[...new Set([...orders.flatMap(o=>o.items.map(i=>i.shape)),...invoices.flatMap(inv=>(inv.items||[]).map(i=>i.shape))])].sort();
+    shapeEl.innerHTML='<option value="">All Shapes</option>'+allS.map(s=>`<option value="${s}" ${s===cur?'selected':''}>${s}</option>`).join('');
+  }
+
+  const {fOrders,fInvoices,selP,selC,selS,from,to}=rptFilterData();
+  const statsEl=document.getElementById('rpt-stats');
+  const contentEl=document.getElementById('rpt-content');
+
+  // Stats
+  const totalOrdKg=fOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
+  const totalInvKg=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
+  const totalInvAmt=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0)*parseFloat(i.price||0),0),0);
+  const pendingOrd=fOrders.filter(o=>o.status==='Pending').length;
+  const pendingKg=fOrders.filter(o=>o.status==='Pending').reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
+
+  // Active filter tags
+  const tags=[];
+  if(from||to) tags.push(`📅 ${from||'…'} → ${to||'…'}`);
+  if(selP) tags.push(`👤 ${selP}`);
+  if(selC) tags.push(`🎨 ${selC}`);
+  if(selS) tags.push(`◆ ${selS}`);
+  const tagHtml=tags.length?`<div style="width:100%;margin-bottom:6px">${tags.map(t=>`<span style="background:#dbeafe;color:#1d4ed8;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;margin-right:6px">${t}</span>`).join('')}</div>`:'';
+
+  statsEl.innerHTML=tagHtml+`
+    <div class="stat"><div class="stat-label">Orders</div><div class="stat-val">${fOrders.length}</div></div>
+    <div class="stat"><div class="stat-label">Pending</div><div class="stat-val" style="color:#d97706">${pendingOrd}</div></div>
+    <div class="stat"><div class="stat-label">Ordered kg</div><div class="stat-val">${totalOrdKg.toFixed(2)}</div></div>
+    <div class="stat"><div class="stat-label">Invoices</div><div class="stat-val">${fInvoices.length}</div></div>
+    <div class="stat"><div class="stat-label">Invoiced kg</div><div class="stat-val" style="color:#16a34a">${totalInvKg.toFixed(2)}</div></div>
+    <div class="stat"><div class="stat-label">Pending kg</div><div class="stat-val" style="color:#d97706">${(totalOrdKg-totalInvKg).toFixed(2)}</div></div>
+    <div class="stat"><div class="stat-label">Invoice Amt</div><div class="stat-val" style="color:#2563eb">${fmt(totalInvAmt)}</div></div>`;
+
+  if(rptView==='summary')   rptSummary(fOrders,fInvoices,contentEl);
+  else if(rptView==='orders')    rptOrders(fOrders,contentEl);
+  else if(rptView==='invoices')  rptInvoices(fInvoices,contentEl);
+  else if(rptView==='pending')   rptPending(fOrders,fInvoices,contentEl);
+  else if(rptView==='partywise') rptPartyWise(fOrders,fInvoices,contentEl);
+  else if(rptView==='itemwise')  rptItemWise(fOrders,fInvoices,contentEl);
+}
+
+function rptTbl(headers,rows){
+  if(!rows.length) return '<div class="empty">No data for selected filters.</div>';
+  return `<div style="overflow-x:auto"><table class="rpt-tbl">
+    <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+// ── SUMMARY VIEW ─────────────────────────────────────────────
+function rptSummary(fOrders,fInvoices,el){
+  // Top parties by ordered kg
+  const pm={};
+  fOrders.forEach(o=>{
+    if(!pm[o.party])pm[o.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};
+    pm[o.party].orders++;
+    pm[o.party].ordKg+=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    if(o.status==='Pending')pm[o.party].pending++;
+  });
+  fInvoices.forEach(inv=>{
+    if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};
+    pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  });
+
+  const partyRows=Object.entries(pm).sort((a,b)=>b[1].ordKg-a[1].ordKg).map(([p,d])=>[
+    `<strong>${p}</strong>`,
+    d.orders,
+    `${d.ordKg.toFixed(2)}`,
+    `${d.invKg.toFixed(2)}`,
+    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`,
+    `<strong style="color:#2563eb">${fmt(d.invAmt)}</strong>`
+  ]);
+
+  // Top items
+  const im={};
+  fOrders.forEach(o=>o.items.forEach(i=>{
+    const k=i.color+'|'+i.shape;
+    if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0};
+    im[k].ordKg+=parseFloat(i.kg||0);
+  }));
+  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+    const k=i.color+'|'+i.shape;
+    if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0};
+    im[k].invKg+=parseFloat(i.kg||0);
+  }));
+  const itemRows=Object.values(im).sort((a,b)=>b.ordKg-a.ordKg).slice(0,10).map(d=>[
+    `<strong>${d.color}</strong>`,d.shape,
+    `${d.ordKg.toFixed(2)}`,`${d.invKg.toFixed(2)}`,
+    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`
+  ]);
+
+  el.innerHTML=`
+    <div class="rpt-card" style="margin-bottom:14px">
+      <div class="rpt-card-hdr"><div class="rpt-card-title">👥 Party Summary</div></div>
+      <div class="rpt-card-body">${rptTbl(['Party','Orders','Ordered kg','Invoiced kg','Pending kg','Inv Amount'],partyRows)}</div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-card-hdr"><div class="rpt-card-title">🎨 Top 10 Items</div></div>
+      <div class="rpt-card-body">${rptTbl(['Color','Shape','Ordered kg','Invoiced kg','Pending kg'],itemRows)}</div>
+    </div>`;
+}
+
+// ── ORDERS VIEW ───────────────────────────────────────────────
+function rptOrders(fOrders,el){
+  const rows=[...fOrders].sort((a,b)=>b.date.localeCompare(a.date)).map(o=>{
+    const kg=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const items=o.items.map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg).toFixed(2)}kg`).join(' | ');
+    return[
+      o.date,
+      invLabel(o.invNum),
+      `<strong>${o.party}</strong>`,
+      `${kg.toFixed(2)} kg`,
+      o.status==='Pending'?`<span class="rpt-badge-p">Pending</span>`:`<span class="rpt-badge-d">Delivered</span>`,
+      `<span style="font-size:11px;color:#888">${items}</span>`
+    ];
+  });
+  el.innerHTML=`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">📦 Orders (${fOrders.length})</div></div>
+    <div class="rpt-card-body">${rptTbl(['Date','Order#','Party','Total kg','Status','Items'],rows)}</div></div>`;
+}
+
+// ── INVOICES VIEW ─────────────────────────────────────────────
+function rptInvoices(fInvoices,el){
+  const rows=[...fInvoices].sort((a,b)=>b.date.localeCompare(a.date)).map(inv=>{
+    const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    const items=(inv.items||[]).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg).toFixed(2)}kg@${i.price}`).join(' | ');
+    return[
+      inv.date,
+      `<span class="rpt-badge-i">${invNumLabel(inv.serial)}</span>`,
+      `<strong>${inv.party}</strong>`,
+      `${kg.toFixed(2)} kg`,
+      `<strong style="color:#2563eb">${fmt(amt)}</strong>`,
+      `<span style="font-size:11px;color:#888">${items}</span>`
+    ];
+  });
+  el.innerHTML=`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">🧾 Invoices (${fInvoices.length})</div></div>
+    <div class="rpt-card-body">${rptTbl(['Date','Invoice#','Party','Total kg','Amount','Items'],rows)}</div></div>`;
+}
+
+// ── PENDING VIEW ──────────────────────────────────────────────
+function rptPending(fOrders,fInvoices,el){
+  // Build per-party per-item pending (ordered - invoiced)
+  const pm={};
+  fOrders.filter(o=>o.status==='Pending').forEach(o=>{
+    o.items.forEach(i=>{
+      const k=o.party+'||'+i.color+'||'+i.shape;
+      if(!pm[k])pm[k]={party:o.party,color:i.color,shape:i.shape,ordKg:0,invKg:0,dates:[]};
+      pm[k].ordKg+=parseFloat(i.kg||0);
+      if(!pm[k].dates.includes(o.date))pm[k].dates.push(o.date);
+    });
+  });
+  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+    const k=inv.party+'||'+i.color+'||'+i.shape;
+    if(!pm[k])pm[k]={party:inv.party,color:i.color,shape:i.shape,ordKg:0,invKg:0,dates:[]};
+    pm[k].invKg+=parseFloat(i.kg||0);
+  }));
+  const rows=Object.values(pm)
+    .map(d=>({...d,netKg:d.ordKg-d.invKg}))
+    .filter(d=>d.netKg>0.001)
+    .sort((a,b)=>b.netKg-a.netKg)
+    .map(d=>[
+      `<strong>${d.party}</strong>`,
+      d.color, d.shape,
+      `${d.ordKg.toFixed(2)}`,
+      `${d.invKg.toFixed(2)}`,
+      `<strong style="color:#d97706">${d.netKg.toFixed(2)} kg</strong>`,
+      `<span style="font-size:11px;color:#aaa">${d.dates.sort().join(', ')}</span>`
+    ]);
+  el.innerHTML=`<div class="rpt-card"><div class="rpt-card-hdr">
+    <div class="rpt-card-title">⏳ Pending Orders</div>
+    <div style="font-size:12px;color:#d97706;font-weight:600">${rows.length} items pending</div>
+    </div>
+    <div class="rpt-card-body">${rptTbl(['Party','Color','Shape','Ordered','Invoiced','Net Pending','Order Dates'],rows)}</div></div>`;
+}
+
+// ── PARTY-WISE VIEW ───────────────────────────────────────────
+function rptPartyWise(fOrders,fInvoices,el){
+  const pm={};
+  fOrders.forEach(o=>{
+    if(!pm[o.party])pm[o.party]={orders:0,ordKg:0,invKg:0,invAmt:0,pending:0,delivered:0};
+    pm[o.party].orders++;
+    pm[o.party].ordKg+=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    if(o.status==='Pending')pm[o.party].pending++;
+    else pm[o.party].delivered++;
+  });
+  fInvoices.forEach(inv=>{
+    if(!pm[inv.party])pm[inv.party]={orders:0,ordKg:0,invKg:0,invAmt:0,pending:0,delivered:0};
+    pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  });
+  const rows=Object.entries(pm).sort((a,b)=>b[1].ordKg-a[1].ordKg).map(([p,d])=>[
+    `<strong>${p}</strong>`,
+    d.orders,
+    `<span class="rpt-badge-p">${d.pending}</span>`,
+    `<span class="rpt-badge-d">${d.delivered}</span>`,
+    `${d.ordKg.toFixed(2)}`,
+    `${d.invKg.toFixed(2)}`,
+    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`,
+    `<strong style="color:#2563eb">${fmt(d.invAmt)}</strong>`
+  ]);
+  el.innerHTML=`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">👥 Party-wise Report</div></div>
+    <div class="rpt-card-body">${rptTbl(['Party','Orders','Pending','Delivered','Ordered kg','Invoiced kg','Net Pending kg','Inv Amount'],rows)}</div></div>`;
+}
+
+// ── ITEM-WISE VIEW ────────────────────────────────────────────
+function rptItemWise(fOrders,fInvoices,el){
+  const im={};
+  fOrders.forEach(o=>o.items.forEach(i=>{
+    const k=i.color+'||'+i.shape;
+    if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0,invAmt:0,parties:new Set()};
+    im[k].ordKg+=parseFloat(i.kg||0);
+    im[k].parties.add(o.party);
+  }));
+  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+    const k=i.color+'||'+i.shape;
+    if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0,invAmt:0,parties:new Set()};
+    im[k].invKg+=parseFloat(i.kg||0);
+    im[k].invAmt+=parseFloat(i.kg||0)*parseFloat(i.price||0);
+  }));
+  const rows=Object.values(im).sort((a,b)=>b.ordKg-a.ordKg).map(d=>[
+    `<strong>${d.color}</strong>`,
+    d.shape,
+    `${d.ordKg.toFixed(2)}`,
+    `${d.invKg.toFixed(2)}`,
+    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`,
+    `<strong style="color:#2563eb">${fmt(d.invAmt)}</strong>`,
+    `<span style="font-size:11px;color:#888">${[...d.parties].join(', ')}</span>`
+  ]);
+  el.innerHTML=`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">🎨 Item-wise Report</div></div>
+    <div class="rpt-card-body">${rptTbl(['Color','Shape','Ordered kg','Invoiced kg','Net Pending kg','Inv Amount','Parties'],rows)}</div></div>`;
+}
+
+// Export all views to XLS
+function exportReportXLS(){
+  if(typeof XLSX==='undefined'){alert('XLSX not loaded');return;}
+  const {fOrders,fInvoices}=rptFilterData();
+  const wb=XLSX.utils.book_new();
+
+  // Summary
+  const pm={};
+  fOrders.forEach(o=>{if(!pm[o.party])pm[o.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};pm[o.party].orders++;pm[o.party].ordKg+=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);if(o.status==='Pending')pm[o.party].pending++;});
+  fInvoices.forEach(inv=>{if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);});
+  const sRows=[['Party','Orders','Pending','Ordered kg','Invoiced kg','Pending kg','Inv Amount']];
+  Object.entries(pm).forEach(([p,d])=>sRows.push([p,d.orders,d.pending,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2),Math.round(d.invAmt)]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sRows),'Party Summary');
+
+  // Orders
+  const oRows=[['Date','Order#','Party','Total kg','Status','Items']];
+  fOrders.sort((a,b)=>b.date.localeCompare(a.date)).forEach(o=>{
+    const kg=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    oRows.push([o.date,invLabel(o.invNum),o.party,+kg.toFixed(2),o.status,o.items.map(i=>i.color+' '+i.shape+' '+i.kg+'kg').join(', ')]);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(oRows),'Orders');
+
+  // Invoices
+  const iRows=[['Date','Invoice#','Party','Total kg','Amount','Items']];
+  fInvoices.sort((a,b)=>b.date.localeCompare(a.date)).forEach(inv=>{
+    const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    iRows.push([inv.date,invNumLabel(inv.serial),inv.party,+kg.toFixed(2),Math.round(amt),(inv.items||[]).map(i=>i.color+' '+i.shape+' '+i.kg+'kg@'+i.price).join(', ')]);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(iRows),'Invoices');
+
+  // Pending
+  const pendMap={};
+  fOrders.filter(o=>o.status==='Pending').forEach(o=>o.items.forEach(i=>{
+    const k=o.party+'||'+i.color+'||'+i.shape;
+    if(!pendMap[k])pendMap[k]={party:o.party,color:i.color,shape:i.shape,ordKg:0,invKg:0};
+    pendMap[k].ordKg+=parseFloat(i.kg||0);
+  }));
+  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+    const k=inv.party+'||'+i.color+'||'+i.shape;
+    if(!pendMap[k])pendMap[k]={party:inv.party,color:i.color,shape:i.shape,ordKg:0,invKg:0};
+    pendMap[k].invKg+=parseFloat(i.kg||0);
+  }));
+  const pRows=[['Party','Color','Shape','Ordered kg','Invoiced kg','Net Pending kg']];
+  Object.values(pendMap).filter(d=>d.ordKg-d.invKg>0.001).sort((a,b)=>(b.ordKg-b.invKg)-(a.ordKg-a.invKg)).forEach(d=>pRows.push([d.party,d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2)]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pRows),'Pending');
+
+  // Item-wise
+  const im={};
+  fOrders.forEach(o=>o.items.forEach(i=>{const k=i.color+'||'+i.shape;if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0,invAmt:0};im[k].ordKg+=parseFloat(i.kg||0);}));
+  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{const k=i.color+'||'+i.shape;if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0,invAmt:0};im[k].invKg+=parseFloat(i.kg||0);im[k].invAmt+=parseFloat(i.kg||0)*parseFloat(i.price||0);}));
+  const mRows=[['Color','Shape','Ordered kg','Invoiced kg','Pending kg','Inv Amount']];
+  Object.values(im).sort((a,b)=>b.ordKg-a.ordKg).forEach(d=>mRows.push([d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2),Math.round(d.invAmt)]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mRows),'Item-wise');
+
+  XLSX.writeFile(wb,'Sitara_Report_'+today()+'.xlsx');
+}
+
+// ============================================================
+// WHATSAPP SHARE
+// ============================================================
+function shareInvWhatsApp(invId){
+  const inv=invoices.find(x=>x.id===invId);
+  if(!inv)return;
+  const items=inv.items||[];
+  const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  const totalAmt=items.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  const serialNum=String(inv.serial).padStart(4,'0');
+  const line='- - - - - - - - - - - - - -';
+  let msg=inv.party+'\n';
+  msg+=line+'\n';
+  msg+=serialNum+'     '+fmtDate(inv.date)+'\n';
+  msg+=line+'\n';
+  items.forEach(i=>{
+    const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
+    const alias=cObj&&typeof cObj==='object'&&cObj.alias?'/'+cObj.alias:'';
+    const colorAlias=i.color+alias;
+    const kg=parseFloat(i.kg).toFixed(2);
+    const rate=i.price>0?'  '+Math.round(i.price):'';
+    const amt=i.price>0?'  '+Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0)):'';
+    msg+=colorAlias+' '+i.shape+'  '+kg+rate+amt+'\n';
+  });
+  msg+=line+'\n';
+  msg+='WT     '+totalKg.toFixed(2)+'\n';
+  if(totalAmt>0) msg+='AMT    '+Math.round(totalAmt)+'\n';
+  msg+=line+'\n';
+  if(inv.remarks) msg+=inv.remarks+'\n';
+  if(inv.courier) msg+=inv.courier+'\n';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+function shareInvoiceWhatsApp(){
+  if(!currentPosInvId) return;
+  const inv = invoices.find(x=>x.id===currentPosInvId);
+  if(!inv) return;
+  const items = inv.items||[];
+  const totalKg = items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  const totalAmt = items.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  const serialNum = String(inv.serial).padStart(4,'0');
+  const line = '- - - - - - - - - - - - - -';
+  let msg = inv.party+'\n';
+  msg += line+'\n';
+  msg += serialNum+'     '+fmtDate(inv.date)+'\n';
+  msg += line+'\n';
+  items.forEach(i=>{
+    const kg=parseFloat(i.kg).toFixed(2);
+    const rate=i.price>0?'  '+Math.round(i.price):'';
+    const amt=i.price>0?'  '+Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0)):'';
+    msg += i.color+' '+i.shape+'  '+kg+rate+amt+'\n';
+  });
+  msg += line+'\n';
+  msg += 'WT     '+totalKg.toFixed(2)+'\n';
+  if(totalAmt>0) msg += 'AMT    '+Math.round(totalAmt)+'\n';
+  msg += line+'\n';
+  if(inv.remarks) msg += inv.remarks+'\n';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+function showOrderWhatsApp(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  // Show a small toast with WhatsApp share option
+  const existing = document.getElementById('wa-toast');
+  if(existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'wa-toast';
+  toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:12px;z-index:9999;display:flex;gap:12px;align-items:center;box-shadow:0 4px 20px rgba(0,0,0,.3);font-size:13px';
+  toast.innerHTML = `<span>Order saved!</span>
+    <button onclick="shareOrderWhatsApp(${o.id})" style="background:#25D366;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer">💬 Share on WhatsApp</button>
+    <button onclick="document.getElementById('wa-toast').remove()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer;padding:0 4px">✕</button>`;
+  document.body.appendChild(toast);
+  // Auto remove after 8 seconds
+  setTimeout(()=>{ const t=document.getElementById('wa-toast'); if(t)t.remove(); }, 8000);
+}
+
+function shareOrderWhatsApp(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  const totalKg = o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  const serialNum = String(o.invNum).padStart(4,'0');
+  function extractNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
+  function extractPrefix(s){ return s.replace(/\d+.*$/,''); }
+  const sortedItems=[...o.items].sort((a,b)=>{
+    const pa=extractPrefix(a.color), pb=extractPrefix(b.color);
+    if(pa!==pb) return pa.localeCompare(pb);
+    const na=extractNum(a.color), nb=extractNum(b.color);
+    if(na!==nb) return na-nb;
+    return extractNum(a.shape)-extractNum(b.shape);
+  });
+  const line = '- - - - - - - - - - - - - -';
+  let msg = o.party+'\n';
+  msg += line+'\n';
+  msg += serialNum+'     '+fmtDate(o.date)+'\n';
+  msg += line+'\n';
+  sortedItems.forEach(i=>{
+    const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
+    const alias=cObj&&typeof cObj==='object'&&cObj.alias?'/'+cObj.alias:'';
+    msg += i.color+alias+' '+i.shape+'  '+parseFloat(i.kg).toFixed(2)+'\n';
+  });
+  msg += line+'\n';
+  msg += 'WT     '+totalKg.toFixed(2)+'\n';
+  msg += line+'\n';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  const t=document.getElementById('wa-toast'); if(t)t.remove();
+}
+
+
+// ============================================================
+// REPORT PRINT & WHATSAPP
+// ============================================================
+function printReport(){
+  const content = document.getElementById('rpt-content').innerHTML;
+  const stats = document.getElementById('rpt-stats').innerHTML;
+  const win = window.open('','_blank','width=900,height=700,toolbar=1,menubar=1');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;padding:16px;color:#000}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{text-align:left;padding:7px 10px;background:#f0f4ff;border-bottom:2px solid #dbeafe;font-size:11px;color:#2563eb;text-transform:uppercase}
+      td{padding:7px 10px;border-bottom:1px solid #f0f0f0}
+      .stat{display:inline-block;background:#f8f9fa;border-radius:6px;padding:6px 12px;margin:3px;font-size:12px}
+      .stat-label{font-size:10px;color:#888}
+      .stat-val{font-size:15px;font-weight:700}
+      .rpt-card{margin-bottom:14px}
+      .rpt-card-hdr{background:#f0f4ff;padding:8px 12px;font-weight:700;font-size:13px;border-bottom:1px solid #dbeafe}
+      @media print{@page{margin:10mm}}
+    </style>
+  </head><body>
+    <div style="margin-bottom:12px">${stats}</div>
+    ${content}
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(), 600);
+}
+
+function shareReportWhatsApp(){
+  const {fOrders,fInvoices,selP,selC,selS,from,to}=rptFilterData();
+  const totalOrdKg=fOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
+  const totalInvKg=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
+  const totalInvAmt=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0)*parseFloat(i.price||0),0),0);
+  const pendingOrd=fOrders.filter(o=>o.status==='Pending').length;
+  const line='- - - - - - - - - - - - - -';
+
+  let msg='*SITARA SEQUINS REPORT*\n';
+  msg+=line+'\n';
+  if(from||to) msg+='Period: '+(from||'start')+' to '+(to||'today')+'\n';
+  if(selP) msg+='Party: '+selP+'\n';
+  if(selC) msg+='Color: '+selC+'\n';
+  if(selS) msg+='Shape: '+selS+'\n';
+  msg+=line+'\n';
+  msg+='Orders:      '+fOrders.length+'\n';
+  msg+='Pending:     '+pendingOrd+'\n';
+  msg+='Ordered kg:  '+totalOrdKg.toFixed(2)+'\n';
+  msg+='Invoices:    '+fInvoices.length+'\n';
+  msg+='Invoiced kg: '+totalInvKg.toFixed(2)+'\n';
+  msg+='Pending kg:  '+(totalOrdKg-totalInvKg).toFixed(2)+'\n';
+  if(totalInvAmt>0) msg+='Inv Amount:  '+Math.round(totalInvAmt)+'\n';
+  msg+=line+'\n';
+
+  // Add party summary
+  const pm={};
+  fOrders.forEach(o=>{
+    if(!pm[o.party])pm[o.party]={ordKg:0,invKg:0,invAmt:0};
+    pm[o.party].ordKg+=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+  });
+  fInvoices.forEach(inv=>{
+    if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0};
+    pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  });
+  Object.entries(pm).sort((a,b)=>b[1].ordKg-a[1].ordKg).forEach(([p,d])=>{
+    const net=(d.ordKg-d.invKg).toFixed(2);
+    msg+=p+'\n';
+    msg+='  Ord:'+d.ordKg.toFixed(2)+' Inv:'+d.invKg.toFixed(2)+' Pend:'+net;
+    if(d.invAmt>0) msg+=' Amt:'+Math.round(d.invAmt);
+    msg+='\n';
+  });
+
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+function sharePendingWhatsApp(mode){
+  mode=mode||'item';
+  const invByItem={};
+  const invByPartyItem={};
+  invoices.forEach(inv=>{
+    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      invByItem[k]=(invByItem[k]||0)+parseFloat(i.kg||0);
+      invByPartyItem[inv.party][k]=(invByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
+    });
+  });
+  function extractNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
+  function extractPrefix(s){ return s.replace(/\d+.*$/,''); }
+  function numSort(a,b){
+    const pa=extractPrefix(a.color),pb=extractPrefix(b.color);
+    if(pa!==pb)return pa.localeCompare(pb);
+    const na=extractNum(a.color),nb=extractNum(b.color);
+    if(na!==nb)return na-nb;
+    return extractNum(a.shape)-extractNum(b.shape);
+  }
+  const line='- - - - - - - - - - - - - -';
+  let msg='';
+
+  if(mode==='item'){
+    const ordByItem={};
+    orders.filter(o=>o.status==='Pending').forEach(o=>o.items.forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,totalKg:0};
+      ordByItem[k].totalKg+=parseFloat(i.kg||0);
+    }));
+    const items=Object.values(ordByItem).map(v=>{
+      const net=v.totalKg-(invByItem[v.color+'||'+v.shape]||0);
+      return net>=1.0?{color:v.color,shape:v.shape,net}:null;
+    }).filter(Boolean).sort(numSort);
+    const totalNet=items.reduce((s,i)=>s+i.net,0);
+    msg='*Item Pending*  '+fmtDate(today())+'\n'+line+'\n';
+    items.forEach(i=>{ msg+=i.color+' '+i.shape+'  '+i.net.toFixed(2)+'\n'; });
+    msg+=line+'\nTOTAL  '+totalNet.toFixed(2)+'\n';
+  } else {
+    const partyMap={};
+    orders.filter(o=>o.status==='Pending').forEach(o=>{
+      if(!partyMap[o.party])partyMap[o.party]={};
+      o.items.forEach(i=>{
+        const k=i.color+'||'+i.shape;
+        if(!partyMap[o.party][k])partyMap[o.party][k]={color:i.color,shape:i.shape,ordKg:0};
+        partyMap[o.party][k].ordKg+=parseFloat(i.kg||0);
+      });
+    });
+    let grandTotal=0;
+    msg='*Party Pending*  '+fmtDate(today())+'\n';
+    Object.entries(partyMap).forEach(([party,itemMap])=>{
+      const pi=invByPartyItem[party]||{};
+      const netItems=Object.values(itemMap).map(it=>{
+        const net=it.ordKg-(pi[it.color+'||'+it.shape]||0);
+        return net>=1.0?{color:it.color,shape:it.shape,net}:null;
+      }).filter(Boolean).sort(numSort);
+      if(!netItems.length)return;
+      const partyTotal=netItems.reduce((s,i)=>s+i.net,0);
+      grandTotal+=partyTotal;
+      msg+=line+'\n*'+party+'*  '+partyTotal.toFixed(2)+'\n';
+      netItems.forEach(i=>{ msg+=i.color+' '+i.shape+'  '+i.net.toFixed(2)+'\n'; });
+    });
+    msg+=line+'\nGRAND TOTAL  '+grandTotal.toFixed(2)+'\n';
+  }
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+
+// ============================================================
+// INVOICE RECOVERY
+// ============================================================
+async function recoverInvoices(){
+  let recovered = false;
+
+  // Try Firebase invoice backup
+  if(window._firebaseReady && window._firestore && window._firestore.INV_DOC){
+    try{
+      const {getDoc, INV_DOC} = window._firestore;
+      const snap = await getDoc(INV_DOC);
+      if(snap.exists()){
+        const data = snap.data();
+        if((data.invoices||[]).length > 0){
+          if(confirm('Found '+data.invoices.length+' invoices in cloud backup. Restore them?')){
+            invoices = data.invoices;
+            nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+            saveToBin(); renderAll();
+            alert('✅ '+invoices.length+' invoices recovered from cloud backup!');
+            recovered = true;
+          }
+        }
+      }
+    } catch(e){ console.error(e); }
+  }
+
+  // Try localStorage backup
+  if(!recovered){
+    const raw = localStorage.getItem('sitara_invoices_safe');
+    if(raw){
+      try{
+        const data = JSON.parse(raw);
+        if((data.invoices||[]).length > 0){
+          if(confirm('Found '+data.invoices.length+' invoices in local backup (saved '+data.savedAt+'). Restore them?')){
+            invoices = data.invoices;
+            nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+            saveToBin(); renderAll();
+            alert('✅ '+invoices.length+' invoices recovered from local backup!');
+            recovered = true;
+          }
+        }
+      } catch(e){}
+    }
+  }
+
+  if(!recovered){
+    alert('No invoice backup found. Make sure you have a backup .json file and use 📥 Restore.');
+  }
+}
+
+
+// ============================================================
+// ADMIN
+// ============================================================
+// ADMIN
+// ============================================================
+function openAdmin(){
+  document.getElementById('admin-locked').style.display='block';
+  document.getElementById('admin-unlocked').style.display='none';
+  document.getElementById('admin-pw-input').value='';
+  document.getElementById('admin-pw-err').style.display='none';
+  document.getElementById('modal-admin').classList.add('open');
+}
+function unlockAdmin(){
+  const pw=document.getElementById('admin-pw-input').value;
+  if(pw===ADMIN_PW){
+    document.getElementById('admin-locked').style.display='none';
+    document.getElementById('admin-unlocked').style.display='block';
+    document.getElementById('admin-pw-changed').style.display='none';
+    document.getElementById('admin-new-pw').value='';
+  } else {
+    document.getElementById('admin-pw-err').style.display='block';
+  }
+}
+function changeAdminPw(){
+  const np=document.getElementById('admin-new-pw').value.trim();
+  if(!np){alert('Enter a new password.');return;}
+  ADMIN_PW=np;
+  localStorage.setItem(LS_PW_KEY,np);
+  document.getElementById('admin-pw-changed').style.display='block';
+  document.getElementById('admin-new-pw').value='';
+}
+function exportBackup(){
+  const payload={colors,shapes,orders,parties,invoices,
+    nextOid,nextPaId,nextInvNum,nextInvoiceNum};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='sitara_backup_'+today()+'.json';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function importBackup(input){
+  const file=input.files[0];if(!file)return;
+  input.value='';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      colors      = data.colors      || colors;
+      shapes      = data.shapes      || shapes;
+      orders      = data.orders      || orders;
+      parties     = data.parties     || parties;
+      invoices    = data.invoices    || invoices;
+      nextOid     = data.nextOid     || nextOid;
+      nextPaId    = data.nextPaId    || nextPaId;
+      nextInvNum  = data.nextInvNum  || nextInvNum;
+      nextInvoiceNum=data.nextInvoiceNum||nextInvoiceNum;
+      saveToBin();renderAll();
+      alert('✅ Backup restored successfully!');
+    }catch(e){alert('❌ Invalid backup file.');}
+  };
+  reader.readAsText(file);
+}
+function adminClearOrders(){
+  if(!confirm('DELETE ALL ORDERS? This cannot be undone!'))return;
+  orders=[];nextOid=1;
+  saveToBin();renderOrders();renderInvoiceList();closeModal('modal-admin');
+}
+function adminClearInvoices(){
+  if(!confirm('DELETE ALL INVOICES? This cannot be undone!'))return;
+  invoices=[];nextInvoiceNum=1;
+  saveToBin();renderInvoiceList();closeModal('modal-admin');
+}
+function adminResetAll(){
+  if(!confirm('RESET EVERYTHING? All data will be lost!'))return;
+  if(!confirm('Are you absolutely sure?'))return;
+  colors=[];shapes=[];orders=[];parties=[];invoices=[];
+  nextOid=1;nextPaId=1;nextInvNum=1;nextInvoiceNum=1;
+  saveToBin();renderAll();closeModal('modal-admin');
+}
+</script>
+
+
+</body></html>
