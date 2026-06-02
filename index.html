@@ -1854,7 +1854,10 @@ function viewInvoice(invId){
       <div style="font-size:13px;color:#444;line-height:1.6">${inv.remarks}</div>
     </div>`:''}${inv.courier?`<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border-left:3px solid #16a34a"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">&#x1F69A; Courier</div><div style="font-size:13px">${inv.courier}</div></div>`:''}`;
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+  ['orders','invoices','catalog','production','reports'].forEach(id=>{
+    const el=document.getElementById('tab-'+id);
+    if(el) el.classList.remove('active');
+  });
   document.getElementById('view-invoice').style.display='block';
 }
 function closeInvoice(){
