@@ -637,7 +637,7 @@ tr:hover td{background:#fafafa}
 </div>
 
 <!-- ===== MOBILE WRAPPER ===== -->
-<div id="mobile-wrapper" style="display:none">
+<div id="mobile-wrapper" style="display:none;padding-bottom:70px">
 
   <div class="mob-topbar"><h2 id="mob-title">New Order</h2></div>
 
@@ -646,7 +646,7 @@ tr:hover td{background:#fafafa}
     <div class="mob-field"><div class="mob-label">Party name</div>
       <input class="mob-input" id="mob-order-party" placeholder="Type or select party..." oninput="mobFilterParty('mob-order-party','mob-order-party-drop')" onfocus="document.getElementById('mob-order-party-drop').style.display='block'">
     </div>
-    <div class="mob-party-drop" id="mob-order-party-drop"></div>
+    <div class="mob-party-drop" id="mob-order-party-drop" style="display:none"></div>
     <div class="mob-date-row">
       <input type="date" class="mob-date-input" id="mob-order-date">
       <div class="mob-today-btn" onclick="setMobToday('mob-order-date')">Today</div>
@@ -658,16 +658,16 @@ tr:hover td{background:#fafafa}
   </div>
 
   <!-- MOB PAGE 2: Orders List -->
-  <div class="mobile-page" id="mp2">
+  <div class="mobile-page" id="mp2" style="display:none">
     <div id="mob-orders-list" style="padding-top:8px"></div>
   </div>
 
   <!-- MOB PAGE 3: New Invoice -->
-  <div class="mobile-page" id="mp3">
+  <div class="mobile-page" id="mp3" style="display:none">
     <div class="mob-field"><div class="mob-label">Party name</div>
       <input class="mob-input" id="mob-inv-party" placeholder="Type or pick party..." oninput="mobFilterParty('mob-inv-party','mob-inv-party-drop')" onfocus="document.getElementById('mob-inv-party-drop').style.display='block'">
     </div>
-    <div class="mob-party-drop" id="mob-inv-party-drop"></div>
+    <div class="mob-party-drop" id="mob-inv-party-drop" style="display:none"></div>
     <div class="mob-date-row">
       <input type="date" class="mob-date-input" id="mob-inv-date">
       <div class="mob-today-btn" onclick="setMobToday('mob-inv-date')">Today</div>
@@ -682,7 +682,7 @@ tr:hover td{background:#fafafa}
   </div>
 
   <!-- MOB PAGE 4: Invoices List -->
-  <div class="mobile-page" id="mp4">
+  <div class="mobile-page" id="mp4" style="display:none">
     <div id="mob-invoices-list" style="padding-top:8px"></div>
   </div>
 
@@ -1140,7 +1140,16 @@ function saveAll(){
 // APP START
 // ============================================================
 function startApp(){
-  document.getElementById('app').style.display='block';
+  if(isMobile()){
+    document.getElementById('app').style.display='none';
+    document.getElementById('mobile-wrapper').style.display='block';
+    document.getElementById('mobile-nav').style.display='flex';
+    initMobile();
+  } else {
+    document.getElementById('app').style.display='block';
+    document.getElementById('mobile-wrapper').style.display='none';
+    document.getElementById('mobile-nav').style.display='none';
+  }
   renderAll();
   setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
 }
@@ -3390,6 +3399,12 @@ function printReport(){
 #mobile-nav{display:none}
 #mobile-wrapper{display:none}
 .mob-topbar{display:none}
+/* Show mobile elements when is-mobile class added */
+body.is-mobile #app{display:none!important}
+body.is-mobile #mobile-wrapper{display:block!important}
+body.is-mobile #mobile-nav{display:flex!important;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-top:1px solid #e5e7eb}
+body.is-mobile .mob-topbar{display:flex!important;position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px}
+body.is-mobile .mob-topbar h2{font-size:18px;font-weight:700;margin:0;color:#111}
     </style>
   </head><body>
     <div style="margin-bottom:12px">${stats}</div>
@@ -3662,7 +3677,7 @@ function mobShow(n){
   for(let i=1;i<=4;i++){
     const p=document.getElementById('mp'+i);
     const b=document.getElementById('mn'+i);
-    if(p) p.classList.toggle('mob-active', i===n);
+    if(p){ p.classList.toggle('mob-active', i===n); p.style.display=(i===n)?'block':'none'; }
     if(b) b.classList.toggle('mob-active', i===n);
   }
   document.getElementById('mob-title').textContent = MOB_TITLES[n-1];
@@ -3903,10 +3918,13 @@ function mobEditInvoice(id){
 // ── INIT MOBILE ──
 function initMobile(){
   if(!isMobile()) return;
+  document.body.classList.add('is-mobile');
   setMobToday('mob-order-date');
   setMobToday('mob-inv-date');
   addMobOrderItem();
   addMobInvItem();
+  renderMobOrders();
+  renderMobInvoices();
 }
 
 // Override renderAll to also update mobile
