@@ -22,7 +22,7 @@
   const INV_DOC  = doc(db, 'sitara26', 'invoices_backup');
 
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, DATA_DOC };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, DATA_DOC, INV_DOC };
   window._firebaseReady = true;
 
   // Listen for real-time updates from other devices
@@ -3494,7 +3494,7 @@ function importBackup(input){
 }
 function adminClearOrders(){
   if(!confirm('DELETE ALL ORDERS? This cannot be undone!'))return;
-  orders=[];nextOid=1;nextInvNum=1;
+  orders=[];nextOid=1;
   saveToBin();renderOrders();renderInvoiceList();closeModal('modal-admin');
 }
 function adminClearInvoices(){
