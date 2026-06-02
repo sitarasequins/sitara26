@@ -628,67 +628,6 @@ tr:hover td{background:#fafafa}
 
 </div>
 
-<!-- ===== MOBILE NAV ===== -->
-<div id="mobile-nav" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-top:1px solid #e5e7eb;padding:4px 0 8px">
-  <button class="mob-nav-btn mob-active" id="mn1" onclick="mobShow(1)" style="flex:1;padding:8px 4px 4px;text-align:center;border:none;background:none;cursor:pointer"><i class="ti ti-plus" style="font-size:22px;color:#2563eb;display:block" aria-hidden="true"></i><span style="font-size:10px;color:#2563eb;display:block">New Order</span></button>
-  <button class="mob-nav-btn" id="mn2" onclick="mobShow(2)" style="flex:1;padding:8px 4px 4px;text-align:center;border:none;background:none;cursor:pointer"><i class="ti ti-list" style="font-size:22px;color:#888;display:block" aria-hidden="true"></i><span style="font-size:10px;color:#888;display:block">Orders</span></button>
-  <button class="mob-nav-btn" id="mn3" onclick="mobShow(3)" style="flex:1;padding:8px 4px 4px;text-align:center;border:none;background:none;cursor:pointer"><i class="ti ti-file-plus" style="font-size:22px;color:#888;display:block" aria-hidden="true"></i><span style="font-size:10px;color:#888;display:block">New Invoice</span></button>
-  <button class="mob-nav-btn" id="mn4" onclick="mobShow(4)" style="flex:1;padding:8px 4px 4px;text-align:center;border:none;background:none;cursor:pointer"><i class="ti ti-files" style="font-size:22px;color:#888;display:block" aria-hidden="true"></i><span style="font-size:10px;color:#888;display:block">Invoices</span></button>
-</div>
-
-<!-- ===== MOBILE WRAPPER ===== -->
-<div id="mobile-wrapper" style="display:none;padding-bottom:70px">
-
-  <div id="mob-topbar" style="display:none;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #e5e7eb;background:#fff;position:sticky;top:0;z-index:10">
-    <h2 id="mob-title" style="font-size:18px;font-weight:700;margin:0;color:#111">New Order</h2>
-  </div>
-
-  <!-- MOB PAGE 1: New Order -->
-  <div class="mobile-page mob-active" id="mp1">
-    <div class="mob-field"><div class="mob-label">Party name</div>
-      <input class="mob-input" id="mob-order-party" placeholder="Type or select party..." oninput="mobFilterParty('mob-order-party','mob-order-party-drop')" onfocus="document.getElementById('mob-order-party-drop').style.display='block'">
-    </div>
-    <div class="mob-party-drop" id="mob-order-party-drop" style="display:none"></div>
-    <div class="mob-date-row">
-      <input type="date" class="mob-date-input" id="mob-order-date">
-      <div class="mob-today-btn" onclick="setMobToday('mob-order-date')">Today</div>
-    </div>
-    <div class="mob-items-hdr-order"><span>Color</span><span>Shape</span><span>Kg</span></div>
-    <div id="mob-order-items"></div>
-    <div class="mob-add-item" onclick="addMobOrderItem()">+ Add item</div>
-    <button class="mob-save-btn" onclick="saveMobOrder()">Save order</button>
-  </div>
-
-  <!-- MOB PAGE 2: Orders List -->
-  <div class="mobile-page" id="mp2" style="display:none">
-    <div id="mob-orders-list" style="padding-top:8px"></div>
-  </div>
-
-  <!-- MOB PAGE 3: New Invoice -->
-  <div class="mobile-page" id="mp3" style="display:none">
-    <div class="mob-field"><div class="mob-label">Party name</div>
-      <input class="mob-input" id="mob-inv-party" placeholder="Type or pick party..." oninput="mobFilterParty('mob-inv-party','mob-inv-party-drop')" onfocus="document.getElementById('mob-inv-party-drop').style.display='block'">
-    </div>
-    <div class="mob-party-drop" id="mob-inv-party-drop" style="display:none"></div>
-    <div class="mob-date-row">
-      <input type="date" class="mob-date-input" id="mob-inv-date">
-      <div class="mob-today-btn" onclick="setMobToday('mob-inv-date')">Today</div>
-    </div>
-    <div class="mob-items-hdr-inv"><span>Color</span><span>Shape</span><span>Kg</span><span>Rate</span></div>
-    <div id="mob-inv-items"></div>
-    <div class="mob-add-item" onclick="addMobInvItem()">+ Add item</div>
-    <div class="mob-remarks"><div class="mob-label">Remarks</div>
-      <textarea class="mob-input" id="mob-inv-remarks" placeholder="Payment received, courier..."></textarea>
-    </div>
-    <button class="mob-save-btn" onclick="saveMobInvoice()">Save invoice</button>
-  </div>
-
-  <!-- MOB PAGE 4: Invoices List -->
-  <div class="mobile-page" id="mp4" style="display:none">
-    <div id="mob-invoices-list" style="padding-top:8px"></div>
-  </div>
-
-</div>
 
 <script>
 // ============================================================
@@ -1142,18 +1081,9 @@ function saveAll(){
 // APP START
 // ============================================================
 function startApp(){
-  const mob = isMobile();
-  document.getElementById('app').style.display = mob ? 'none' : 'block';
-  const mw = document.getElementById('mobile-wrapper');
-  const mn = document.getElementById('mobile-nav');
-  if(mw) mw.style.display = mob ? 'block' : 'none';
-  if(mn) mn.style.display = mob ? 'flex' : 'none';
-  if(!mob){
-    renderAll();
-    setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
-  } else {
-    initMobile();
-  }
+  document.getElementById('app').style.display='block';
+  renderAll();
+  setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
 }
 
 window.onload = function(){
@@ -2468,7 +2398,73 @@ function printPendingPOS(mode){
 
   const posWin=window.open('','_blank','width=400,height=600,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
+<!-- MOBILE APP -->
+<div id="mob-app">
+
+  <!-- TOP BAR -->
+  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
+    <div style="font-size:12px;color:#888" id="mob-sync"></div>
+  </div>
+
+  <!-- PAGE 1: NEW ORDER -->
+  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
+    <div style="padding:12px 16px 0">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
+      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
+        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
+        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
+      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
+      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
+      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
+      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
+    </div>
+    <div style="padding:10px 16px 0">
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
+      </div>
+      <div id="mob-o-items"></div>
+      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
+    </div>
+    <div style="padding:0 16px">
+      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2: ORDERS LIST -->
+  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
+    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
+  </div>
+
+  <!-- PAGE 3: INVOICES LIST -->
+  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
+    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
+  </div>
+
+</div>
+
+<!-- MOBILE NAV -->
+<div id="mob-nav">
+  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
+    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
+  </button>
+  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
+  </button>
+  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
+  </button>
+</div>
+</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
@@ -2509,7 +2505,73 @@ function printOrderPOS(id){
     <div style="height:20mm"></div>`;
   const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
+<!-- MOBILE APP -->
+<div id="mob-app">
+
+  <!-- TOP BAR -->
+  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
+    <div style="font-size:12px;color:#888" id="mob-sync"></div>
+  </div>
+
+  <!-- PAGE 1: NEW ORDER -->
+  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
+    <div style="padding:12px 16px 0">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
+      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
+        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
+        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
+      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
+      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
+      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
+      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
+    </div>
+    <div style="padding:10px 16px 0">
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
+      </div>
+      <div id="mob-o-items"></div>
+      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
+    </div>
+    <div style="padding:0 16px">
+      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2: ORDERS LIST -->
+  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
+    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
+  </div>
+
+  <!-- PAGE 3: INVOICES LIST -->
+  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
+    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
+  </div>
+
+</div>
+
+<!-- MOBILE NAV -->
+<div id="mob-nav">
+  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
+    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
+  </button>
+  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
+  </button>
+  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
+  </button>
+</div>
+</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
@@ -2561,7 +2623,73 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
+<!-- MOBILE APP -->
+<div id="mob-app">
+
+  <!-- TOP BAR -->
+  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
+    <div style="font-size:12px;color:#888" id="mob-sync"></div>
+  </div>
+
+  <!-- PAGE 1: NEW ORDER -->
+  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
+    <div style="padding:12px 16px 0">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
+      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
+        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
+        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
+      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
+      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
+      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
+      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
+    </div>
+    <div style="padding:10px 16px 0">
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
+      </div>
+      <div id="mob-o-items"></div>
+      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
+    </div>
+    <div style="padding:0 16px">
+      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2: ORDERS LIST -->
+  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
+    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
+  </div>
+
+  <!-- PAGE 3: INVOICES LIST -->
+  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
+    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
+  </div>
+
+</div>
+
+<!-- MOBILE NAV -->
+<div id="mob-nav">
+  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
+    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
+  </button>
+  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
+  </button>
+  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
+  </button>
+</div>
+</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
@@ -3330,88 +3458,89 @@ function printReport(){
       .rpt-card-hdr{background:#f0f4ff;padding:8px 12px;font-weight:700;font-size:13px;border-bottom:1px solid #dbeafe}
       @media print{@page{margin:10mm}}
 
-/* ===== MOBILE LAYOUT (max 768px) ===== */
+/* mobile removed */
+
+/* ===== MOBILE ===== */
+#mob-app{display:none}
+#mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-top:1px solid #e5e7eb}
 @media(max-width:768px){
-  #app{padding:0}
-  /* Hide desktop tabs and show mobile nav */
-  .tabs{display:none!important}
-  #mobile-nav{display:flex!important}
-  /* Hide all desktop tab panels */
-  #tab-orders,#tab-invoices,#tab-catalog,#tab-production,#tab-reports{display:none!important}
-  /* Show mobile pages */
-  .mobile-page{display:none}
-  .mobile-page.mob-active{display:block!important}
-  /* Mobile wrapper */
-  #mobile-wrapper{display:block!important;padding-bottom:70px}
-  /* Top bar */
-  .mob-topbar{display:flex!important;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:0.5px solid #e5e7eb;background:#fff;position:sticky;top:0;z-index:10}
-  .mob-topbar h2{font-size:17px;font-weight:600;margin:0;color:#111}
-  /* Cards */
-  .mob-card{border:0.5px solid #e5e7eb;border-radius:12px;padding:13px;margin:0 12px 10px}
-  .mob-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}
-  .mob-card-name{font-size:15px;font-weight:600;color:#111}
-  .mob-card-meta{font-size:12px;color:#888;margin-bottom:9px}
-  .mob-btns{display:flex;gap:6px}
-  .mob-btn{flex:1;padding:8px 4px;font-size:13px;border:0.5px solid #ddd;border-radius:8px;text-align:center;color:#111;background:#fff;cursor:pointer}
-  .mob-btn.blue{background:#2563eb;color:#fff;border-color:#2563eb}
-  .mob-btn.green{background:#25D366;color:#fff;border-color:#25D366}
-  .mob-btn.red{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
-  /* Form fields */
-  .mob-field{margin:10px 16px 0}
-  .mob-label{font-size:12px;color:#888;margin-bottom:3px}
-  .mob-input{width:100%;box-sizing:border-box;border:0.5px solid #ddd;border-radius:8px;padding:11px 12px;font-size:14px;color:#111;background:#fff;outline:none}
-  .mob-input:focus{border-color:#2563eb}
-  .mob-party-drop{border:0.5px solid #ddd;border-radius:8px;background:#fff;margin:2px 16px 0;display:none;max-height:180px;overflow-y:auto;z-index:100;position:relative}
-  .mob-party-opt{padding:10px 13px;font-size:14px;color:#111;border-bottom:0.5px solid #f0f0f0;cursor:pointer}
-  .mob-party-opt:last-child{border-bottom:none}
-  .mob-party-opt:active{background:#eff6ff}
-  .mob-date-row{display:flex;gap:8px;align-items:center;margin:10px 16px 0}
-  .mob-date-input{flex:1;border:0.5px solid #ddd;border-radius:8px;padding:11px 12px;font-size:14px;color:#111;background:#fff}
-  .mob-today-btn{background:#f3f4f6;border:0.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer}
-  /* Items grid */
-  .mob-items-hdr-order{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr);gap:5px;margin:8px 16px 3px;font-size:11px;color:#888}
-  .mob-items-hdr-inv{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr) minmax(0,0.7fr);gap:4px;margin:8px 16px 3px;font-size:11px;color:#888}
-  .mob-item-row-order{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr);gap:5px;margin:0 16px 6px}
-  .mob-item-row-inv{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr) minmax(0,0.7fr);gap:4px;margin:0 16px 6px}
-  .mob-cell{border:0.5px solid #ddd;border-radius:8px;padding:9px 6px;font-size:13px;color:#111;background:#fff;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .mob-cell.ph{color:#bbb}
-  .mob-add-item{color:#2563eb;font-size:13px;margin:4px 16px 8px;cursor:pointer}
-  .mob-remarks{margin:8px 16px 0}
-  .mob-remarks textarea{width:100%;box-sizing:border-box;border:0.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#111;background:#fff;resize:none;height:70px}
-  .mob-save-btn{margin:12px 16px 0;background:#2563eb;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;width:calc(100% - 32px);cursor:pointer}
-  /* Courier row */
-  .mob-courier-row{display:flex;gap:6px;margin-top:8px}
-  .mob-courier-row input{flex:1;border:0.5px solid #ddd;border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;color:#111}
-  .mob-courier-row button{background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 13px;font-size:14px;cursor:pointer}
-  /* Bottom nav */
-  #mobile-nav{position:fixed;bottom:0;left:0;right:0;display:flex;border-top:0.5px solid #e5e7eb;background:#fff;z-index:1000;padding-bottom:env(safe-area-inset-bottom)}
-  .mob-nav-btn{flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer}
-  .mob-nav-btn i{font-size:22px;color:#888;display:block;margin-bottom:2px}
-  .mob-nav-btn span{font-size:10px;color:#888;display:block}
-  .mob-nav-btn.mob-active i,.mob-nav-btn.mob-active span{color:#2563eb}
-  /* Date chip */
-  .mob-date-chip{font-size:11px;color:#2563eb;background:#eff6ff;border-radius:6px;padding:3px 9px;display:inline-block;margin:10px 16px 6px}
-  /* Stat bar */
-  .mob-stat-bar{display:flex;gap:8px;margin:10px 12px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:0.5px solid #e5e7eb}
-  .mob-stat{flex:1;text-align:center}
-  .mob-stat-label{font-size:11px;color:#888}
-  .mob-stat-val{font-size:16px;font-weight:600;color:#111}
+  #app{display:none!important}
+  #mob-app{display:block!important;padding-bottom:68px}
+  #mob-nav{display:flex!important}
 }
-/* Hide mobile elements on desktop */
-#mobile-nav{display:none}
-#mobile-wrapper{display:none}
-.mob-topbar{display:none}
-/* Show mobile elements when is-mobile class added */
-body.is-mobile #app{display:none!important}
-body.is-mobile #mobile-wrapper{display:block!important}
-body.is-mobile #mobile-nav{display:flex!important;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-top:1px solid #e5e7eb}
-body.is-mobile .mob-topbar{display:flex!important;position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px}
-body.is-mobile .mob-topbar h2{font-size:18px;font-weight:700;margin:0;color:#111}
+.mob-page{display:none}
+.mob-page.on{display:block}
     </style>
   </head><body>
     <div style="margin-bottom:12px">${stats}</div>
     ${content}
-  </body></html>`);
+  
+<!-- MOBILE APP -->
+<div id="mob-app">
+
+  <!-- TOP BAR -->
+  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
+    <div style="font-size:12px;color:#888" id="mob-sync"></div>
+  </div>
+
+  <!-- PAGE 1: NEW ORDER -->
+  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
+    <div style="padding:12px 16px 0">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
+      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
+        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
+        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
+      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
+      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
+      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
+      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
+    </div>
+    <div style="padding:10px 16px 0">
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
+      </div>
+      <div id="mob-o-items"></div>
+      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
+    </div>
+    <div style="padding:0 16px">
+      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2: ORDERS LIST -->
+  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
+    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
+  </div>
+
+  <!-- PAGE 3: INVOICES LIST -->
+  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
+    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
+  </div>
+
+</div>
+
+<!-- MOBILE NAV -->
+<div id="mob-nav">
+  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
+    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
+  </button>
+  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
+  </button>
+  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
+  </button>
+</div>
+</body></html>`);
   win.document.close();
   win.focus();
   setTimeout(()=>win.print(), 600);
@@ -3664,306 +3793,291 @@ function adminResetAll(){
   saveToBin();renderAll();closeModal('modal-admin');
 }
 
-// ============================================================
-// MOBILE FUNCTIONS
-// ============================================================
-const MOB_TITLES = ['New Order','Orders','New Invoice','Invoices'];
-let mobOrderItems = [];
-let mobInvItems = [];
-let editMobOrderId = null;
-let editMobInvId = null;
 
-function isMobile(){ return window.innerWidth <= 768; }
+// ===== MOBILE =====
+function isMobile(){return window.innerWidth<=768;}
 
-function mobShow(n){
-  for(let i=1;i<=4;i++){
-    const p=document.getElementById('mp'+i);
-    const b=document.getElementById('mn'+i);
-    if(p){ p.style.display=(i===n)?'block':'none'; }
+function mobPage(n){
+  [1,2,3].forEach(i=>{
+    const p=document.getElementById('mob-p'+i);
+    if(p) p.style.display=(i===n)?'block':'none';
+    const b=document.getElementById('mob-n'+i);
     if(b){
       const icon=b.querySelector('i');
-      const lbl=b.querySelector('span');
-      const active=(i===n);
-      if(icon) icon.style.color=active?'#2563eb':'#888';
-      if(lbl) lbl.style.color=active?'#2563eb':'#888';
+      const lbl=b.querySelectorAll('div')[1];
+      const c=i===n?'#2563eb':'#aaa';
+      if(icon) icon.style.color=c;
+      if(lbl) lbl.style.color=c;
     }
-  }
-  document.getElementById('mob-title').textContent = MOB_TITLES[n-1];
-  document.querySelectorAll('.mob-party-drop').forEach(d=>d.style.display='none');
-  if(n===2) renderMobOrders();
-  if(n===4) renderMobInvoices();
-  if(n===1){ editMobOrderId=null; resetMobOrderForm(); }
-  if(n===3){ editMobInvId=null; resetMobInvForm(); }
+  });
+  const titles=['New Order','Orders','Invoices'];
+  const t=document.getElementById('mob-title');
+  if(t) t.textContent=titles[n-1];
+  if(n===2) mobRenderOrders();
+  if(n===3) mobRenderInvoices();
 }
 
-function setMobToday(id){
-  document.getElementById(id).value = new Date().toISOString().split('T')[0];
+function mobToday(id){
+  document.getElementById(id).value=new Date().toISOString().split('T')[0];
 }
 
-function mobFilterParty(inputId, dropId){
-  const val = document.getElementById(inputId).value.toLowerCase();
-  const drop = document.getElementById(dropId);
-  drop.style.display = 'block';
-  drop.innerHTML = parties
-    .filter(p=>p.name.toLowerCase().includes(val))
-    .slice(0,8)
-    .map(p=>`<div class="mob-party-opt" onclick="mobPickParty('${inputId}','${dropId}','${p.name.replace(/'/g,"\\'")}')">${p.name}</div>`)
-    .join('');
+function mobPartyOpen(inputId,dropId){
+  const drop=document.getElementById(dropId);
+  const val=document.getElementById(inputId).value.toLowerCase();
+  const opts=parties.filter(p=>!val||p.name.toLowerCase().includes(val)).slice(0,10);
+  drop.innerHTML=opts.map(p=>`<div onclick="mobPickParty('${inputId}','${dropId}','${p.name.replace(/'/g,"\'")}');" style="padding:11px 14px;font-size:14px;color:#111;border-bottom:1px solid #f5f5f5;cursor:pointer">${p.name}</div>`).join('');
+  drop.style.display=opts.length?'block':'none';
 }
 
-function mobPickParty(inputId, dropId, name){
-  document.getElementById(inputId).value = name;
-  document.getElementById(dropId).style.display = 'none';
+function mobPartyFilter(inputId,dropId){mobPartyOpen(inputId,dropId);}
+
+function mobPickParty(inputId,dropId,name){
+  document.getElementById(inputId).value=name;
+  document.getElementById(dropId).style.display='none';
 }
 
-function colorDisplayMob(colorCode){
+function mobColorDisplay(colorCode){
   const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
-  if(c && typeof c==='object' && c.alias) return colorCode+'/'+c.alias;
+  if(c&&typeof c==='object'&&c.alias) return colorCode+'/'+c.alias;
   return colorCode;
 }
 
-// ── ORDER ITEMS ──
-function addMobOrderItem(item=null){
-  const id = Date.now();
-  const colorOpts = colors.map(c=>{
-    const n = typeof c==='object'?c.name:c;
-    const sel = item&&item.color===n?'selected':'';
-    return `<option value="${n}" ${sel}>${colorDisplayMob(n)}</option>`;
-  }).join('');
-  const shapeOpts = shapes.map(s=>`<option value="${s}" ${item&&item.shape===s?'selected':''}>${s}</option>`).join('');
-  const row = document.createElement('div');
-  row.className = 'mob-item-row-order';
-  row.id = 'mob-orow-'+id;
-  row.innerHTML = `
-    <select class="mob-cell" onchange="updateMobOrderAmt(${id})" style="font-size:12px;padding:6px 4px"><option value="">color...</option>${colorOpts}</select>
-    <select class="mob-cell" style="font-size:12px;padding:6px 4px"><option value="">shape...</option>${shapeOpts}</select>
-    <input type="number" class="mob-cell" placeholder="kg" step="0.01" value="${item?item.kg:''}" style="font-size:12px;padding:6px 4px">
+function mobAddOrderItem(item=null){
+  const colorOpts=colors.map(c=>{const n=typeof c==='object'?c.name:c;return`<option value="${n}"${item&&item.color===n?' selected':''}>${mobColorDisplay(n)}</option>`;}).join('');
+  const shapeOpts=shapes.map(s=>`<option value="${s}"${item&&item.shape===s?' selected':''}>${s}</option>`).join('');
+  const row=document.createElement('div');
+  row.style.cssText='display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:6px';
+  row.innerHTML=`
+    <select style="border:1px solid #ddd;border-radius:8px;padding:9px 4px;font-size:12px;color:#111;background:#fff;min-width:0;overflow:hidden"><option value="">color...</option>${colorOpts}</select>
+    <select style="border:1px solid #ddd;border-radius:8px;padding:9px 4px;font-size:12px;color:#111;background:#fff;min-width:0"><option value="">shape...</option>${shapeOpts}</select>
+    <input type="number" placeholder="kg" step="0.01" value="${item?item.kg:''}" style="border:1px solid #ddd;border-radius:8px;padding:9px 4px;font-size:12px;color:#111;background:#fff;width:100%;box-sizing:border-box;min-width:0">
   `;
-  document.getElementById('mob-order-items').appendChild(row);
+  document.getElementById('mob-o-items').appendChild(row);
 }
 
-function resetMobOrderForm(){
-  document.getElementById('mob-order-party').value='';
-  setMobToday('mob-order-date');
-  document.getElementById('mob-order-items').innerHTML='';
-  mobOrderItems=[];
-  addMobOrderItem();
-}
-
-function saveMobOrder(){
-  const party = document.getElementById('mob-order-party').value.trim();
-  const date = document.getElementById('mob-order-date').value;
-  if(!party){alert('Please enter party name');return;}
-  if(!date){alert('Please select date');return;}
-  const rows = document.getElementById('mob-order-items').querySelectorAll('.mob-item-row-order');
-  const items = [];
-  rows.forEach(row=>{
-    const sels = row.querySelectorAll('select');
-    const inp = row.querySelector('input');
-    const color = sels[0]?sels[0].value:'';
-    const shape = sels[1]?sels[1].value:'';
-    const kg = parseFloat(inp?inp.value:0)||0;
+function mobSaveOrder(){
+  const party=document.getElementById('mob-o-party').value.trim();
+  const date=document.getElementById('mob-o-date').value;
+  if(!party){alert('Enter party name');return;}
+  if(!date){alert('Select date');return;}
+  const rows=document.getElementById('mob-o-items').children;
+  const items=[];
+  Array.from(rows).forEach(row=>{
+    const sels=row.querySelectorAll('select');
+    const inp=row.querySelector('input');
+    const color=sels[0]?sels[0].value:'';
+    const shape=sels[1]?sels[1].value:'';
+    const kg=parseFloat(inp?inp.value:0)||0;
     if(color&&shape&&kg>0) items.push({color,shape,kg});
   });
   if(!items.length){alert('Add at least one item');return;}
-  if(editMobOrderId){
-    const o=orders.find(x=>x.id===editMobOrderId);
-    if(o){o.party=party;o.date=date;o.items=items;saveAll();}
-    editMobOrderId=null;
-  } else {
-    const o={id:nextOid++,invNum:nextInvNum++,party,date,items,status:'Pending'};
-    orders.unshift(o);
-    saveAll();
-    if(isMobile()) showOrderWhatsApp(o.id);
-  }
-  resetMobOrderForm();
-  mobShow(2);
+  const o={id:nextOid++,invNum:nextInvNum++,party,date,items,status:'Pending'};
+  orders.unshift(o);
+  saveAll();
+  document.getElementById('mob-o-party').value='';
+  document.getElementById('mob-o-items').innerHTML='';
+  mobAddOrderItem();
+  mobToday('mob-o-date');
+  setTimeout(()=>showOrderWhatsApp(o.id),300);
+  mobPage(2);
 }
 
-function renderMobOrders(){
-  const list = document.getElementById('mob-orders-list');
+function mobRenderOrders(){
+  const list=document.getElementById('mob-o-list');
   if(!list) return;
-  const sorted = [...orders].sort((a,b)=>b.date.localeCompare(a.date));
+  const sorted=[...orders].sort((a,b)=>b.date.localeCompare(a.date));
   if(!sorted.length){list.innerHTML='<div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div>';return;}
-  list.innerHTML = sorted.map(o=>{
-    const itemSummary = (o.items||[]).slice(0,3).map(i=>colorDisplayMob(i.color)+' '+i.shape).join(' · ')+(o.items.length>3?'...':'');
-    const totalKg = (o.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    return `<div class="mob-card">
-      <div class="mob-card-top">
-        <div class="mob-card-name">${o.party}</div>
+  list.innerHTML=sorted.map(o=>{
+    const totalKg=(o.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const preview=(o.items||[]).slice(0,3).map(i=>mobColorDisplay(i.color)+' '+i.shape).join(' · ')+(o.items.length>3?' ...':'');
+    return `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:13px;margin-bottom:10px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
+        <div style="font-size:15px;font-weight:600;color:#111">${o.party}</div>
         <div style="font-size:12px;color:#888">${fmtDate(o.date)}</div>
       </div>
-      <div class="mob-card-meta">${itemSummary} · ${totalKg.toFixed(2)}kg</div>
-      <div class="mob-btns">
-        <div class="mob-btn" onclick="mobEditOrder(${o.id})">Edit</div>
-        <div class="mob-btn blue" onclick="printOrderPOS(${o.id})">Print</div>
-        <div class="mob-btn green" onclick="showOrderWhatsApp(${o.id})">WA</div>
+      <div style="font-size:12px;color:#888;margin-bottom:10px">${preview} · ${totalKg.toFixed(2)}kg</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="mobEditOrder(${o.id})" style="flex:1;padding:9px 4px;font-size:13px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#111;cursor:pointer">Edit</button>
+        <button onclick="printOrderPOS(${o.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer">Print</button>
+        <button onclick="showOrderWhatsApp(${o.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#25D366;color:#fff;cursor:pointer">WA</button>
       </div>
     </div>`;
   }).join('');
 }
 
 function mobEditOrder(id){
-  const o = orders.find(x=>x.id===id);
+  const o=orders.find(x=>x.id===id);
   if(!o) return;
-  editMobOrderId = id;
-  mobShow(1);
   document.getElementById('mob-title').textContent='Edit Order';
-  setTimeout(()=>{
-    document.getElementById('mob-order-party').value = o.party;
-    document.getElementById('mob-order-date').value = o.date;
-    document.getElementById('mob-order-items').innerHTML='';
-    (o.items||[]).forEach(item=>addMobOrderItem(item));
-  },50);
-}
-
-// ── INVOICE ITEMS ──
-function addMobInvItem(item=null){
-  const id = Date.now();
-  const colorOpts = colors.map(c=>{
-    const n = typeof c==='object'?c.name:c;
-    return `<option value="${n}" ${item&&item.color===n?'selected':''}>${colorDisplayMob(n)}</option>`;
-  }).join('');
-  const shapeOpts = shapes.map(s=>`<option value="${s}" ${item&&item.shape===s?'selected':''}>${s}</option>`).join('');
-  const row = document.createElement('div');
-  row.className = 'mob-item-row-inv';
-  row.id = 'mob-irow-'+id;
-  row.innerHTML = `
-    <select class="mob-cell" style="font-size:12px;padding:6px 4px"><option value="">color...</option>${colorOpts}</select>
-    <select class="mob-cell" style="font-size:12px;padding:6px 4px"><option value="">shape...</option>${shapeOpts}</select>
-    <input type="number" class="mob-cell" placeholder="kg" step="0.01" value="${item?item.kg:''}" style="font-size:12px;padding:6px 4px">
-    <input type="number" class="mob-cell" placeholder="rate" value="${item?item.price:''}" style="font-size:12px;padding:6px 4px">
-  `;
-  document.getElementById('mob-inv-items').appendChild(row);
-}
-
-function resetMobInvForm(){
-  document.getElementById('mob-inv-party').value='';
-  setMobToday('mob-inv-date');
-  document.getElementById('mob-inv-items').innerHTML='';
-  document.getElementById('mob-inv-remarks').value='';
-  addMobInvItem();
-}
-
-function saveMobInvoice(){
-  const party = document.getElementById('mob-inv-party').value.trim();
-  const date = document.getElementById('mob-inv-date').value;
-  const remarks = document.getElementById('mob-inv-remarks').value.trim();
-  if(!party){alert('Please enter party name');return;}
-  if(!date){alert('Please select date');return;}
-  const rows = document.getElementById('mob-inv-items').querySelectorAll('.mob-item-row-inv');
-  const items=[];
-  rows.forEach(row=>{
-    const sels=row.querySelectorAll('select');
-    const inps=row.querySelectorAll('input');
-    const color=sels[0]?sels[0].value:'';
-    const shape=sels[1]?sels[1].value:'';
-    const kg=parseFloat(inps[0]?inps[0].value:0)||0;
-    const price=parseFloat(inps[1]?inps[1].value:0)||0;
-    if(color&&shape&&kg>0) items.push({color,shape,kg,price});
-  });
-  if(!items.length){alert('Add at least one item');return;}
-  if(editMobInvId){
-    const inv=invoices.find(x=>x.id===editMobInvId);
-    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;saveAll();}
-    editMobInvId=null;
-  } else {
-    const inv={id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,courier:''};
-    invoices.unshift(inv);
-    saveAll();
+  document.getElementById('mob-o-party').value=o.party;
+  document.getElementById('mob-o-date').value=o.date;
+  document.getElementById('mob-o-items').innerHTML='';
+  (o.items||[]).forEach(item=>mobAddOrderItem(item));
+  [1,2,3].forEach(i=>{const p=document.getElementById('mob-p'+i);if(p)p.style.display=(i===1)?'block':'none';});
+  const btn=document.querySelector('#mob-p1 button');
+  if(btn){
+    btn.textContent='Update order';
+    btn.onclick=()=>{
+      const party=document.getElementById('mob-o-party').value.trim();
+      const date=document.getElementById('mob-o-date').value;
+      const rows=document.getElementById('mob-o-items').children;
+      const items=[];
+      Array.from(rows).forEach(row=>{
+        const sels=row.querySelectorAll('select');
+        const inp=row.querySelector('input');
+        const color=sels[0]?sels[0].value:'';
+        const shape=sels[1]?sels[1].value:'';
+        const kg=parseFloat(inp?inp.value:0)||0;
+        if(color&&shape&&kg>0) items.push({color,shape,kg});
+      });
+      if(party) o.party=party;
+      if(date) o.date=date;
+      if(items.length) o.items=items;
+      saveAll();
+      btn.textContent='Save order';
+      btn.onclick=mobSaveOrder;
+      document.getElementById('mob-title').textContent='New Order';
+      document.getElementById('mob-o-party').value='';
+      document.getElementById('mob-o-items').innerHTML='';
+      mobAddOrderItem();
+      mobPage(2);
+    };
   }
-  resetMobInvForm();
-  mobShow(4);
 }
 
-function renderMobInvoices(){
-  const list = document.getElementById('mob-invoices-list');
+function mobRenderInvoices(){
+  const list=document.getElementById('mob-i-list');
   if(!list) return;
-  const sorted = [...invoices].sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
+  const sorted=[...invoices].sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
   if(!sorted.length){list.innerHTML='<div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div>';return;}
-  list.innerHTML = sorted.map(inv=>{
+  list.innerHTML=sorted.map(inv=>{
     const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
-    return `<div class="mob-card">
-      <div class="mob-card-top">
+    return `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:13px;margin-bottom:10px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
-          <div style="font-size:11px;color:#888">${invNumLabel(inv.serial)}</div>
-          <div class="mob-card-name">${inv.party}</div>
+          <div style="font-size:11px;color:#aaa">${invNumLabel(inv.serial)}</div>
+          <div style="font-size:15px;font-weight:600;color:#111">${inv.party}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:12px;color:#888">${fmtDate(inv.date)}</div>
           <div style="font-size:14px;font-weight:600;color:#111">${fmt(amt)}</div>
         </div>
       </div>
-      <div class="mob-courier-row">
-        <input placeholder="courier / transport..." id="mob-courier-${inv.id}" value="${inv.courier||''}" style="background:#fff;color:#111">
-        <button onclick="saveCourier(${inv.id},document.getElementById('mob-courier-${inv.id}').value)">✓</button>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input id="mc-${inv.id}" value="${inv.courier||''}" placeholder="courier..." style="flex:1;border:1px solid #ddd;border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;color:#111;outline:none">
+        <button onclick="saveCourier(${inv.id},document.getElementById('mc-${inv.id}').value)" style="background:#e9f9ef;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;padding:8px 13px;font-size:14px;cursor:pointer">✓</button>
       </div>
-      <div class="mob-btns" style="margin-top:8px">
-        <div class="mob-btn" onclick="mobEditInvoice(${inv.id})">Edit</div>
-        <div class="mob-btn blue" onclick="viewInvoice(${inv.id})">Print</div>
-        <div class="mob-btn green" onclick="shareInvWhatsApp(${inv.id})">WA</div>
-        <div class="mob-btn red" onclick="delInvoice(${inv.id});renderMobInvoices()">Del</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="mobInvEdit(${inv.id})" style="flex:1;padding:9px 4px;font-size:13px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#111;cursor:pointer">Edit</button>
+        <button onclick="viewInvoice(${inv.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer">Print</button>
+        <button onclick="shareInvWhatsApp(${inv.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#25D366;color:#fff;cursor:pointer">WA</button>
+        <button onclick="if(confirm('Delete?')){delInvoice(${inv.id});mobRenderInvoices()}" style="flex:1;padding:9px 4px;font-size:13px;border:1px solid #fca5a5;border-radius:8px;background:#fee2e2;color:#dc2626;cursor:pointer">Del</button>
       </div>
     </div>`;
   }).join('');
 }
 
-function mobEditInvoice(id){
-  const inv=invoices.find(x=>x.id===id);
-  if(!inv) return;
-  editMobInvId=id;
-  mobShow(3);
-  document.getElementById('mob-title').textContent='Edit Invoice';
-  setTimeout(()=>{
-    document.getElementById('mob-inv-party').value=inv.party;
-    document.getElementById('mob-inv-date').value=inv.date;
-    document.getElementById('mob-inv-remarks').value=inv.remarks||'';
-    document.getElementById('mob-inv-items').innerHTML='';
-    (inv.items||[]).forEach(item=>addMobInvItem(item));
-  },50);
-}
-
-// ── INIT MOBILE ──
-function initMobile(){
-  document.body.classList.add('is-mobile');
-  const tb=document.getElementById('mob-topbar'); if(tb) tb.style.display='flex';
-  loadFromStorage();
-  setMobToday('mob-order-date');
-  setMobToday('mob-inv-date');
-  document.getElementById('mob-order-items').innerHTML='';
-  document.getElementById('mob-inv-items').innerHTML='';
-  addMobOrderItem();
-  addMobInvItem();
-  renderMobOrders();
-  renderMobInvoices();
-  // Populate party dropdowns
-  mobFilterParty('mob-order-party','mob-order-party-drop');
-  mobFilterParty('mob-inv-party','mob-inv-party-drop');
-}
-
-// Mobile render hook - called from within renderAll directly
-
-window.addEventListener('resize',()=>{
-  const mob=isMobile();
-  document.getElementById('mobile-wrapper').style.display=mob?'block':'none';
-  document.getElementById('mobile-nav').style.display=mob?'flex':'none';
-  document.getElementById('app').style.display=mob?'none':'block';
-});
-
-document.addEventListener('DOMContentLoaded',()=>{
-  if(isMobile()){
-    document.getElementById('mobile-wrapper').style.display='block';
+function mobInvEdit(id){
+  loadInvIntoForm(id);
+  document.getElementById('mob-app').style.display='none';
+  document.getElementById('mob-nav').style.display='none';
+  document.getElementById('app').style.display='block';
+  const backBtn=document.createElement('button');
+  backBtn.textContent='← Back';
+  backBtn.style.cssText='position:fixed;top:10px;left:10px;z-index:9999;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer';
+  backBtn.onclick=()=>{
     document.getElementById('app').style.display='none';
-    initMobile();
+    document.getElementById('mob-app').style.display='block';
+    document.getElementById('mob-nav').style.display='flex';
+    backBtn.remove();
+    mobPage(3);
+  };
+  document.body.appendChild(backBtn);
+}
+
+window.addEventListener('load',()=>{
+  if(isMobile()){
+    mobToday('mob-o-date');
+    mobAddOrderItem();
+    mobRenderOrders();
+    mobRenderInvoices();
   }
 });
 
-document.addEventListener('click',function(e){
-  if(!e.target.closest('.mob-input')&&!e.target.closest('.mob-party-drop')){
-    document.querySelectorAll('.mob-party-drop').forEach(d=>d.style.display='none');
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#mob-o-party')&&!e.target.closest('#mob-o-pdrop')){
+    const d=document.getElementById('mob-o-pdrop');if(d)d.style.display='none';
   }
 });
+
+
 </script>
 
 
+
+<!-- MOBILE APP -->
+<div id="mob-app">
+
+  <!-- TOP BAR -->
+  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
+    <div style="font-size:12px;color:#888" id="mob-sync"></div>
+  </div>
+
+  <!-- PAGE 1: NEW ORDER -->
+  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
+    <div style="padding:12px 16px 0">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
+      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
+        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
+        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
+      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
+      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
+      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
+      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
+    </div>
+    <div style="padding:10px 16px 0">
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
+        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
+      </div>
+      <div id="mob-o-items"></div>
+      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
+    </div>
+    <div style="padding:0 16px">
+      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2: ORDERS LIST -->
+  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
+    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
+  </div>
+
+  <!-- PAGE 3: INVOICES LIST -->
+  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
+    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
+  </div>
+
+</div>
+
+<!-- MOBILE NAV -->
+<div id="mob-nav">
+  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
+    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
+  </button>
+  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
+  </button>
+  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
+    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
+    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
+  </button>
+</div>
 </body></html>
