@@ -628,6 +628,66 @@ tr:hover td{background:#fafafa}
 
 </div>
 
+<!-- ===== MOBILE NAV ===== -->
+<div id="mobile-nav" style="display:none">
+  <button class="mob-nav-btn mob-active" id="mn1" onclick="mobShow(1)"><i class="ti ti-plus" aria-hidden="true"></i><span>New Order</span></button>
+  <button class="mob-nav-btn" id="mn2" onclick="mobShow(2)"><i class="ti ti-list" aria-hidden="true"></i><span>Orders</span></button>
+  <button class="mob-nav-btn" id="mn3" onclick="mobShow(3)"><i class="ti ti-file-plus" aria-hidden="true"></i><span>New Invoice</span></button>
+  <button class="mob-nav-btn" id="mn4" onclick="mobShow(4)"><i class="ti ti-files" aria-hidden="true"></i><span>Invoices</span></button>
+</div>
+
+<!-- ===== MOBILE WRAPPER ===== -->
+<div id="mobile-wrapper" style="display:none">
+
+  <div class="mob-topbar"><h2 id="mob-title">New Order</h2></div>
+
+  <!-- MOB PAGE 1: New Order -->
+  <div class="mobile-page mob-active" id="mp1">
+    <div class="mob-field"><div class="mob-label">Party name</div>
+      <input class="mob-input" id="mob-order-party" placeholder="Type or select party..." oninput="mobFilterParty('mob-order-party','mob-order-party-drop')" onfocus="document.getElementById('mob-order-party-drop').style.display='block'">
+    </div>
+    <div class="mob-party-drop" id="mob-order-party-drop"></div>
+    <div class="mob-date-row">
+      <input type="date" class="mob-date-input" id="mob-order-date">
+      <div class="mob-today-btn" onclick="setMobToday('mob-order-date')">Today</div>
+    </div>
+    <div class="mob-items-hdr-order"><span>Color</span><span>Shape</span><span>Kg</span></div>
+    <div id="mob-order-items"></div>
+    <div class="mob-add-item" onclick="addMobOrderItem()">+ Add item</div>
+    <button class="mob-save-btn" onclick="saveMobOrder()">Save order</button>
+  </div>
+
+  <!-- MOB PAGE 2: Orders List -->
+  <div class="mobile-page" id="mp2">
+    <div id="mob-orders-list" style="padding-top:8px"></div>
+  </div>
+
+  <!-- MOB PAGE 3: New Invoice -->
+  <div class="mobile-page" id="mp3">
+    <div class="mob-field"><div class="mob-label">Party name</div>
+      <input class="mob-input" id="mob-inv-party" placeholder="Type or pick party..." oninput="mobFilterParty('mob-inv-party','mob-inv-party-drop')" onfocus="document.getElementById('mob-inv-party-drop').style.display='block'">
+    </div>
+    <div class="mob-party-drop" id="mob-inv-party-drop"></div>
+    <div class="mob-date-row">
+      <input type="date" class="mob-date-input" id="mob-inv-date">
+      <div class="mob-today-btn" onclick="setMobToday('mob-inv-date')">Today</div>
+    </div>
+    <div class="mob-items-hdr-inv"><span>Color</span><span>Shape</span><span>Kg</span><span>Rate</span></div>
+    <div id="mob-inv-items"></div>
+    <div class="mob-add-item" onclick="addMobInvItem()">+ Add item</div>
+    <div class="mob-remarks"><div class="mob-label">Remarks</div>
+      <textarea class="mob-input" id="mob-inv-remarks" placeholder="Payment received, courier..."></textarea>
+    </div>
+    <button class="mob-save-btn" onclick="saveMobInvoice()">Save invoice</button>
+  </div>
+
+  <!-- MOB PAGE 4: Invoices List -->
+  <div class="mobile-page" id="mp4">
+    <div id="mob-invoices-list" style="padding-top:8px"></div>
+  </div>
+
+</div>
+
 <script>
 // ============================================================
 // CONFIG & STATE
@@ -3258,6 +3318,78 @@ function printReport(){
       .rpt-card{margin-bottom:14px}
       .rpt-card-hdr{background:#f0f4ff;padding:8px 12px;font-weight:700;font-size:13px;border-bottom:1px solid #dbeafe}
       @media print{@page{margin:10mm}}
+
+/* ===== MOBILE LAYOUT (max 768px) ===== */
+@media(max-width:768px){
+  #app{padding:0}
+  /* Hide desktop tabs and show mobile nav */
+  .tabs{display:none!important}
+  #mobile-nav{display:flex!important}
+  /* Hide all desktop tab panels */
+  #tab-orders,#tab-invoices,#tab-catalog,#tab-production,#tab-reports{display:none!important}
+  /* Show mobile pages */
+  .mobile-page{display:none}
+  .mobile-page.mob-active{display:block!important}
+  /* Mobile wrapper */
+  #mobile-wrapper{display:block!important;padding-bottom:70px}
+  /* Top bar */
+  .mob-topbar{display:flex!important;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:0.5px solid #e5e7eb;background:#fff;position:sticky;top:0;z-index:10}
+  .mob-topbar h2{font-size:17px;font-weight:600;margin:0;color:#111}
+  /* Cards */
+  .mob-card{border:0.5px solid #e5e7eb;border-radius:12px;padding:13px;margin:0 12px 10px}
+  .mob-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}
+  .mob-card-name{font-size:15px;font-weight:600;color:#111}
+  .mob-card-meta{font-size:12px;color:#888;margin-bottom:9px}
+  .mob-btns{display:flex;gap:6px}
+  .mob-btn{flex:1;padding:8px 4px;font-size:13px;border:0.5px solid #ddd;border-radius:8px;text-align:center;color:#111;background:#fff;cursor:pointer}
+  .mob-btn.blue{background:#2563eb;color:#fff;border-color:#2563eb}
+  .mob-btn.green{background:#25D366;color:#fff;border-color:#25D366}
+  .mob-btn.red{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+  /* Form fields */
+  .mob-field{margin:10px 16px 0}
+  .mob-label{font-size:12px;color:#888;margin-bottom:3px}
+  .mob-input{width:100%;box-sizing:border-box;border:0.5px solid #ddd;border-radius:8px;padding:11px 12px;font-size:14px;color:#111;background:#fff;outline:none}
+  .mob-input:focus{border-color:#2563eb}
+  .mob-party-drop{border:0.5px solid #ddd;border-radius:8px;background:#fff;margin:2px 16px 0;display:none;max-height:180px;overflow-y:auto;z-index:100;position:relative}
+  .mob-party-opt{padding:10px 13px;font-size:14px;color:#111;border-bottom:0.5px solid #f0f0f0;cursor:pointer}
+  .mob-party-opt:last-child{border-bottom:none}
+  .mob-party-opt:active{background:#eff6ff}
+  .mob-date-row{display:flex;gap:8px;align-items:center;margin:10px 16px 0}
+  .mob-date-input{flex:1;border:0.5px solid #ddd;border-radius:8px;padding:11px 12px;font-size:14px;color:#111;background:#fff}
+  .mob-today-btn{background:#f3f4f6;border:0.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer}
+  /* Items grid */
+  .mob-items-hdr-order{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr);gap:5px;margin:8px 16px 3px;font-size:11px;color:#888}
+  .mob-items-hdr-inv{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr) minmax(0,0.7fr);gap:4px;margin:8px 16px 3px;font-size:11px;color:#888}
+  .mob-item-row-order{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr);gap:5px;margin:0 16px 6px}
+  .mob-item-row-inv{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.7fr) minmax(0,0.7fr);gap:4px;margin:0 16px 6px}
+  .mob-cell{border:0.5px solid #ddd;border-radius:8px;padding:9px 6px;font-size:13px;color:#111;background:#fff;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mob-cell.ph{color:#bbb}
+  .mob-add-item{color:#2563eb;font-size:13px;margin:4px 16px 8px;cursor:pointer}
+  .mob-remarks{margin:8px 16px 0}
+  .mob-remarks textarea{width:100%;box-sizing:border-box;border:0.5px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#111;background:#fff;resize:none;height:70px}
+  .mob-save-btn{margin:12px 16px 0;background:#2563eb;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;width:calc(100% - 32px);cursor:pointer}
+  /* Courier row */
+  .mob-courier-row{display:flex;gap:6px;margin-top:8px}
+  .mob-courier-row input{flex:1;border:0.5px solid #ddd;border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;color:#111}
+  .mob-courier-row button{background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 13px;font-size:14px;cursor:pointer}
+  /* Bottom nav */
+  #mobile-nav{position:fixed;bottom:0;left:0;right:0;display:flex;border-top:0.5px solid #e5e7eb;background:#fff;z-index:1000;padding-bottom:env(safe-area-inset-bottom)}
+  .mob-nav-btn{flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer}
+  .mob-nav-btn i{font-size:22px;color:#888;display:block;margin-bottom:2px}
+  .mob-nav-btn span{font-size:10px;color:#888;display:block}
+  .mob-nav-btn.mob-active i,.mob-nav-btn.mob-active span{color:#2563eb}
+  /* Date chip */
+  .mob-date-chip{font-size:11px;color:#2563eb;background:#eff6ff;border-radius:6px;padding:3px 9px;display:inline-block;margin:10px 16px 6px}
+  /* Stat bar */
+  .mob-stat-bar{display:flex;gap:8px;margin:10px 12px;padding:10px 14px;background:#f9fafb;border-radius:10px;border:0.5px solid #e5e7eb}
+  .mob-stat{flex:1;text-align:center}
+  .mob-stat-label{font-size:11px;color:#888}
+  .mob-stat-val{font-size:16px;font-weight:600;color:#111}
+}
+/* Hide mobile elements on desktop */
+#mobile-nav{display:none}
+#mobile-wrapper{display:none}
+.mob-topbar{display:none}
     </style>
   </head><body>
     <div style="margin-bottom:12px">${stats}</div>
@@ -3514,6 +3646,299 @@ function adminResetAll(){
   nextOid=1;nextPaId=1;nextInvNum=1;nextInvoiceNum=1;
   saveToBin();renderAll();closeModal('modal-admin');
 }
+
+// ============================================================
+// MOBILE FUNCTIONS
+// ============================================================
+const MOB_TITLES = ['New Order','Orders','New Invoice','Invoices'];
+let mobOrderItems = [];
+let mobInvItems = [];
+let editMobOrderId = null;
+let editMobInvId = null;
+
+function isMobile(){ return window.innerWidth <= 768; }
+
+function mobShow(n){
+  for(let i=1;i<=4;i++){
+    const p=document.getElementById('mp'+i);
+    const b=document.getElementById('mn'+i);
+    if(p) p.classList.toggle('mob-active', i===n);
+    if(b) b.classList.toggle('mob-active', i===n);
+  }
+  document.getElementById('mob-title').textContent = MOB_TITLES[n-1];
+  document.querySelectorAll('.mob-party-drop').forEach(d=>d.style.display='none');
+  if(n===2) renderMobOrders();
+  if(n===4) renderMobInvoices();
+  if(n===1){ editMobOrderId=null; resetMobOrderForm(); }
+  if(n===3){ editMobInvId=null; resetMobInvForm(); }
+}
+
+function setMobToday(id){
+  document.getElementById(id).value = new Date().toISOString().split('T')[0];
+}
+
+function mobFilterParty(inputId, dropId){
+  const val = document.getElementById(inputId).value.toLowerCase();
+  const drop = document.getElementById(dropId);
+  drop.style.display = 'block';
+  drop.innerHTML = parties
+    .filter(p=>p.name.toLowerCase().includes(val))
+    .slice(0,8)
+    .map(p=>`<div class="mob-party-opt" onclick="mobPickParty('${inputId}','${dropId}','${p.name.replace(/'/g,"\\'")}')">${p.name}</div>`)
+    .join('');
+}
+
+function mobPickParty(inputId, dropId, name){
+  document.getElementById(inputId).value = name;
+  document.getElementById(dropId).style.display = 'none';
+}
+
+function colorDisplayMob(colorCode){
+  const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
+  if(c && typeof c==='object' && c.alias) return colorCode+'/'+c.alias;
+  return colorCode;
+}
+
+// ── ORDER ITEMS ──
+function addMobOrderItem(item=null){
+  const id = Date.now();
+  const colorOpts = colors.map(c=>{
+    const n = typeof c==='object'?c.name:c;
+    const sel = item&&item.color===n?'selected':'';
+    return `<option value="${n}" ${sel}>${colorDisplayMob(n)}</option>`;
+  }).join('');
+  const shapeOpts = shapes.map(s=>`<option value="${s}" ${item&&item.shape===s?'selected':''}>${s}</option>`).join('');
+  const row = document.createElement('div');
+  row.className = 'mob-item-row-order';
+  row.id = 'mob-orow-'+id;
+  row.innerHTML = `
+    <select class="mob-cell" onchange="updateMobOrderAmt(${id})" style="font-size:12px;padding:6px 4px"><option value="">color...</option>${colorOpts}</select>
+    <select class="mob-cell" style="font-size:12px;padding:6px 4px"><option value="">shape...</option>${shapeOpts}</select>
+    <input type="number" class="mob-cell" placeholder="kg" step="0.01" value="${item?item.kg:''}" style="font-size:12px;padding:6px 4px">
+  `;
+  document.getElementById('mob-order-items').appendChild(row);
+}
+
+function resetMobOrderForm(){
+  document.getElementById('mob-order-party').value='';
+  setMobToday('mob-order-date');
+  document.getElementById('mob-order-items').innerHTML='';
+  mobOrderItems=[];
+  addMobOrderItem();
+}
+
+function saveMobOrder(){
+  const party = document.getElementById('mob-order-party').value.trim();
+  const date = document.getElementById('mob-order-date').value;
+  if(!party){alert('Please enter party name');return;}
+  if(!date){alert('Please select date');return;}
+  const rows = document.getElementById('mob-order-items').querySelectorAll('.mob-item-row-order');
+  const items = [];
+  rows.forEach(row=>{
+    const sels = row.querySelectorAll('select');
+    const inp = row.querySelector('input');
+    const color = sels[0]?sels[0].value:'';
+    const shape = sels[1]?sels[1].value:'';
+    const kg = parseFloat(inp?inp.value:0)||0;
+    if(color&&shape&&kg>0) items.push({color,shape,kg});
+  });
+  if(!items.length){alert('Add at least one item');return;}
+  if(editMobOrderId){
+    const o=orders.find(x=>x.id===editMobOrderId);
+    if(o){o.party=party;o.date=date;o.items=items;saveAll();}
+    editMobOrderId=null;
+  } else {
+    const o={id:nextOid++,invNum:nextInvNum++,party,date,items,status:'Pending'};
+    orders.unshift(o);
+    saveAll();
+    if(isMobile()) showOrderWhatsApp(o.id);
+  }
+  resetMobOrderForm();
+  mobShow(2);
+}
+
+function renderMobOrders(){
+  const list = document.getElementById('mob-orders-list');
+  if(!list) return;
+  const sorted = [...orders].sort((a,b)=>b.date.localeCompare(a.date));
+  if(!sorted.length){list.innerHTML='<div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div>';return;}
+  list.innerHTML = sorted.map(o=>{
+    const itemSummary = (o.items||[]).slice(0,3).map(i=>colorDisplayMob(i.color)+' '+i.shape).join(' · ')+(o.items.length>3?'...':'');
+    const totalKg = (o.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    return `<div class="mob-card">
+      <div class="mob-card-top">
+        <div class="mob-card-name">${o.party}</div>
+        <div style="font-size:12px;color:#888">${fmtDate(o.date)}</div>
+      </div>
+      <div class="mob-card-meta">${itemSummary} · ${totalKg.toFixed(2)}kg</div>
+      <div class="mob-btns">
+        <div class="mob-btn" onclick="mobEditOrder(${o.id})">Edit</div>
+        <div class="mob-btn blue" onclick="printOrderPOS(${o.id})">Print</div>
+        <div class="mob-btn green" onclick="showOrderWhatsApp(${o.id})">WA</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function mobEditOrder(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  editMobOrderId = id;
+  mobShow(1);
+  document.getElementById('mob-title').textContent='Edit Order';
+  setTimeout(()=>{
+    document.getElementById('mob-order-party').value = o.party;
+    document.getElementById('mob-order-date').value = o.date;
+    document.getElementById('mob-order-items').innerHTML='';
+    (o.items||[]).forEach(item=>addMobOrderItem(item));
+  },50);
+}
+
+// ── INVOICE ITEMS ──
+function addMobInvItem(item=null){
+  const id = Date.now();
+  const colorOpts = colors.map(c=>{
+    const n = typeof c==='object'?c.name:c;
+    return `<option value="${n}" ${item&&item.color===n?'selected':''}>${colorDisplayMob(n)}</option>`;
+  }).join('');
+  const shapeOpts = shapes.map(s=>`<option value="${s}" ${item&&item.shape===s?'selected':''}>${s}</option>`).join('');
+  const row = document.createElement('div');
+  row.className = 'mob-item-row-inv';
+  row.id = 'mob-irow-'+id;
+  row.innerHTML = `
+    <select class="mob-cell" style="font-size:12px;padding:6px 4px"><option value="">color...</option>${colorOpts}</select>
+    <select class="mob-cell" style="font-size:12px;padding:6px 4px"><option value="">shape...</option>${shapeOpts}</select>
+    <input type="number" class="mob-cell" placeholder="kg" step="0.01" value="${item?item.kg:''}" style="font-size:12px;padding:6px 4px">
+    <input type="number" class="mob-cell" placeholder="rate" value="${item?item.price:''}" style="font-size:12px;padding:6px 4px">
+  `;
+  document.getElementById('mob-inv-items').appendChild(row);
+}
+
+function resetMobInvForm(){
+  document.getElementById('mob-inv-party').value='';
+  setMobToday('mob-inv-date');
+  document.getElementById('mob-inv-items').innerHTML='';
+  document.getElementById('mob-inv-remarks').value='';
+  addMobInvItem();
+}
+
+function saveMobInvoice(){
+  const party = document.getElementById('mob-inv-party').value.trim();
+  const date = document.getElementById('mob-inv-date').value;
+  const remarks = document.getElementById('mob-inv-remarks').value.trim();
+  if(!party){alert('Please enter party name');return;}
+  if(!date){alert('Please select date');return;}
+  const rows = document.getElementById('mob-inv-items').querySelectorAll('.mob-item-row-inv');
+  const items=[];
+  rows.forEach(row=>{
+    const sels=row.querySelectorAll('select');
+    const inps=row.querySelectorAll('input');
+    const color=sels[0]?sels[0].value:'';
+    const shape=sels[1]?sels[1].value:'';
+    const kg=parseFloat(inps[0]?inps[0].value:0)||0;
+    const price=parseFloat(inps[1]?inps[1].value:0)||0;
+    if(color&&shape&&kg>0) items.push({color,shape,kg,price});
+  });
+  if(!items.length){alert('Add at least one item');return;}
+  if(editMobInvId){
+    const inv=invoices.find(x=>x.id===editMobInvId);
+    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;saveAll();}
+    editMobInvId=null;
+  } else {
+    const inv={id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,courier:''};
+    invoices.unshift(inv);
+    saveAll();
+  }
+  resetMobInvForm();
+  mobShow(4);
+}
+
+function renderMobInvoices(){
+  const list = document.getElementById('mob-invoices-list');
+  if(!list) return;
+  const sorted = [...invoices].sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
+  if(!sorted.length){list.innerHTML='<div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div>';return;}
+  list.innerHTML = sorted.map(inv=>{
+    const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
+    return `<div class="mob-card">
+      <div class="mob-card-top">
+        <div>
+          <div style="font-size:11px;color:#888">${invNumLabel(inv.serial)}</div>
+          <div class="mob-card-name">${inv.party}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:#888">${fmtDate(inv.date)}</div>
+          <div style="font-size:14px;font-weight:600;color:#111">${fmt(amt)}</div>
+        </div>
+      </div>
+      <div class="mob-courier-row">
+        <input placeholder="courier / transport..." id="mob-courier-${inv.id}" value="${inv.courier||''}" style="background:#fff;color:#111">
+        <button onclick="saveCourier(${inv.id},document.getElementById('mob-courier-${inv.id}').value)">✓</button>
+      </div>
+      <div class="mob-btns" style="margin-top:8px">
+        <div class="mob-btn" onclick="mobEditInvoice(${inv.id})">Edit</div>
+        <div class="mob-btn blue" onclick="viewInvoice(${inv.id})">Print</div>
+        <div class="mob-btn green" onclick="shareInvWhatsApp(${inv.id})">WA</div>
+        <div class="mob-btn red" onclick="delInvoice(${inv.id});renderMobInvoices()">Del</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function mobEditInvoice(id){
+  const inv=invoices.find(x=>x.id===id);
+  if(!inv) return;
+  editMobInvId=id;
+  mobShow(3);
+  document.getElementById('mob-title').textContent='Edit Invoice';
+  setTimeout(()=>{
+    document.getElementById('mob-inv-party').value=inv.party;
+    document.getElementById('mob-inv-date').value=inv.date;
+    document.getElementById('mob-inv-remarks').value=inv.remarks||'';
+    document.getElementById('mob-inv-items').innerHTML='';
+    (inv.items||[]).forEach(item=>addMobInvItem(item));
+  },50);
+}
+
+// ── INIT MOBILE ──
+function initMobile(){
+  if(!isMobile()) return;
+  setMobToday('mob-order-date');
+  setMobToday('mob-inv-date');
+  addMobOrderItem();
+  addMobInvItem();
+}
+
+// Override renderAll to also update mobile
+const _origRenderAll = renderAll;
+function renderAll(){
+  _origRenderAll();
+  if(isMobile()){
+    renderMobOrders();
+    renderMobInvoices();
+  }
+}
+
+window.addEventListener('resize',()=>{
+  const mob=isMobile();
+  document.getElementById('mobile-wrapper').style.display=mob?'block':'none';
+  document.getElementById('mobile-nav').style.display=mob?'flex':'none';
+  document.getElementById('app').style.display=mob?'none':'block';
+});
+
+document.addEventListener('DOMContentLoaded',()=>{
+  if(isMobile()){
+    document.getElementById('mobile-wrapper').style.display='block';
+    document.getElementById('app').style.display='none';
+    initMobile();
+  }
+});
+
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.mob-input')&&!e.target.closest('.mob-party-drop')){
+    document.querySelectorAll('.mob-party-drop').forEach(d=>d.style.display='none');
+  }
+});
 </script>
 
 
