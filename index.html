@@ -2397,67 +2397,7 @@ function printPendingPOS(mode){
 
   const posWin=window.open('','_blank','width=400,height=600,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
-    <div style="font-size:12px;color:#888" id="mob-sync"></div>
-  </div>
-
-  <!-- PAGE 1: NEW ORDER -->
-  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
-    <div style="padding:12px 16px 0">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
-      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
-        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
-        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
-        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
-      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
-    </div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
-      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
-      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
-      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
-    </div>
-    <div style="padding:10px 16px 0">
-      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
-      </div>
-      <div id="mob-o-items"></div>
-      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
-    </div>
-    <div style="padding:0 16px">
-      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
-    </div>
-  </div>
-
-  <!-- PAGE 2: ORDERS LIST -->
-  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
-    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
-  </div>
-
-  <!-- PAGE 3: INVOICES LIST -->
-  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
-    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
-  </div>
-
-</div>
-
-<!-- MOBILE NAV -->
-<div id="mob-nav">
-  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
-    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
-  </button>
-  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
-  </button>
-  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
-  </button>
-</div>
-</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
@@ -2502,62 +2442,6 @@ function printOrderPOS(id){
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
-  <!-- PAGE 1: NEW ORDER -->
-  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
-    <div style="padding:12px 16px 0">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
-      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
-        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
-        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
-        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
-      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
-    </div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
-      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
-      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
-      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
-    </div>
-    <div style="padding:10px 16px 0">
-      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
-      </div>
-      <div id="mob-o-items"></div>
-      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
-    </div>
-    <div style="padding:0 16px">
-      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
-    </div>
-  </div>
-
-  <!-- PAGE 2: ORDERS LIST -->
-  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
-    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
-  </div>
-
-  <!-- PAGE 3: INVOICES LIST -->
-  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
-    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
-  </div>
-
-</div>
-
-<!-- MOBILE NAV -->
-<div id="mob-nav">
-  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
-    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
-  </button>
-  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
-  </button>
-  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
-  </button>
-</div>
 </body></html>');
   posWin.document.close();
   posWin.focus();
@@ -2614,62 +2498,6 @@ function printPOS(){
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
-  <!-- PAGE 1: NEW ORDER -->
-  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
-    <div style="padding:12px 16px 0">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
-      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
-        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
-        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
-        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
-      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
-    </div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
-      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
-      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
-      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
-    </div>
-    <div style="padding:10px 16px 0">
-      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
-      </div>
-      <div id="mob-o-items"></div>
-      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
-    </div>
-    <div style="padding:0 16px">
-      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
-    </div>
-  </div>
-
-  <!-- PAGE 2: ORDERS LIST -->
-  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
-    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
-  </div>
-
-  <!-- PAGE 3: INVOICES LIST -->
-  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
-    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
-  </div>
-
-</div>
-
-<!-- MOBILE NAV -->
-<div id="mob-nav">
-  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
-    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
-  </button>
-  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
-  </button>
-  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
-  </button>
-</div>
 </body></html>');
   posWin.document.close();
   posWin.focus();
@@ -3450,62 +3278,6 @@ function printReport(){
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
-  <!-- PAGE 1: NEW ORDER -->
-  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
-    <div style="padding:12px 16px 0">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
-      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
-        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
-        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
-        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
-      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
-    </div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
-      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
-      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
-      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
-    </div>
-    <div style="padding:10px 16px 0">
-      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
-      </div>
-      <div id="mob-o-items"></div>
-      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
-    </div>
-    <div style="padding:0 16px">
-      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
-    </div>
-  </div>
-
-  <!-- PAGE 2: ORDERS LIST -->
-  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
-    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
-  </div>
-
-  <!-- PAGE 3: INVOICES LIST -->
-  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
-    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
-  </div>
-
-</div>
-
-<!-- MOBILE NAV -->
-<div id="mob-nav">
-  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
-    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
-  </button>
-  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
-  </button>
-  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
-  </button>
-</div>
 </body></html>`);
   win.document.close();
   win.focus();
@@ -3768,60 +3540,4 @@ function adminResetAll(){
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
-  <!-- PAGE 1: NEW ORDER -->
-  <div class="mob-page on" id="mob-p1" style="padding:0 0 20px">
-    <div style="padding:12px 16px 0">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Party name</div>
-      <input id="mob-o-party" placeholder="Type or select party..." autocomplete="off"
-        style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:10px;padding:12px 14px;font-size:14px;color:#111;background:#fff;outline:none"
-        oninput="mobPartyFilter('mob-o-party','mob-o-pdrop')"
-        onfocus="mobPartyOpen('mob-o-party','mob-o-pdrop')">
-      <div id="mob-o-pdrop" style="display:none;border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
-    </div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center">
-      <div style="font-size:12px;color:#888;white-space:nowrap">Date</div>
-      <input type="date" id="mob-o-date" style="flex:1;border:1px solid #ddd;border-radius:10px;padding:10px 12px;font-size:14px;color:#111;background:#fff">
-      <button onclick="mobToday('mob-o-date')" style="background:#f3f4f6;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;color:#555;white-space:nowrap;cursor:pointer">Today</button>
-    </div>
-    <div style="padding:10px 16px 0">
-      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:3px">
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Color</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Shape</div>
-        <div style="font-size:11px;color:#aaa;padding-left:2px">Kg</div>
-      </div>
-      <div id="mob-o-items"></div>
-      <div onclick="mobAddOrderItem()" style="color:#2563eb;font-size:13px;padding:6px 0;cursor:pointer">+ Add item</div>
-    </div>
-    <div style="padding:0 16px">
-      <button onclick="mobSaveOrder()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer">Save order</button>
-    </div>
-  </div>
-
-  <!-- PAGE 2: ORDERS LIST -->
-  <div class="mob-page" id="mob-p2" style="padding:8px 12px 0">
-    <div id="mob-o-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div></div>
-  </div>
-
-  <!-- PAGE 3: INVOICES LIST -->
-  <div class="mob-page" id="mob-p3" style="padding:8px 12px 0">
-    <div id="mob-i-list"><div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div></div>
-  </div>
-
-</div>
-
-<!-- MOBILE NAV -->
-<div id="mob-nav">
-  <button id="mob-n1" onclick="mobPage(1)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-plus" style="color:#2563eb"></i></div>
-    <div style="font-size:10px;color:#2563eb;margin-top:2px">New Order</div>
-  </button>
-  <button id="mob-n2" onclick="mobPage(2)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-list" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Orders</div>
-  </button>
-  <button id="mob-n3" onclick="mobPage(3)" style="flex:1;padding:10px 4px 6px;text-align:center;border:none;background:none;cursor:pointer">
-    <div style="font-size:22px;line-height:1"><i class="ti ti-files" style="color:#aaa"></i></div>
-    <div style="font-size:10px;color:#aaa;margin-top:2px">Invoices</div>
-  </button>
-</div>
 </body></html>
