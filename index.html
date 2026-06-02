@@ -1091,7 +1091,6 @@ window.onload = function(){
   // FORCE CLEAR old data - version stamp
   const DATA_VER = 'v20260601_v4';
   if(localStorage.getItem('sitara_ver') !== DATA_VER){
-    localStorage.clear();
     localStorage.setItem('sitara_ver', DATA_VER);
   }
   loadFromStorage();
@@ -2399,12 +2398,6 @@ function printPendingPOS(mode){
   const posWin=window.open('','_blank','width=400,height=600,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site.');return;}
   posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
-<!-- MOBILE APP -->
-<div id="mob-app">
-
-  <!-- TOP BAR -->
-  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
@@ -2506,12 +2499,6 @@ function printOrderPOS(id){
   const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
   posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
-<!-- MOBILE APP -->
-<div id="mob-app">
-
-  <!-- TOP BAR -->
-  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
@@ -2624,12 +2611,6 @@ function printPOS(){
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
   posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'
-<!-- MOBILE APP -->
-<div id="mob-app">
-
-  <!-- TOP BAR -->
-  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
@@ -3460,27 +3441,12 @@ function printReport(){
 
 /* mobile removed */
 
-/* ===== MOBILE ===== */
-#mob-app{display:none}
-#mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-top:1px solid #e5e7eb}
-@media(max-width:768px){
-  #app{display:none!important}
-  #mob-app{display:block!important;padding-bottom:68px}
-  #mob-nav{display:flex!important}
-}
-.mob-page{display:none}
-.mob-page.on{display:block}
+
     </style>
   </head><body>
     <div style="margin-bottom:12px">${stats}</div>
     ${content}
   
-<!-- MOBILE APP -->
-<div id="mob-app">
-
-  <!-- TOP BAR -->
-  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
@@ -3794,233 +3760,11 @@ function adminResetAll(){
 }
 
 
-// ===== MOBILE =====
-function isMobile(){return window.innerWidth<=768;}
-
-function mobPage(n){
-  [1,2,3].forEach(i=>{
-    const p=document.getElementById('mob-p'+i);
-    if(p) p.style.display=(i===n)?'block':'none';
-    const b=document.getElementById('mob-n'+i);
-    if(b){
-      const icon=b.querySelector('i');
-      const lbl=b.querySelectorAll('div')[1];
-      const c=i===n?'#2563eb':'#aaa';
-      if(icon) icon.style.color=c;
-      if(lbl) lbl.style.color=c;
-    }
-  });
-  const titles=['New Order','Orders','Invoices'];
-  const t=document.getElementById('mob-title');
-  if(t) t.textContent=titles[n-1];
-  if(n===2) mobRenderOrders();
-  if(n===3) mobRenderInvoices();
-}
-
-function mobToday(id){
-  document.getElementById(id).value=new Date().toISOString().split('T')[0];
-}
-
-function mobPartyOpen(inputId,dropId){
-  const drop=document.getElementById(dropId);
-  const val=document.getElementById(inputId).value.toLowerCase();
-  const opts=parties.filter(p=>!val||p.name.toLowerCase().includes(val)).slice(0,10);
-  drop.innerHTML=opts.map(p=>`<div onclick="mobPickParty('${inputId}','${dropId}','${p.name.replace(/'/g,"\'")}');" style="padding:11px 14px;font-size:14px;color:#111;border-bottom:1px solid #f5f5f5;cursor:pointer">${p.name}</div>`).join('');
-  drop.style.display=opts.length?'block':'none';
-}
-
-function mobPartyFilter(inputId,dropId){mobPartyOpen(inputId,dropId);}
-
-function mobPickParty(inputId,dropId,name){
-  document.getElementById(inputId).value=name;
-  document.getElementById(dropId).style.display='none';
-}
-
-function mobColorDisplay(colorCode){
-  const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
-  if(c&&typeof c==='object'&&c.alias) return colorCode+'/'+c.alias;
-  return colorCode;
-}
-
-function mobAddOrderItem(item=null){
-  const colorOpts=colors.map(c=>{const n=typeof c==='object'?c.name:c;return`<option value="${n}"${item&&item.color===n?' selected':''}>${mobColorDisplay(n)}</option>`;}).join('');
-  const shapeOpts=shapes.map(s=>`<option value="${s}"${item&&item.shape===s?' selected':''}>${s}</option>`).join('');
-  const row=document.createElement('div');
-  row.style.cssText='display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,0.65fr);gap:4px;margin-bottom:6px';
-  row.innerHTML=`
-    <select style="border:1px solid #ddd;border-radius:8px;padding:9px 4px;font-size:12px;color:#111;background:#fff;min-width:0;overflow:hidden"><option value="">color...</option>${colorOpts}</select>
-    <select style="border:1px solid #ddd;border-radius:8px;padding:9px 4px;font-size:12px;color:#111;background:#fff;min-width:0"><option value="">shape...</option>${shapeOpts}</select>
-    <input type="number" placeholder="kg" step="0.01" value="${item?item.kg:''}" style="border:1px solid #ddd;border-radius:8px;padding:9px 4px;font-size:12px;color:#111;background:#fff;width:100%;box-sizing:border-box;min-width:0">
-  `;
-  document.getElementById('mob-o-items').appendChild(row);
-}
-
-function mobSaveOrder(){
-  const party=document.getElementById('mob-o-party').value.trim();
-  const date=document.getElementById('mob-o-date').value;
-  if(!party){alert('Enter party name');return;}
-  if(!date){alert('Select date');return;}
-  const rows=document.getElementById('mob-o-items').children;
-  const items=[];
-  Array.from(rows).forEach(row=>{
-    const sels=row.querySelectorAll('select');
-    const inp=row.querySelector('input');
-    const color=sels[0]?sels[0].value:'';
-    const shape=sels[1]?sels[1].value:'';
-    const kg=parseFloat(inp?inp.value:0)||0;
-    if(color&&shape&&kg>0) items.push({color,shape,kg});
-  });
-  if(!items.length){alert('Add at least one item');return;}
-  const o={id:nextOid++,invNum:nextInvNum++,party,date,items,status:'Pending'};
-  orders.unshift(o);
-  saveAll();
-  document.getElementById('mob-o-party').value='';
-  document.getElementById('mob-o-items').innerHTML='';
-  mobAddOrderItem();
-  mobToday('mob-o-date');
-  setTimeout(()=>showOrderWhatsApp(o.id),300);
-  mobPage(2);
-}
-
-function mobRenderOrders(){
-  const list=document.getElementById('mob-o-list');
-  if(!list) return;
-  const sorted=[...orders].sort((a,b)=>b.date.localeCompare(a.date));
-  if(!sorted.length){list.innerHTML='<div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No orders yet</div>';return;}
-  list.innerHTML=sorted.map(o=>{
-    const totalKg=(o.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    const preview=(o.items||[]).slice(0,3).map(i=>mobColorDisplay(i.color)+' '+i.shape).join(' · ')+(o.items.length>3?' ...':'');
-    return `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:13px;margin-bottom:10px;background:#fff">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
-        <div style="font-size:15px;font-weight:600;color:#111">${o.party}</div>
-        <div style="font-size:12px;color:#888">${fmtDate(o.date)}</div>
-      </div>
-      <div style="font-size:12px;color:#888;margin-bottom:10px">${preview} · ${totalKg.toFixed(2)}kg</div>
-      <div style="display:flex;gap:6px">
-        <button onclick="mobEditOrder(${o.id})" style="flex:1;padding:9px 4px;font-size:13px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#111;cursor:pointer">Edit</button>
-        <button onclick="printOrderPOS(${o.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer">Print</button>
-        <button onclick="showOrderWhatsApp(${o.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#25D366;color:#fff;cursor:pointer">WA</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function mobEditOrder(id){
-  const o=orders.find(x=>x.id===id);
-  if(!o) return;
-  document.getElementById('mob-title').textContent='Edit Order';
-  document.getElementById('mob-o-party').value=o.party;
-  document.getElementById('mob-o-date').value=o.date;
-  document.getElementById('mob-o-items').innerHTML='';
-  (o.items||[]).forEach(item=>mobAddOrderItem(item));
-  [1,2,3].forEach(i=>{const p=document.getElementById('mob-p'+i);if(p)p.style.display=(i===1)?'block':'none';});
-  const btn=document.querySelector('#mob-p1 button');
-  if(btn){
-    btn.textContent='Update order';
-    btn.onclick=()=>{
-      const party=document.getElementById('mob-o-party').value.trim();
-      const date=document.getElementById('mob-o-date').value;
-      const rows=document.getElementById('mob-o-items').children;
-      const items=[];
-      Array.from(rows).forEach(row=>{
-        const sels=row.querySelectorAll('select');
-        const inp=row.querySelector('input');
-        const color=sels[0]?sels[0].value:'';
-        const shape=sels[1]?sels[1].value:'';
-        const kg=parseFloat(inp?inp.value:0)||0;
-        if(color&&shape&&kg>0) items.push({color,shape,kg});
-      });
-      if(party) o.party=party;
-      if(date) o.date=date;
-      if(items.length) o.items=items;
-      saveAll();
-      btn.textContent='Save order';
-      btn.onclick=mobSaveOrder;
-      document.getElementById('mob-title').textContent='New Order';
-      document.getElementById('mob-o-party').value='';
-      document.getElementById('mob-o-items').innerHTML='';
-      mobAddOrderItem();
-      mobPage(2);
-    };
-  }
-}
-
-function mobRenderInvoices(){
-  const list=document.getElementById('mob-i-list');
-  if(!list) return;
-  const sorted=[...invoices].sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
-  if(!sorted.length){list.innerHTML='<div style="text-align:center;color:#aaa;padding:40px;font-size:14px">No invoices yet</div>';return;}
-  list.innerHTML=sorted.map(inv=>{
-    const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
-    return `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:13px;margin-bottom:10px;background:#fff">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-size:11px;color:#aaa">${invNumLabel(inv.serial)}</div>
-          <div style="font-size:15px;font-weight:600;color:#111">${inv.party}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:12px;color:#888">${fmtDate(inv.date)}</div>
-          <div style="font-size:14px;font-weight:600;color:#111">${fmt(amt)}</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:8px">
-        <input id="mc-${inv.id}" value="${inv.courier||''}" placeholder="courier..." style="flex:1;border:1px solid #ddd;border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;color:#111;outline:none">
-        <button onclick="saveCourier(${inv.id},document.getElementById('mc-${inv.id}').value)" style="background:#e9f9ef;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;padding:8px 13px;font-size:14px;cursor:pointer">✓</button>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button onclick="mobInvEdit(${inv.id})" style="flex:1;padding:9px 4px;font-size:13px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#111;cursor:pointer">Edit</button>
-        <button onclick="viewInvoice(${inv.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer">Print</button>
-        <button onclick="shareInvWhatsApp(${inv.id})" style="flex:1;padding:9px 4px;font-size:13px;border:none;border-radius:8px;background:#25D366;color:#fff;cursor:pointer">WA</button>
-        <button onclick="if(confirm('Delete?')){delInvoice(${inv.id});mobRenderInvoices()}" style="flex:1;padding:9px 4px;font-size:13px;border:1px solid #fca5a5;border-radius:8px;background:#fee2e2;color:#dc2626;cursor:pointer">Del</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function mobInvEdit(id){
-  loadInvIntoForm(id);
-  document.getElementById('mob-app').style.display='none';
-  document.getElementById('mob-nav').style.display='none';
-  document.getElementById('app').style.display='block';
-  const backBtn=document.createElement('button');
-  backBtn.textContent='← Back';
-  backBtn.style.cssText='position:fixed;top:10px;left:10px;z-index:9999;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer';
-  backBtn.onclick=()=>{
-    document.getElementById('app').style.display='none';
-    document.getElementById('mob-app').style.display='block';
-    document.getElementById('mob-nav').style.display='flex';
-    backBtn.remove();
-    mobPage(3);
-  };
-  document.body.appendChild(backBtn);
-}
-
-window.addEventListener('load',()=>{
-  if(isMobile()){
-    mobToday('mob-o-date');
-    mobAddOrderItem();
-    mobRenderOrders();
-    mobRenderInvoices();
-  }
-});
-
-document.addEventListener('click',e=>{
-  if(!e.target.closest('#mob-o-party')&&!e.target.closest('#mob-o-pdrop')){
-    const d=document.getElementById('mob-o-pdrop');if(d)d.style.display='none';
-  }
-});
-
 
 </script>
 
 
 
-<!-- MOBILE APP -->
-<div id="mob-app">
-
-  <!-- TOP BAR -->
-  <div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:18px;font-weight:700;color:#111" id="mob-title">New Order</div>
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
   </div>
 
