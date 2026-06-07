@@ -388,9 +388,9 @@ tr:hover td{background:#fafafa}
         </div>
         <table>
           <thead><tr>
-            <th style="width:14%">Inv#</th>
-            <th style="width:20%">Party</th><th style="width:13%">Date</th>
-            <th style="width:13%">Amount</th><th>Actions</th>
+            <th style="width:12%">Inv#</th>
+            <th style="width:18%">Party</th><th style="width:10%">Date</th>
+            <th style="width:10%">Kg</th><th style="width:12%">Amount</th><th>Actions</th>
           </tr></thead>
           <tbody id="inv-body"></tbody>
         </table>
@@ -1824,11 +1824,13 @@ function renderInvoiceList(){
   let grand=0;
   tbody.innerHTML=sorted.map((inv,idx)=>{
     const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
+    const totalKg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
     grand+=amt;
     return `<tr>
       <td style="color:#888;font-size:12px">${invNumLabel(inv.serial)}</td>
       <td style="font-weight:600">${inv.party}</td>
       <td style="color:#888">${fmtDate(inv.date)}</td>
+      <td style="color:#2563eb;font-weight:600">${totalKg.toFixed(2)}</td>
       <td>${fmt(amt)}</td>
       <td style="white-space:nowrap">
   <input type="text" value="${(inv.courier||'').replace(/"/g,'&quot;')}" placeholder="courier..." id="courier-${inv.id}" style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:110px">
