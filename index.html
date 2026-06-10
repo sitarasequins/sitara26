@@ -2159,10 +2159,14 @@ function renderProduction(){
   });
 
   // ── Build raw item cards ──────────────────────────────────────
+  // invKg per item = sum of invoiced kg for that item ONLY for parties that have pending orders
   const rawCards=[];
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
-    const invKg=invByItem[key]||0;
+    // Sum invoiced kg only for parties that actually ordered this item
+    const invKg=Object.keys(v.parties).reduce((s,party)=>{
+      return s+((invByPartyItem[party]&&invByPartyItem[party][key])||0);
+    },0);
     const net=v.totalKg-invKg;
     totalOrderKg+=v.totalKg; totalInvKg+=invKg;
     if(net>0.001){
