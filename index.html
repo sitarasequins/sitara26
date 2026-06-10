@@ -1245,7 +1245,7 @@ function buildPendingMap(){
     Object.entries(ordered[party]).forEach(([k,v])=>{
       const invKg=(invoiced[party]&&invoiced[party][k])||0;
       const netKg=v.ordKg-invKg;
-      if(netKg>0.001){
+      if(netKg>=1.0){
         const [color,shape]=k.split('||');
         partyItems.push({color,shape,ordKg:v.ordKg,invKg,netKg,price:v.price,refs:v.orderRefs});
       }
@@ -2159,20 +2159,28 @@ function renderProduction(){
   });
 
   // ── Build raw item cards ──────────────────────────────────────
-  // invKg per item = sum of invoiced kg for that item ONLY for parties that have pending orders
+  // Correct approach: net per item = SUM of per-party nets (each capped at 0)
+  // This prevents over-invoiced parties from reducing other parties' pending
   const rawCards=[];
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
-    // Sum invoiced kg only for parties that actually ordered this item
-    const invKg=Object.keys(v.parties).reduce((s,party)=>{
-      return s+((invByPartyItem[party]&&invByPartyItem[party][key])||0);
-    },0);
-    const net=v.totalKg-invKg;
-    totalOrderKg+=v.totalKg; totalInvKg+=invKg;
-    if(net>0.001){
-      totalNetKg+=net;
+    const pendingParties={};
+    let itemNet=0;
+    let itemInvKg=0;
+    Object.entries(v.parties).forEach(([party,ordKg])=>{
+      const pInvKg=(invByPartyItem[party]&&invByPartyItem[party][key])||0;
+      const pNet=Math.max(0, ordKg-pInvKg); // cap at 0 — no negative
+      itemInvKg+=Math.min(pInvKg, ordKg);   // only count invoiced up to ordered
+      itemNet+=pNet;
+      if(pNet>=1.0) pendingParties[party]=pNet;
+      else itemNet-=pNet; // treat <1kg as complete, remove from net
+    });
+    totalOrderKg+=v.totalKg;
+    totalInvKg+=itemInvKg;
+    if(itemNet>=1.0){
+      totalNetKg+=itemNet;
       const [color,shape]=key.split('||');
-      rawCards.push({color,shape,ordKg:v.totalKg,invKg,net,parties:v.parties,dates:v.dates});
+      rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,parties:pendingParties,dates:v.dates});
     }
   });
   // add invoiced-only items to total
@@ -2272,7 +2280,7 @@ function renderProduction(){
       const itemEntries=Object.values(data.items);
       let rows=itemEntries.map(it=>{
         const net=it.ordKg-it.invKg;
-        if(net<=0.001)return '';
+        if(net<1.0)return '';
         return `<tr>
           <td style="padding:6px 8px;font-size:12px;font-weight:600">${it.color}</td>
           <td style="padding:6px 8px;font-size:12px;color:#888">${it.shape}</td>
@@ -2341,7 +2349,7 @@ function exportPendingXLS(){
   Object.values(ordByItem).forEach(v=>{
     const invKg=invByItem[v.color+'||'+v.shape]||0;
     const net=v.totalKg-invKg;
-    if(net>0.001) itemRows.push([v.color,v.shape,v.totalKg,invKg,net,
+    if(net>=1.0) itemRows.push([v.color,v.shape,v.totalKg,invKg,net,
       Object.entries(v.parties).map(([p,kg])=>p+':'+kg+'kg').join(', '),
       v.dates.sort().join(', ')]);
   });
@@ -2371,7 +2379,7 @@ function exportPendingXLS(){
     Object.values(data.items).forEach(it=>{
       const invKg=(invByPartyItem[party]&&invByPartyItem[party][it.color+'||'+it.shape])||0;
       const net=it.ordKg-invKg;
-      if(net>0.001) partyRows.push([party,it.color,it.shape,it.ordKg,invKg,net,data.dates.sort().join(', ')]);
+      if(net>=1.0) partyRows.push([party,it.color,it.shape,it.ordKg,invKg,net,data.dates.sort().join(', ')]);
     });
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(partyRows),'Party-wise');
@@ -3089,7 +3097,7 @@ function rptPending(fOrders,fInvoices,el){
   }));
   const rows=Object.values(pm)
     .map(d=>({...d,netKg:d.ordKg-d.invKg}))
-    .filter(d=>d.netKg>0.001)
+    .filter(d=>d.netKg>=1.0)
     .sort((a,b)=>b.netKg-a.netKg)
     .map(d=>[
       `<strong>${d.party}</strong>`,
@@ -3207,7 +3215,7 @@ function exportReportXLS(){
     pendMap[k].invKg+=parseFloat(i.kg||0);
   }));
   const pRows=[['Party','Color','Shape','Ordered kg','Invoiced kg','Net Pending kg']];
-  Object.values(pendMap).filter(d=>d.ordKg-d.invKg>0.001).sort((a,b)=>(b.ordKg-b.invKg)-(a.ordKg-a.invKg)).forEach(d=>pRows.push([d.party,d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2)]));
+  Object.values(pendMap).filter(d=>d.ordKg-d.invKg>=1.0).sort((a,b)=>(b.ordKg-b.invKg)-(a.ordKg-a.invKg)).forEach(d=>pRows.push([d.party,d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2)]));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pRows),'Pending');
 
   // Item-wise
