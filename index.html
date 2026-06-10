@@ -276,6 +276,10 @@ tr:hover td{background:#fafafa}
     <div style="display:flex;align-items:center;gap:10px">
       <div class="app-title">Sitara <span>Sequins</span></div>
       <span class="sync-status " id="sync-status">☁ Cloud</span>
+      <span id="online-dot" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 10px;border-radius:99px;background:#f0fdf4;color:#166534;font-weight:600">
+        <span id="online-dot-circle" style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span>
+        <span id="online-dot-text">Online</span>
+      </span>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn btn-sm" onclick="exportBackup()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8" title="Download backup JSON">📤 Backup</button>
@@ -359,6 +363,15 @@ tr:hover td{background:#fafafa}
         </div>
         <div style="margin-top:10px;margin-bottom:6px;padding:8px 12px;background:#f0f4ff;border-radius:8px;font-size:13px;font-weight:600;color:#1e3a5f">
           Total Weight: <span id="inv-form-weight" style="color:#2563eb">0.00 kg</span>
+        </div>
+        <div class="field" style="margin-top:6px">
+          <label>Extra Charges <span style="font-size:11px;color:#aaa">(optional — added to total)</span></label>
+          <div style="display:flex;gap:6px">
+            <input id="if-charge-label" type="text" placeholder="e.g. Transport, Packing..."
+              style="flex:1;font-size:13px;padding:7px 10px;border-radius:7px;border:1.5px solid #ddd;outline:none" oninput="updateInvFormTotal()">
+            <input id="if-charge-amt" type="number" min="0" placeholder="₹ Amount"
+              style="width:110px;font-size:13px;padding:7px 10px;border-radius:7px;border:1.5px solid #ddd;outline:none" oninput="updateInvFormTotal()">
+          </div>
         </div>
         <div class="field" style="margin-top:6px">
           <label>Remarks <span style="font-size:11px;color:#aaa">(optional — printed at bottom)</span></label>
@@ -1048,9 +1061,11 @@ function saveToBin(){
       .then(()=>{
         setSyncStatus('saved','☁ Saved');
         setTimeout(()=>setSyncStatus('','☁ Cloud'), 2000);
+        showSaveToast('Saved to cloud');
       })
       .catch(e=>{
         setSyncStatus('error','☁ Save failed');
+        showSaveToast('Save failed! Check connection',true);
         console.error(e);
       });
     // Save invoices separately for extra protection
@@ -1098,6 +1113,26 @@ function startApp(){
   setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
 }
 
+function updateOnlineDot(){
+  const dot=document.getElementById('online-dot-circle');
+  const txt=document.getElementById('online-dot-text');
+  const wrap=document.getElementById('online-dot');
+  if(!dot||!txt||!wrap) return;
+  if(navigator.onLine){
+    dot.style.background='#16a34a';
+    txt.textContent='Online';
+    wrap.style.background='#f0fdf4';
+    wrap.style.color='#166534';
+  } else {
+    dot.style.background='#dc2626';
+    txt.textContent='Offline';
+    wrap.style.background='#fef2f2';
+    wrap.style.color='#dc2626';
+  }
+}
+window.addEventListener('online',  updateOnlineDot);
+window.addEventListener('offline', updateOnlineDot);
+
 function doSetup(){
   const pw=document.getElementById('setup-pw').value;
   if(pw==='786'){
@@ -1112,6 +1147,7 @@ function doSetup(){
 
 window.onload = function(){
   ADMIN_PW = '786';
+  updateOnlineDot();
   // FORCE CLEAR old data - version stamp
   const DATA_VER = 'v20260601_v4';
   if(localStorage.getItem('sitara_ver') !== DATA_VER){
@@ -1678,6 +1714,7 @@ function saveOrder(){
     orders[i]={...orders[i],party,date:dateVal,items};
     resetOrderForm();
     saveAll();renderOrders();renderInvoiceList();
+    showSaveToast('Order updated!');
   } else {
     const newOrder={id:nextOid++,invNum:nextInvNum++,party,date:dateVal,status:'Pending',items};
     orders.push(newOrder);
@@ -1745,7 +1782,8 @@ function updateInvFormTotal(){
   const items=getInvItems();
   const t=Math.round(items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0));
   const w=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
-  document.getElementById('inv-form-total').textContent=fmt(t);
+  const extraAmt=parseFloat((document.getElementById('if-charge-amt')||{value:0}).value||0);
+  document.getElementById('inv-form-total').textContent=fmt(t+extraAmt);
   const wEl=document.getElementById('inv-form-weight');
   if(wEl)wEl.textContent=w.toFixed(2)+' kg';
 }
@@ -1759,6 +1797,10 @@ function resetInvForm(){
   document.getElementById('inv-items-container').innerHTML='';
   const rem=document.getElementById('if-remarks');
   if(rem)rem.value='';
+  const cl=document.getElementById('if-charge-label');
+  if(cl)cl.value='';
+  const ca=document.getElementById('if-charge-amt');
+  if(ca)ca.value='';
   addInvItemRow();
 }
 function cancelInvForm(){resetInvForm();}
@@ -1772,6 +1814,10 @@ function loadInvIntoForm(invId){
   document.getElementById('if-date').value=inv.date;
   const remEl=document.getElementById('if-remarks');
   if(remEl)remEl.value=inv.remarks||'';
+  const clEl=document.getElementById('if-charge-label');
+  if(clEl)clEl.value=inv.chargeLabel||'';
+  const caEl=document.getElementById('if-charge-amt');
+  if(caEl)caEl.value=inv.chargeAmt||'';
   document.getElementById('inv-items-container').innerHTML='';
   (inv.items||[]).forEach(i=>addInvItemRow(i));
   if(!(inv.items||[]).length)addInvItemRow();
@@ -1784,19 +1830,22 @@ function saveInvoice(){
   const date=document.getElementById('if-date').value;
   const items=getInvItems();
   const remarks=(document.getElementById('if-remarks').value||'').trim();
+  const chargeLabel=(document.getElementById('if-charge-label').value||'').trim();
+  const chargeAmt=parseFloat(document.getElementById('if-charge-amt').value||0)||0;
   if(!party||!items.length){alert('Select a party and add at least one item.');return;}
   if(editInvId){
     const inv=invoices.find(x=>x.id===editInvId);
-    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;}
+    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;inv.chargeLabel=chargeLabel;inv.chargeAmt=chargeAmt;}
   } else {
     // Always use max serial + 1 to avoid duplicates
     const maxSerial=invoices.reduce((m,i)=>Math.max(m,i.serial||0),0);
     if(nextInvoiceNum<=maxSerial) nextInvoiceNum=maxSerial+1;
     if(nextInvoiceNum<590) nextInvoiceNum=590;
-    invoices.push({id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,orderIds:[]});
+    invoices.push({id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,chargeLabel,chargeAmt,orderIds:[]});
   }
   resetInvForm();
   saveAll();renderInvoiceList();
+  setSyncStatus('saving','☁ Saving...');
 }
 function saveCourier(id,val){
   const inv=invoices.find(x=>x.id==id);
@@ -1864,7 +1913,10 @@ function viewInvoice(invId){
     <td style="text-align:right">${fmt(i.price)}/kg</td>
     <td style="text-align:right">${fmt(i.kg*i.price)}</td>
   </tr>`).join('');
-  const grand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
+  const itemsTotal=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
+  const chargeAmt=parseFloat(inv.chargeAmt||0);
+  const chargeLabel=inv.chargeLabel||'Extra Charges';
+  const grand=itemsTotal+chargeAmt;
   document.getElementById('inv-content').innerHTML=`
     <div style="margin-bottom:18px">
       <div class="inv-to-name" style="font-size:22px;font-weight:700;color:#1a1a1a;margin-bottom:4px">${inv.party}</div>
@@ -1881,6 +1933,8 @@ function viewInvoice(invId){
       <tbody>${rows}</tbody>
     </table>
     <div class="inv-total-box"><div class="inv-total-inner">
+      ${chargeAmt>0?`<div class="inv-total-row"><span>Items Total</span><span>${fmt(itemsTotal)}</span></div>
+      <div class="inv-total-row"><span>${chargeLabel}</span><span>+ ${fmt(chargeAmt)}</span></div>`:''}
       <div class="inv-total-row grand"><span>Total</span><span>${fmt(grand)}</span></div>
     </div></div>
     ${inv.remarks?`<div style="margin-top:24px;padding:12px 14px;background:#f8f9fa;border-radius:8px;border-left:3px solid #2563eb">
@@ -3221,6 +3275,17 @@ function shareInvoiceWhatsApp(){
   msg += line+'\n';
   if(inv.remarks) msg += inv.remarks+'\n';
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+function showSaveToast(msg,isError){
+  const existing=document.getElementById('save-toast');
+  if(existing)existing.remove();
+  const toast=document.createElement('div');
+  toast.id='save-toast';
+  toast.style.cssText='position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:10px;z-index:9999;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);transition:opacity .3s;'+(isError?'background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca':'background:#f0fdf4;color:#166534;border:1.5px solid #bbf7d0');
+  toast.textContent=(isError?'❌ ':'✅ ')+msg;
+  document.body.appendChild(toast);
+  setTimeout(()=>{toast.style.opacity='0';setTimeout(()=>toast.remove(),300);},3000);
 }
 
 function showOrderWhatsApp(orderId){
