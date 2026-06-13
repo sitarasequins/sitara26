@@ -46,7 +46,7 @@
     }
   });
 </script>
-<link rel="stylesheet" href="./Sitara Sequins_files/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f6f9;color:#1a1a1a;font-size:15px}
@@ -1064,10 +1064,7 @@ function showReconnect(){}
 
 const APP_PW = '786';
 
-function doSetup(){
-  document.getElementById('setup-screen').style.display='none';
-  startApp();
-}
+
 
 // ============================================================
 // JSONBIN STORAGE
@@ -1188,9 +1185,10 @@ window.addEventListener('online',  updateOnlineDot);
 window.addEventListener('offline', updateOnlineDot);
 
 function doSetup(){
-  const pw=document.getElementById('setup-pw').value;
+  const pw=document.getElementById('setup-pw').value.trim();
   if(pw==='786'){
     document.getElementById('setup-screen').style.display='none';
+    document.getElementById('setup-err').style.display='none';
     startApp();
   } else {
     document.getElementById('setup-err').style.display='block';
