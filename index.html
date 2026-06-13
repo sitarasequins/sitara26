@@ -1814,6 +1814,26 @@ function cancelOrderPrompt(id){
   document.body.appendChild(modal);
 }
 
+function cancelItemForParty(party, color, shape){
+  if(!confirm(`Cancel ${color} ${shape} for ${party}?`)) return;
+  // Cancel this item across all pending orders for this party
+  let cancelled=0;
+  orders.filter(o=>o.status==='Pending'&&o.party===party).forEach(o=>{
+    o.items.forEach(i=>{
+      if(i.color===color&&i.shape===shape&&!i.cancelled){
+        i.cancelled=true;
+        cancelled++;
+      }
+    });
+    // If all items cancelled, mark order as cancelled
+    if(o.items.every(it=>it.cancelled)) o.status='Cancelled';
+  });
+  saveAll();
+  renderProduction();
+  renderOrders();
+  showSaveToast(`${color} ${shape} cancelled for ${party}`);
+}
+
 function restoreOrder(id){
   const o=orders.find(x=>x.id===id);if(!o)return;
   o.status='Pending';
@@ -2414,12 +2434,16 @@ function renderProduction(){
       let rows=itemEntries.map(it=>{
         const net=it.ordKg-it.invKg;
         if(net<1.0)return '';
+        // Find order ids for this party+item to allow cancellation
+        const matchOrders=orders.filter(o=>o.status==='Pending'&&o.party===party&&o.items.some(i=>i.color===it.color&&i.shape===it.shape&&!i.cancelled));
+        const cancelBtn=matchOrders.length?`<button onclick="cancelItemForParty('${party}','${it.color}','${it.shape}')" style="font-size:11px;padding:2px 8px;border-radius:5px;border:1.5px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;font-weight:600">✕</button>`:''
         return `<tr>
           <td style="padding:6px 8px;font-size:12px;font-weight:600">${it.color}</td>
           <td style="padding:6px 8px;font-size:12px;color:#888">${it.shape}</td>
           <td style="padding:6px 8px;font-size:12px;text-align:right;color:#888">${fmtKg(it.ordKg)}</td>
           <td style="padding:6px 8px;font-size:12px;text-align:right;color:#16a34a">${it.invKg>0?fmtKg(it.invKg):'-'}</td>
           <td style="padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#d97706">${fmtKg(net)}</td>
+          <td style="padding:6px 8px;text-align:center">${cancelBtn}</td>
         </tr>`;
       }).filter(Boolean).join('');
       if(!rows)return '';
@@ -2444,7 +2468,7 @@ function renderProduction(){
             <div style="font-size:11px;color:#aaa">net due</div>
           </div>
         </div>
-        ${orderBtns?`<div style="margin-bottom:10px;padding:6px 8px;background:#fff7ed;border-radius:8px;border:1px solid #fed7aa">${orderBtns}</div>`:''}
+
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="border-bottom:1.5px solid #f0f0f0">
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:left">Color</th>
@@ -2452,6 +2476,7 @@ function renderProduction(){
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Ordered</th>
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Invoiced</th>
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Net Due</th>
+            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:center"></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
