@@ -541,10 +541,7 @@ tr:hover td{background:#f8faff}
         <button class="btn btn-sm" onclick="printPendingPOS('party')" style="background:#374151;color:#fff;border-color:#374151">🧾 Party POS</button>
         <button class="btn btn-sm" onclick="sharePendingWhatsApp('item')" style="background:#25D366;color:#fff;border-color:#25D366">💬 Item WA</button>
         <button class="btn btn-sm" onclick="sharePendingWhatsApp('party')" style="background:#128C7E;color:#fff;border-color:#128C7E">💬 Party WA</button>
-        <!-- Date filter -->
-        <input type="date" id="prod-date-filter" onchange="renderProduction()" value=""
-          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
-        <button class="btn btn-sm" onclick="document.getElementById('prod-date-filter').value='';renderProduction()">All</button>
+
         <!-- Search -->
         <input id="prod-search" type="text" placeholder="🔍 Search item / party…"
           oninput="renderProduction()"
@@ -2402,11 +2399,7 @@ function editOrderFromAnywhere(id){
 // ============================================================
 let prodView='item'; // 'item' or 'party'
 
-function setToday(){
-  const el=document.getElementById('prod-date-filter');
-  if(el){el.value='';}
-  renderProduction();
-}
+function setToday(){ renderProduction(); }
 
 function setProdView(v){
   prodView=v;
@@ -2439,8 +2432,7 @@ function renderProduction(){
   // ── Build net-pending across ALL pending orders (all dates) ──
   // ordered[color||shape] = {totalKg, parties:{name->kg}, dates:[]}
   const ordByItem={};
-  const prodDateFilter=(document.getElementById('prod-date-filter')||{value:''}).value;
-  orders.filter(o=>o.status==='Pending'&&(!prodDateFilter||o.date===prodDateFilter)).forEach(o=>{
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
     o.items.filter(i=>!i.cancelled).forEach(i=>{
       const key=i.color+'||'+i.shape;
       if(!ordByItem[key])ordByItem[key]={totalKg:0,parties:{},dates:[]};
@@ -2550,7 +2542,7 @@ function renderProduction(){
     // ── PARTY-WISE VIEW ─────────────────────────────────────────
     // Build per-party net pending
     const partyMap={};
-    orders.filter(o=>o.status==='Pending'&&(!prodDateFilter||o.date===prodDateFilter)).forEach(o=>{
+    orders.filter(o=>o.status==='Pending').forEach(o=>{
       if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
       o.items.forEach(i=>{
         const key=i.color+'||'+i.shape;
