@@ -1188,11 +1188,6 @@ window.addEventListener('offline', updateOnlineDot);
 window.onload = function(){
   ADMIN_PW = '786';
   updateOnlineDot();
-  // FORCE CLEAR old data - version stamp
-  const DATA_VER = 'v20260601_v4';
-  if(localStorage.getItem('sitara_ver') !== DATA_VER){
-    localStorage.setItem('sitara_ver', DATA_VER);
-  }
   loadFromStorage();
   startApp();
   setTimeout(async function(){
@@ -1214,7 +1209,7 @@ window.onload = function(){
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
             const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
             deduplicateShapes();
-            if(needsUpdate) saveToBin();
+            saveToBin();
             renderAll();
             setSyncStatus('saved','☁ Cloud ready');
             setTimeout(()=>setSyncStatus('','☁ Cloud'),2000);
