@@ -542,7 +542,7 @@ tr:hover td{background:#f8faff}
         <button class="btn btn-sm" onclick="sharePendingWhatsApp('item')" style="background:#25D366;color:#fff;border-color:#25D366">💬 Item WA</button>
         <button class="btn btn-sm" onclick="sharePendingWhatsApp('party')" style="background:#128C7E;color:#fff;border-color:#128C7E">💬 Party WA</button>
         <!-- Date filter -->
-        <input type="date" id="prod-date-filter" onchange="renderProduction()"
+        <input type="date" id="prod-date-filter" onchange="renderProduction()" value=""
           style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
         <button class="btn btn-sm" onclick="document.getElementById('prod-date-filter').value='';renderProduction()">All</button>
         <!-- Search -->
@@ -2404,7 +2404,7 @@ let prodView='item'; // 'item' or 'party'
 
 function setToday(){
   const el=document.getElementById('prod-date-filter');
-  if(el&&!el._initialized){el.value='';el._initialized=true;}
+  if(el){el.value='';}
   renderProduction();
 }
 
