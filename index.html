@@ -2105,7 +2105,7 @@ function renderInvoiceList(){
   });
   let grand=0;
   tbody.innerHTML=sorted.map((inv,idx)=>{
-    const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
+    const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0))+parseFloat(inv.chargeAmt||0);
     const totalKg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
     grand+=amt;
     return `<tr>
@@ -2795,7 +2795,8 @@ function printPOS(){
   const inv=invoices.find(x=>x.id===currentPosInvId);if(!inv)return;
   // Build POS content
   const items=inv.items||[];
-  const grand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
+  const itemsGrand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
+  const grand=itemsGrand+parseFloat(inv.chargeAmt||0);
   const dashes='--------------------------------';
   // Helper to get color display name with alias
   function colorDisplay(colorCode){
@@ -3479,7 +3480,7 @@ function shareInvWhatsApp(invId){
   if(!inv)return;
   const items=inv.items||[];
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
-  const totalAmt=items.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  const totalAmt=items.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
   const serialNum=String(inv.serial).padStart(4,'0');
   const line='- - - - - - - - - - - - - -';
   let msg=inv.party+'\n';
