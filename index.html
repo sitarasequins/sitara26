@@ -310,7 +310,8 @@ tr:hover td{background:#f8faff}
 
   <div class="tabs">
     <button class="tab" onclick="switchTab(&#39;orders&#39;,this)">Orders</button>
-    <button class="tab active" onclick="switchTab(&#39;invoices&#39;,this)">Invoices</button>
+    <button class="tab" onclick="switchTab(&#39;invoices&#39;,this)">New Invoice</button>
+    <button class="tab active" onclick="switchTab(&#39;invlist&#39;,this)">Invoice List</button>
     <button class="tab" onclick="switchTab(&#39;catalog&#39;,this)">Create</button>
     <button class="tab" onclick="switchTab('production',this)">Pending Work</button>
     <button class="tab" onclick="switchTab('reports',this)">📊 Reports</button>
@@ -371,10 +372,9 @@ tr:hover td{background:#f8faff}
     </div>
   </div>
 
-  <!-- INVOICES -->
-  <div id="tab-invoices" class="view active">
-    <div class="split">
-      <div class="form-panel">
+  <!-- NEW INVOICE FORM -->
+  <div id="tab-invoices" class="view">
+    <div class="form-panel" style="max-width:500px;margin:0 auto">
         <h4 id="inv-form-title">New Invoice</h4>
         <div class="field"><label>Party name</label>
           <div class="combo-wrap" style="width:100%">
@@ -405,6 +405,11 @@ tr:hover td{background:#f8faff}
           </div>
         </div>
         <div class="field" style="margin-top:6px">
+          <label>Bags <span style="font-size:11px;color:#aaa">(optional)</span></label>
+          <input id="if-bags" type="number" min="0" placeholder="No. of bags"
+            style="width:100%;font-size:13px;padding:8px 12px;border-radius:8px;border:1.5px solid #e5e5e5;outline:none">
+        </div>
+        <div class="field" style="margin-top:6px">
           <label>Remarks <span style="font-size:11px;color:#aaa">(optional — printed at bottom)</span></label>
           <textarea id="if-remarks" placeholder="e.g. Payment received, Delivery by courier, Special instructions..."
             style="width:100%;padding:8px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:13px;outline:none;resize:vertical;min-height:60px;box-sizing:border-box;font-family:inherit"></textarea>
@@ -416,8 +421,12 @@ tr:hover td{background:#f8faff}
             <button class="btn btn-primary" onclick="saveInvoice()" id="save-inv-btn">Save invoice</button>
           </div>
         </div>
-      </div>
-      <div>
+    </div>
+  </div>
+
+  <!-- INVOICE LIST -->
+  <div id="tab-invlist" class="view active">
+    <div>
         <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div class="stat"><div class="stat-label">Total</div><div class="stat-val" id="si-total">0</div></div>
@@ -435,6 +444,7 @@ tr:hover td{background:#f8faff}
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:150px">
             <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
             <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
+            <button class="btn btn-sm" onclick="openDispatchRegister()" style="background:#0f766e;color:#fff;border-color:#0f766e">📋 Dispatch Register</button>
           </div>
         </div>
         <table>
@@ -446,7 +456,6 @@ tr:hover td{background:#f8faff}
           <tbody id="inv-body"></tbody>
         </table>
         <div id="empty-invlist" class="empty" style="display: none;">No invoices yet.</div>
-      </div>
     </div>
   </div>
 
@@ -619,6 +628,37 @@ tr:hover td{background:#f8faff}
       </div>
     </div>
   </div>
+  <!-- DISPATCH REGISTER MODAL -->
+  <div class="modal-bg" id="modal-dispatch">
+    <div class="modal" style="max-width:560px">
+      <h3>📋 Dispatch Register</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end">
+        <div class="field" style="margin:0;flex:1;min-width:100px">
+          <label>From Inv #</label>
+          <input type="number" id="dr-from-inv" placeholder="590" style="width:100%">
+        </div>
+        <div class="field" style="margin:0;flex:1;min-width:100px">
+          <label>To Inv #</label>
+          <input type="number" id="dr-to-inv" placeholder="680" style="width:100%">
+        </div>
+        <div class="field" style="margin:0;flex:1;min-width:120px">
+          <label>From Date</label>
+          <input type="date" id="dr-from-date" style="width:100%">
+        </div>
+        <div class="field" style="margin:0;flex:1;min-width:120px">
+          <label>To Date</label>
+          <input type="date" id="dr-to-date" style="width:100%">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-sm" onclick="previewDispatch()" style="background:#0f766e;color:#fff;border-color:#0f766e">Preview</button>
+        <button class="btn btn-sm" onclick="printDispatch()" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🖨 Print A4</button>
+        <button class="btn btn-sm" onclick="closeModal('modal-dispatch')">Close</button>
+      </div>
+      <div id="dr-preview" style="overflow-x:auto;font-size:13px;"></div>
+    </div>
+  </div>
+
   <!-- IMPORT MODAL -->
   <div class="modal-bg" id="modal-import">
     <div class="modal" style="max-width:480px">
@@ -1265,10 +1305,12 @@ function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderPa
 function switchTab(t,el){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['orders','invoices','catalog','production','reports'].forEach(id=>{
-    document.getElementById('tab-'+id).classList.toggle('active',id===t);
+  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
+    const el2=document.getElementById('tab-'+id);
+    if(el2) el2.classList.toggle('active',id===t);
   });
   if(t==='reports') renderReport();
+  if(t==='invoices'){resetInvForm();}
 }
 function setF(f,el){
   // kept for compatibility but no longer used in orders tab
@@ -2010,6 +2052,8 @@ function resetInvForm(){
   document.getElementById('inv-items-container').innerHTML='';
   const rem=document.getElementById('if-remarks');
   if(rem)rem.value='';
+  const bagsEl=document.getElementById('if-bags');
+  if(bagsEl)bagsEl.value='';
   const cl=document.getElementById('if-charge-label');
   if(cl)cl.value='';
   const ca=document.getElementById('if-charge-amt');
@@ -2027,6 +2071,8 @@ function loadInvIntoForm(invId){
   document.getElementById('if-date').value=inv.date;
   const remEl=document.getElementById('if-remarks');
   if(remEl)remEl.value=inv.remarks||'';
+  const bagsLoadEl=document.getElementById('if-bags');
+  if(bagsLoadEl)bagsLoadEl.value=inv.bags||'';
   const clEl=document.getElementById('if-charge-label');
   if(clEl)clEl.value=inv.chargeLabel||'';
   const caEl=document.getElementById('if-charge-amt');
@@ -2045,20 +2091,27 @@ function saveInvoice(){
   const remarks=(document.getElementById('if-remarks').value||'').trim();
   const chargeLabel=(document.getElementById('if-charge-label').value||'').trim();
   const chargeAmt=parseFloat(document.getElementById('if-charge-amt').value||0)||0;
+  const bags=parseInt(document.getElementById('if-bags').value||0)||0;
   if(!party||!items.length){alert('Select a party and add at least one item.');return;}
   if(editInvId){
     const inv=invoices.find(x=>x.id===editInvId);
-    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;inv.chargeLabel=chargeLabel;inv.chargeAmt=chargeAmt;}
+    if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;inv.chargeLabel=chargeLabel;inv.chargeAmt=chargeAmt;inv.bags=bags;}
   } else {
-    // Always use max serial + 1 to avoid duplicates
     const maxSerial=invoices.reduce((m,i)=>Math.max(m,i.serial||0),0);
     if(nextInvoiceNum<=maxSerial) nextInvoiceNum=maxSerial+1;
     if(nextInvoiceNum<590) nextInvoiceNum=590;
-    invoices.push({id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,chargeLabel,chargeAmt,orderIds:[]});
+    invoices.push({id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,chargeLabel,chargeAmt,bags,orderIds:[]});
   }
   resetInvForm();
   saveAll();renderInvoiceList();
   setSyncStatus('saving','☁ Saving...');
+  // Switch to invoice list after saving
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab')[2].classList.add('active');
+  ['orders','invoices','invlist','catalog','production','reports'].forEach((id,i)=>{
+    const el=document.getElementById('tab-'+id);
+    if(el)el.classList.toggle('active',id==='invlist');
+  });
 }
 function saveCourier(id,val){
   const inv=invoices.find(x=>x.id==id);
@@ -3029,6 +3082,124 @@ function importFromXLS(input){
 // ============================================================
 // TALLY PRIME XML EXPORT
 // ============================================================
+function openDispatchRegister(){
+  document.getElementById('dr-from-inv').value='';
+  document.getElementById('dr-to-inv').value='';
+  document.getElementById('dr-from-date').value='';
+  document.getElementById('dr-to-date').value='';
+  document.getElementById('dr-preview').innerHTML='<div style="color:#bbb;font-size:12px;text-align:center;padding:20px">Set filters above and click Preview</div>';
+  document.getElementById('modal-dispatch').classList.add('open');
+}
+
+function getDispatchData(){
+  const fromInv=parseInt(document.getElementById('dr-from-inv').value)||0;
+  const toInv=parseInt(document.getElementById('dr-to-inv').value)||99999;
+  const fromDate=document.getElementById('dr-from-date').value;
+  const toDate=document.getElementById('dr-to-date').value;
+  let filtered=[...invoices];
+  if(fromInv) filtered=filtered.filter(i=>i.serial>=fromInv);
+  if(toInv<99999) filtered=filtered.filter(i=>i.serial<=toInv);
+  if(fromDate) filtered=filtered.filter(i=>i.date>=fromDate);
+  if(toDate) filtered=filtered.filter(i=>i.date<=toDate);
+  return filtered.sort((a,b)=>a.serial-b.serial);
+}
+
+function previewDispatch(){
+  const data=getDispatchData();
+  if(!data.length){
+    document.getElementById('dr-preview').innerHTML='<div style="color:#bbb;text-align:center;padding:20px">No invoices found for selected range</div>';
+    return;
+  }
+  const totalWt=data.reduce((s,inv)=>{
+    const kg=(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0),0);
+    return s+kg;
+  },0);
+  const totalBags=data.reduce((s,inv)=>s+(parseInt(inv.bags||0)),0);
+  const rows=data.map(inv=>{
+    const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    return `<tr style="border-bottom:1px solid #ddd;height:32px">
+      <td style="padding:4px 8px;vertical-align:middle">${fmtDate(inv.date)}</td>
+      <td style="padding:4px 8px;vertical-align:middle">${String(inv.serial).padStart(4,'0')}</td>
+      <td style="padding:4px 8px;vertical-align:middle;font-weight:600">${inv.party}</td>
+      <td style="padding:4px 8px;vertical-align:middle;text-align:center">${kg.toFixed(2)}</td>
+      <td style="padding:4px 8px;vertical-align:middle;text-align:center">${inv.bags||''}</td>
+      <td style="padding:4px 8px;vertical-align:middle">${inv.remarks||''}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('dr-preview').innerHTML=`
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:2px solid #000;border-top:2px solid #000">
+        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Date</th>
+        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Inv#</th>
+        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Party</th>
+        <th style="padding:5px 8px;text-align:center;font-weight:600;font-size:11px">WT</th>
+        <th style="padding:5px 8px;text-align:center;font-weight:600;font-size:11px">Bags</th>
+        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Remarks</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:2px solid #000">
+        <td colspan="3" style="padding:5px 8px;font-weight:700;font-size:12px">Total — ${data.length} invoices</td>
+        <td style="padding:5px 8px;text-align:center;font-weight:700">${totalWt.toFixed(2)}</td>
+        <td style="padding:5px 8px;text-align:center;font-weight:700">${totalBags||''}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>`;
+}
+
+function printDispatch(){
+  const data=getDispatchData();
+  if(!data.length){alert('No invoices found for selected range.');return;}
+  const totalWt=data.reduce((s,inv)=>{
+    const kg=(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0),0);
+    return s+kg;
+  },0);
+  const totalBags=data.reduce((s,inv)=>s+(parseInt(inv.bags||0)),0);
+  const rows=data.map(inv=>{
+    const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    return `<tr style="border-bottom:1px solid #bbb;height:30mm">
+      <td style="padding:0 8px;vertical-align:middle;font-size:13px">${fmtDate(inv.date)}</td>
+      <td style="padding:0 8px;vertical-align:middle;font-size:13px">${String(inv.serial).padStart(4,'0')}</td>
+      <td style="padding:0 8px;vertical-align:middle;font-size:13px;font-weight:600">${inv.party}</td>
+      <td style="padding:0 8px;vertical-align:middle;text-align:center;font-size:13px">${kg.toFixed(2)}</td>
+      <td style="padding:0 8px;vertical-align:middle;text-align:center;font-size:13px">${inv.bags||''}</td>
+      <td style="padding:0 8px;vertical-align:middle;font-size:13px">${inv.remarks||''}</td>
+    </tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      body{font-family:Arial,sans-serif;margin:0;padding:15mm;box-sizing:border-box}
+      table{width:100%;border-collapse:collapse;table-layout:fixed}
+      @page{size:A4;margin:15mm}
+    </style>
+  </head><body>
+    <table>
+      <tbody>
+        <tr style="border-top:2px solid #000;border-bottom:2px solid #000">
+          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:10%">Date</td>
+          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:10%">Inv</td>
+          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:36%">Party Name</td>
+          <td style="padding:6px 8px;font-weight:700;font-size:13px;text-align:center;width:12%">WT (kg)</td>
+          <td style="padding:6px 8px;font-weight:700;font-size:13px;text-align:center;width:10%">Bags</td>
+          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:22%">Remarks</td>
+        </tr>
+        ${rows}
+        <tr style="border-top:2px solid #000">
+          <td colspan="3" style="padding:8px;font-weight:700;font-size:13px">Total &nbsp; ${data.length} invoices</td>
+          <td style="padding:8px;text-align:center;font-weight:700;font-size:14px">${totalWt.toFixed(2)}</td>
+          <td style="padding:8px;text-align:center;font-weight:700;font-size:14px">${totalBags||''}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </body></html>`;
+  const win=window.open('','_blank','width=900,height=700');
+  if(!win){alert('Please allow popups.');return;}
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{win.print();setTimeout(()=>win.close(),1000);},600);
+}
+
 function exportTallyXML(){
   if(!invoices.length){alert('No invoices to export.');return;}
 
