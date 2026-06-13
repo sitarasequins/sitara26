@@ -33,14 +33,29 @@
     if(data){
       window.colors       = data.colors       || window.colors;
       window.shapes       = data.shapes       || window.shapes;
-      window.orders       = data.orders       || window.orders;
       window.parties      = data.parties      || window.parties;
-      window.invoices     = data.invoices     || window.invoices;
       window.nextOid      = data.nextOid      || window.nextOid;
       window.nextPaId     = data.nextPaId     || window.nextPaId;
       window.nextInvNum   = data.nextInvNum   || window.nextInvNum;
       window.nextInvoiceNum = data.nextInvoiceNum || window.nextInvoiceNum;
-      // Fix boolean status
+      // Merge orders - preserve local changes, only update from remote if more orders
+      if((data.orders||[]).length >= (window.orders||[]).length){
+        window.orders = data.orders || window.orders;
+      }
+      // Merge invoices - preserve courier and local fields
+      if(data.invoices && data.invoices.length > 0){
+        const remoteInvMap={};
+        data.invoices.forEach(inv=>remoteInvMap[inv.id]=inv);
+        // Keep local courier/bags if remote doesn't have them
+        window.invoices = data.invoices.map(inv=>{
+          const local=(window.invoices||[]).find(x=>x.id===inv.id);
+          return {...inv,
+            courier: inv.courier|||(local&&local.courier)||'',
+            bags: inv.bags!=null?inv.bags:(local&&local.bags!=null?local.bags:0)
+          };
+        });
+      }
+      // Fix boolean status + normalize case
       if(window.orders) window.orders.forEach(o=>{
         if(o.status===true) o.status='Delivered';
         if(o.status===false||!o.status) o.status='Pending';
