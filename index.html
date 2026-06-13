@@ -326,6 +326,7 @@ tr:hover td{background:#fafafa}
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div class="stat"><div class="stat-label">Pending Orders</div><div class="stat-val" id="s-pending" style="color:#d97706">0</div></div>
             <div class="stat"><div class="stat-label">Parties</div><div class="stat-val" id="s-parties">0</div></div>
+            <div class="stat" style="cursor:pointer" onclick="toggleCancelledOrders()"><div class="stat-label">Cancelled</div><div class="stat-val" id="s-cancelled" style="color:#9ca3af">0</div></div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <label style="font-size:12px;color:#888;font-weight:500">Filter:</label>
@@ -340,6 +341,13 @@ tr:hover td{background:#fafafa}
         </div>
         <div id="pending-orders-list"></div>
         <div id="empty-orders" class="empty" style="display: none;">No pending orders.</div>
+        <div id="cancelled-orders-list" style="display:none;margin-top:16px">
+          <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span>Cancelled Orders</span>
+            <button class="btn btn-sm" onclick="toggleCancelledOrders()" style="font-size:11px">Hide</button>
+          </div>
+          <div id="cancelled-orders-body"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1270,6 +1278,10 @@ function renderOrders(){
   let filteredOrders=orders.filter(o=>o.status==='Pending');
   if(dateFilter) filteredOrders=filteredOrders.filter(o=>o.date===dateFilter);
   if(partyFilter) filteredOrders=filteredOrders.filter(o=>o.party===partyFilter);
+  // Count cancelled
+  const cancelledOrders=orders.filter(o=>o.status==='Cancelled');
+  const cancelledEl=document.getElementById('s-cancelled');
+  if(cancelledEl)cancelledEl.textContent=cancelledOrders.length;
   // Populate party dropdown with parties that have pending orders
   const orderPartyEl=document.getElementById('order-party-filter');
   if(orderPartyEl){
@@ -1308,6 +1320,28 @@ function renderOrders(){
     return latestB.localeCompare(latestA)||(b[1][0].id-a[1][0].id);
   });
 
+  // Render cancelled orders section
+  const cancelledBody=document.getElementById('cancelled-orders-body');
+  const cancelledList=document.getElementById('cancelled-orders-list');
+  if(cancelledBody&&cancelledList){
+    cancelledList.style.display=showCancelled&&cancelledOrders.length?'block':'none';
+    if(showCancelled){
+      cancelledBody.innerHTML=cancelledOrders.map(o=>{
+        const itemsStr=o.items.map(it=>`<span style="font-size:11px;background:#f5f5f5;border-radius:3px;padding:1px 6px;margin-right:3px;${it.cancelled?'text-decoration:line-through;color:#bbb':''}">${it.color} ${it.shape} ${fmtKg(it.kg)}</span>`).join('');
+        return `<div style="padding:8px 12px;border-radius:8px;border:1px solid #f0f0f0;background:#fafafa;margin-bottom:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#9ca3af;margin-bottom:4px">${invLabel(o.invNum)} · ${o.party} · <span style="color:#bbb;font-weight:400">${fmtDate(o.date)}</span></div>
+            <div>${itemsStr}</div>
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0">
+            <button class="btn btn-sm" onclick="restoreOrder(${o.id})" style="font-size:11px;color:#16a34a;border-color:#bbf7d0">↩ Restore</button>
+            <button class="btn btn-sm btn-danger" onclick="delOrder(${o.id})" style="font-size:11px">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
   container.innerHTML=sortedParties.map(([party,partyOrders])=>{
     const orderRows=partyOrders.map(o=>{
       const itemsStr=o.items.map(i=>`<span style="font-size:11px;background:#f5f5f5;border-radius:3px;padding:1px 6px;margin-right:3px">${i.color} ${i.shape} ${fmtKg(i.kg)}</span>`).join('');
@@ -1322,6 +1356,7 @@ function renderOrders(){
           <button class="btn btn-sm" onclick="loadOrderIntoForm(${o.id})">✏ Edit</button>
           <button class="btn btn-sm" onclick="printOrderPOS(${o.id})" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾</button>
           <button class="btn btn-sm" onclick="shareOrderWhatsApp(${o.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
+          <button class="btn btn-sm" onclick="cancelOrderPrompt(${o.id})" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c">✕ Cancel</button>
           <button class="btn btn-sm btn-danger" onclick="delOrder(${o.id})">🗑</button>
         </div>
       </div>`;
@@ -1747,6 +1782,74 @@ function delOrder(id){
   saveAll();renderOrders();renderInvoiceList();
 }
 
+function cancelOrderPrompt(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  // Build item checkboxes for partial cancel
+  const itemList=o.items.map((it,i)=>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5">
+      <input type="checkbox" id="cit-${i}" value="${i}" style="width:16px;height:16px;cursor:pointer">
+      <label for="cit-${i}" style="font-size:13px;cursor:pointer;flex:1">${it.color} ${it.shape} — ${parseFloat(it.kg).toFixed(2)} kg</label>
+    </div>`
+  ).join('');
+
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:#fff;border-radius:14px;padding:20px 22px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">Cancel Order — ${o.party}</div>
+      <div style="font-size:12px;color:#888;margin-bottom:14px">${invLabel(o.invNum)} · ${fmtDate(o.date)}</div>
+      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px">Select items to cancel (or cancel entire order):</div>
+      <div style="margin-bottom:14px">${itemList}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button onclick="this.closest('.cancel-modal').remove()" 
+          style="padding:8px 16px;border-radius:8px;border:1.5px solid #ddd;background:#fff;cursor:pointer;font-size:13px">Keep</button>
+        <button onclick="cancelSelectedItems(${id},this.closest('.cancel-modal'))"
+          style="padding:8px 16px;border-radius:8px;border:1.5px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;font-size:13px;font-weight:600">✕ Cancel Selected Items</button>
+        <button onclick="cancelFullOrder(${id},this.closest('.cancel-modal'))"
+          style="padding:8px 16px;border-radius:8px;border:none;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;font-weight:600">✕ Cancel Entire Order</button>
+      </div>
+    </div>`;
+  modal.className='cancel-modal';
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  document.body.appendChild(modal);
+}
+
+function restoreOrder(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  o.status='Pending';
+  o.items=o.items.map(it=>({...it,cancelled:false}));
+  saveAll();renderOrders();renderProduction();
+  showSaveToast('Order restored');
+}
+
+function cancelFullOrder(id, modal){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  o.status='Cancelled';
+  if(modal)modal.remove();
+  saveAll();renderOrders();renderProduction();
+  showSaveToast('Order cancelled');
+}
+
+function cancelSelectedItems(id, modal){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  const checkboxes=modal.querySelectorAll('input[type=checkbox]:checked');
+  if(!checkboxes.length){alert('Please select at least one item to cancel.');return;}
+  const cancelIdx=new Set([...checkboxes].map(c=>parseInt(c.value)));
+  // Mark cancelled items
+  o.items=o.items.map((it,i)=>cancelIdx.has(i)?{...it,cancelled:true}:it);
+  // If all items cancelled, cancel whole order
+  if(o.items.every(it=>it.cancelled)) o.status='Cancelled';
+  if(modal)modal.remove();
+  saveAll();renderOrders();renderProduction();
+  showSaveToast(cancelIdx.size===o.items.length?'Order cancelled':'Items cancelled');
+}
+
+let showCancelled=false;
+function toggleCancelledOrders(){
+  showCancelled=!showCancelled;
+  renderOrders();
+}
+
 // ============================================================
 // INVOICES
 // ============================================================
@@ -2156,7 +2259,7 @@ function renderProduction(){
   // ordered[color||shape] = {totalKg, parties:{name->kg}, dates:[]}
   const ordByItem={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
-    o.items.forEach(i=>{
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
       const key=i.color+'||'+i.shape;
       if(!ordByItem[key])ordByItem[key]={totalKg:0,parties:{},dates:[]};
       ordByItem[key].totalKg+=parseFloat(i.kg||0);
@@ -2244,7 +2347,11 @@ function renderProduction(){
       `<div style="font-size:11px;color:#888;margin-bottom:10px">${cards.length} item(s) · Net due = Ordered − Invoiced</div>`+
       cards.map(c=>{
         const partyBreakdown=Object.entries(c.parties)
-          .map(([p,kg])=>`<span style="background:#f0f4ff;border-radius:4px;padding:1px 7px;font-size:11px;color:#2563eb;margin-right:4px">${p}: ${fmtKg(kg)}</span>`)
+          .map(([p,kg])=>{
+            const partyOrd=orders.filter(o=>o.status==='Pending'&&o.party===p);
+            const cancelBtns=partyOrd.map(o=>`<button onclick="cancelOrderPrompt(${o.id})" title="Cancel ${invLabel(o.invNum)}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;margin-left:3px">✕</button>`).join('');
+            return `<span style="background:#f0f4ff;border-radius:4px;padding:1px 7px;font-size:11px;color:#2563eb;margin-right:4px;display:inline-flex;align-items:center">${p}: ${fmtKg(kg)}${cancelBtns}</span>`;
+          })
           .join('');
         const datesStr=c.dates.sort().map(d=>`<span style="font-size:10px;color:#bbb;background:#f5f5f5;border-radius:3px;padding:1px 5px;margin-right:3px">${d}</span>`).join('');
         return `<div class="prod-card">
@@ -2318,6 +2425,14 @@ function renderProduction(){
       if(!rows)return '';
       const totalNet=itemEntries.reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
       const datesStr=data.dates.sort().join(', ');
+      // Get order ids for this party
+      const partyOrderIds=orders.filter(o=>o.status='Pending'&&o.party===party).map(o=>o.id);
+      const orderBtns=orders.filter(o=>o.status==='Pending'&&o.party===party).map(o=>
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f8f8f8">
+          <span style="font-size:12px;color:#666">${invLabel(o.invNum)} · ${fmtDate(o.date)}</span>
+          <button onclick="cancelOrderPrompt(${o.id})" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1.5px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;font-weight:600">✕ Cancel</button>
+        </div>`
+      ).join('');
       return `<div class="party-pending-card" style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div>
@@ -2329,6 +2444,7 @@ function renderProduction(){
             <div style="font-size:11px;color:#aaa">net due</div>
           </div>
         </div>
+        ${orderBtns?`<div style="margin-bottom:10px;padding:6px 8px;background:#fff7ed;border-radius:8px;border:1px solid #fed7aa">${orderBtns}</div>`:''}
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="border-bottom:1.5px solid #f0f0f0">
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:left">Color</th>
