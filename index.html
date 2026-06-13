@@ -2402,7 +2402,11 @@ function editOrderFromAnywhere(id){
 // ============================================================
 let prodView='item'; // 'item' or 'party'
 
-function setToday(){ renderProduction(); } // kept for renderAll compatibility
+function setToday(){
+  const el=document.getElementById('prod-date-filter');
+  if(el&&!el._initialized){el.value='';el._initialized=true;}
+  renderProduction();
+}
 
 function setProdView(v){
   prodView=v;
