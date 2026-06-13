@@ -342,7 +342,9 @@ tr:hover td{background:#f8faff}
               style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:180px">
               <option value="">All Parties</option>
             </select>
-            <button class="btn btn-sm" onclick="document.getElementById('order-date-filter').value='';document.getElementById('order-party-filter').value='';renderOrders()">✕ Clear</button>
+            <input type="text" id="order-item-search" placeholder="🔍 Search color..." oninput="renderOrders()"
+              style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:150px">
+            <button class="btn btn-sm" onclick="document.getElementById('order-date-filter').value='';document.getElementById('order-party-filter').value='';document.getElementById('order-item-search').value='';renderOrders()">✕ Clear</button>
           </div>
         </div>
         <div id="pending-orders-list"></div>
@@ -406,9 +408,10 @@ tr:hover td{background:#f8faff}
       </div>
       <div>
         <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div class="stat"><div class="stat-label">Total</div><div class="stat-val" id="si-total">0</div></div>
             <div class="stat"><div class="stat-label">Amount</div><div class="stat-val" id="si-amount" style="font-size:15px">₹0</div></div>
+
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <input type="date" id="inv-date-filter" onchange="renderInvoiceList()"
@@ -417,7 +420,9 @@ tr:hover td{background:#f8faff}
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:170px">
               <option value="">All Parties</option>
             </select>
-            <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';document.getElementById('inv-party-filter').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
+            <input type="text" id="inv-item-search" placeholder="🔍 Search color..." oninput="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:150px">
+            <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
             <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
           </div>
         </div>
@@ -1024,7 +1029,22 @@ let nextOid=1, nextPaId=83, nextInvNum=1, nextInvoiceNum=590;
 // ─────────────────────────────────────────────────────────────────────────
 
 let filt='all', editOid=null, editInvId=null, ovOid=null, pdPartyId=null;
-let prodSort='qty-desc'; // default sort for Today's Work
+let prodSort='qty-desc';
+let orderSort='date';
+let invSort='date';
+
+function setOrderSort(s,el){
+  orderSort=s;
+  document.querySelectorAll('[id^="osort-"]').forEach(b=>{b.style.background='#fff';b.style.color='#444';b.style.borderColor='#e0e0e0';});
+  el.style.background='#2563eb';el.style.color='#fff';el.style.borderColor='#2563eb';
+  renderOrders();
+}
+function setInvSort(s,el){
+  invSort=s;
+  document.querySelectorAll('[id^="isort-"]').forEach(b=>{b.style.background='#fff';b.style.color='#444';b.style.borderColor='#e0e0e0';});
+  el.style.background='#2563eb';el.style.color='#fff';el.style.borderColor='#2563eb';
+  renderInvoiceList();
+}
 
 // Date format helper - converts YYYY-MM-DD to DDMon format e.g. 01Jun
 function fmtDate(d){
@@ -1281,9 +1301,21 @@ function renderOrders(){
   const dateFilter=(document.getElementById('order-date-filter')||{value:''}).value;
   // Filter pending orders by date if selected
   const partyFilter=(document.getElementById('order-party-filter')||{value:''}).value;
+  const itemSearch=(document.getElementById('order-item-search')||{value:''}).value.trim().toLowerCase();
   let filteredOrders=orders.filter(o=>o.status==='Pending');
   if(dateFilter) filteredOrders=filteredOrders.filter(o=>o.date===dateFilter);
   if(partyFilter) filteredOrders=filteredOrders.filter(o=>o.party===partyFilter);
+  if(itemSearch) filteredOrders=filteredOrders.filter(o=>
+    o.items.some(i=>i.color.toLowerCase().includes(itemSearch)||i.shape.toLowerCase().includes(itemSearch))
+  );
+  // Also filter items within each order to highlight matching ones
+  if(itemSearch) filteredOrders=filteredOrders.map(o=>({
+    ...o,
+    items: o.items.map(i=>({
+      ...i,
+      _highlight: i.color.toLowerCase().includes(itemSearch)||i.shape.toLowerCase().includes(itemSearch)
+    }))
+  }));
   // Count cancelled
   const cancelledOrders=orders.filter(o=>o.status==='Cancelled');
   const cancelledEl=document.getElementById('s-cancelled');
@@ -1314,10 +1346,20 @@ function renderOrders(){
 
   // Group by party
   const byParty={};
-  filteredOrders.sort((a,b)=>b.date.localeCompare(a.date)||(b.id-a.id)).forEach(o=>{
+  // Apply sort
+  if(orderSort==='date') filteredOrders.sort((a,b)=>b.date.localeCompare(a.date)||(b.id-a.id));
+  else if(orderSort==='party') filteredOrders.sort((a,b)=>a.party.localeCompare(b.party));
+  else if(orderSort==='kg') filteredOrders.sort((a,b)=>{
+    const kgA=a.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const kgB=b.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    return kgB-kgA;
+  });
+  filteredOrders.forEach(o=>{
     if(!byParty[o.party])byParty[o.party]=[];
     byParty[o.party].push(o);
   });
+  // Within each party, always sort orders by date desc
+  Object.values(byParty).forEach(arr=>arr.sort((a,b)=>b.date.localeCompare(a.date)||(b.id-a.id)));
 
   // Sort party groups by most recent order descending
   const sortedParties=Object.entries(byParty).sort((a,b)=>{
@@ -1350,7 +1392,7 @@ function renderOrders(){
 
   container.innerHTML=sortedParties.map(([party,partyOrders])=>{
     const orderRows=partyOrders.map(o=>{
-      const itemsStr=o.items.map(i=>`<span style="font-size:11px;background:#f5f5f5;border-radius:3px;padding:1px 6px;margin-right:3px">${i.color} ${i.shape} ${fmtKg(i.kg)}</span>`).join('');
+      const itemsStr=o.items.map(i=>`<span style="font-size:11px;background:${i._highlight?'#dbeafe':'#f5f5f5'};color:${i._highlight?'#1d4ed8':'inherit'};border-radius:3px;padding:1px 6px;margin-right:3px;font-weight:${i._highlight?'600':'400'}">${i.color} ${i.shape} ${fmtKg(i.kg)}</span>`).join('');
       const total=o.items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
       return `<div style="padding:8px 0;border-bottom:1px solid #f5f5f5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
         <div style="flex:1">
@@ -2015,8 +2057,12 @@ function renderInvoiceList(){
   empty.style.display='none';
   const invDateFilter=(document.getElementById('inv-date-filter')||{value:''}).value;
   const invPartyFilter=(document.getElementById('inv-party-filter')||{value:''}).value;
+  const invItemSearch=(document.getElementById('inv-item-search')||{value:''}).value.trim().toLowerCase();
   let filtInvoices=invDateFilter?invoices.filter(i=>i.date===invDateFilter):invoices;
   if(invPartyFilter) filtInvoices=filtInvoices.filter(i=>i.party===invPartyFilter);
+  if(invItemSearch) filtInvoices=filtInvoices.filter(inv=>
+    (inv.items||[]).some(i=>i.color.toLowerCase().includes(invItemSearch)||i.shape.toLowerCase().includes(invItemSearch))
+  );
   // Populate party dropdown
   const invPartyEl=document.getElementById('inv-party-filter');
   if(invPartyEl){
@@ -2024,7 +2070,19 @@ function renderInvoiceList(){
     const allP=[...new Set(invoices.map(i=>i.party))].sort();
     invPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}}>${p}</option>`).join('');
   }
-  const sorted=[...filtInvoices].sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
+  let sorted=[...filtInvoices];
+  if(invSort==='date') sorted.sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
+  else if(invSort==='party') sorted.sort((a,b)=>a.party.localeCompare(b.party));
+  else if(invSort==='amt') sorted.sort((a,b)=>{
+    const aA=Math.round((a.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
+    const bA=Math.round((b.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
+    return bA-aA;
+  });
+  else if(invSort==='kg') sorted.sort((a,b)=>{
+    const kgA=(a.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const kgB=(b.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    return kgB-kgA;
+  });
   let grand=0;
   tbody.innerHTML=sorted.map((inv,idx)=>{
     const amt=Math.round((inv.items||[]).reduce((s,i)=>s+(i.kg*i.price),0));
@@ -2373,11 +2431,7 @@ function renderProduction(){
       `<div style="font-size:11px;color:#888;margin-bottom:10px">${cards.length} item(s) · Net due = Ordered − Invoiced</div>`+
       cards.map(c=>{
         const partyBreakdown=Object.entries(c.parties)
-          .map(([p,kg])=>{
-            const partyOrd=orders.filter(o=>o.status==='Pending'&&o.party===p);
-            const cancelBtns=partyOrd.map(o=>`<button onclick="cancelOrderPrompt(${o.id})" title="Cancel ${invLabel(o.invNum)}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;margin-left:3px">✕</button>`).join('');
-            return `<span style="background:#f0f4ff;border-radius:4px;padding:1px 7px;font-size:11px;color:#2563eb;margin-right:4px;display:inline-flex;align-items:center">${p}: ${fmtKg(kg)}${cancelBtns}</span>`;
-          })
+          .map(([p,kg])=>`<span style="background:#f0f4ff;border-radius:4px;padding:1px 7px;font-size:11px;color:#2563eb;margin-right:4px">${p}: ${fmtKg(kg)}</span>`)
           .join('');
         const datesStr=c.dates.sort().map(d=>`<span style="font-size:10px;color:#bbb;background:#f5f5f5;border-radius:3px;padding:1px 5px;margin-right:3px">${d}</span>`).join('');
         return `<div class="prod-card">
@@ -2440,16 +2494,12 @@ function renderProduction(){
       let rows=itemEntries.map(it=>{
         const net=it.ordKg-it.invKg;
         if(net<1.0)return '';
-        // Find order ids for this party+item to allow cancellation
-        const matchOrders=orders.filter(o=>o.status==='Pending'&&o.party===party&&o.items.some(i=>i.color===it.color&&i.shape===it.shape&&!i.cancelled));
-        const cancelBtn=matchOrders.length?`<button onclick="cancelItemForParty('${party}','${it.color}','${it.shape}')" style="font-size:11px;padding:2px 8px;border-radius:5px;border:1.5px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;font-weight:600">✕</button>`:''
         return `<tr>
           <td style="padding:6px 8px;font-size:12px;font-weight:600">${it.color}</td>
           <td style="padding:6px 8px;font-size:12px;color:#888">${it.shape}</td>
           <td style="padding:6px 8px;font-size:12px;text-align:right;color:#888">${fmtKg(it.ordKg)}</td>
           <td style="padding:6px 8px;font-size:12px;text-align:right;color:#16a34a">${it.invKg>0?fmtKg(it.invKg):'-'}</td>
           <td style="padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#d97706">${fmtKg(net)}</td>
-          <td style="padding:6px 8px;text-align:center">${cancelBtn}</td>
         </tr>`;
       }).filter(Boolean).join('');
       if(!rows)return '';
@@ -2482,7 +2532,6 @@ function renderProduction(){
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Ordered</th>
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Invoiced</th>
             <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Net Due</th>
-            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:center"></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
