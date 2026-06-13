@@ -1123,6 +1123,17 @@ function saveToBin(){
   }
 }
 
+function deduplicateShapes(){
+  // Remove case-insensitive duplicates, keep first occurrence, normalize to lowercase
+  const seen=new Set();
+  shapes=shapes.filter(s=>{
+    const key=s.toLowerCase();
+    if(seen.has(key))return false;
+    seen.add(key);
+    return true;
+  }).map(s=>s.toLowerCase());
+}
+
 function loadFromStorage(){
   try{
     const raw=localStorage.getItem(LS_KEY);
@@ -1137,6 +1148,7 @@ function loadFromStorage(){
     nextPaId     = data.nextPaId     || nextPaId;
     nextInvNum   = data.nextInvNum   || nextInvNum;
     nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+    deduplicateShapes();
     return true;
   } catch(e){ return false; }
 }
@@ -1216,6 +1228,7 @@ window.onload = function(){
             nextInvNum = data.nextInvNum || nextInvNum;
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
             const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
+            deduplicateShapes();
             if(needsUpdate) saveToBin();
             renderAll();
             setSyncStatus('saved','☁ Cloud ready');
@@ -1512,7 +1525,7 @@ function editColorAlias(idx){
 function addColor(){
   const inp=document.getElementById('new-color');
   const aliasInp=document.getElementById('new-color-alias');
-  const v=normalizeStr(inp.value);
+  const v=normalizeStr(inp.value).toUpperCase();
   if(!v)return;
   if(colors.some(c=>colorName(c).toLowerCase()===v.toLowerCase())){alert('Color already exists.');return;}
   const alias=(aliasInp?aliasInp.value.trim():'');
@@ -1521,7 +1534,14 @@ function addColor(){
   saveAll();renderCatalog();
 }
 function delColor(c){colors=colors.filter(x=>colorName(x)!==c);saveAll();renderCatalog();}
-function addShape(){const inp=document.getElementById('new-shape');const v=normalizeStr(inp.value);if(!v||ciIncludes(shapes,v))return;shapes.push(v);inp.value='';saveAll();renderCatalog();}
+function addShape(){
+  const inp=document.getElementById('new-shape');
+  const v=normalizeStr(inp.value);
+  if(!v)return;
+  if(ciIncludes(shapes,v)){alert('Shape already exists.');return;}
+  shapes.push(v.toLowerCase());
+  inp.value='';saveAll();renderCatalog();
+}
 function delShape(s){shapes=shapes.filter(x=>x!==s);saveAll();renderCatalog();}
 document.getElementById('new-color').addEventListener('keydown',e=>{if(e.key==='Enter')addColor();});
 document.getElementById('new-shape').addEventListener('keydown',e=>{if(e.key==='Enter')addShape();});
