@@ -173,6 +173,15 @@ tr:hover td{background:#f8faff}
 /* Misc */
 .empty{text-align:center;color:#bbb;font-size:13px;padding:28px 0}
 .save-ind{font-size:11px}
+/* Setup screen */
+#setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999}
+.setup-box{background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.25);text-align:center}
+.setup-logo{font-size:26px;font-weight:800;color:#1e3a5f;margin-bottom:4px}
+.setup-logo span{color:#2563eb}
+.setup-sub{font-size:13px;color:#999;margin-bottom:28px}
+.setup-btn{width:100%;padding:13px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px}
+.setup-btn:hover{background:#1d4ed8}
+.setup-err{color:#dc2626;font-size:13px;margin-top:10px;display:none}
 /* Sort buttons */
 .sort-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center}
 .sort-bar-label{font-size:11px;color:#999;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
@@ -264,20 +273,10 @@ tr:hover td{background:#f8faff}
 </head>
 <body>
 
-<div id="setup-screen">
-  <div class="setup-box">
-    <div class="setup-logo">Sitara <span>Sequins</span></div>
-    <div class="setup-sub">Enter password to continue</div>
-    <input type="password" id="setup-pw" placeholder="••••••" autocomplete="off"
-      style="width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px;text-align:center;letter-spacing:4px;box-sizing:border-box;margin-bottom:4px;outline:none"
-      onkeydown="if(event.key==='Enter')doSetup()">
-    <button class="setup-btn" onclick="doSetup()">OPEN APP →</button>
-    <div class="setup-err" id="setup-err">❌ Wrong password</div>
-  </div>
-</div>
+
 
 <!-- ===== MAIN APP ===== -->
-<div id="app" style="display: none;">
+<div id="app" style="display: block;">
   <div class="topbar-app">
     <div style="display:flex;align-items:center;gap:10px">
       <div class="app-title">Sitara <span>Sequins</span></div>
@@ -1184,18 +1183,7 @@ function updateOnlineDot(){
 window.addEventListener('online',  updateOnlineDot);
 window.addEventListener('offline', updateOnlineDot);
 
-function doSetup(){
-  const pw=document.getElementById('setup-pw').value.trim();
-  if(pw==='786'){
-    document.getElementById('setup-screen').style.display='none';
-    document.getElementById('setup-err').style.display='none';
-    startApp();
-  } else {
-    document.getElementById('setup-err').style.display='block';
-    document.getElementById('setup-pw').value='';
-    document.getElementById('setup-pw').focus();
-  }
-}
+
 
 window.onload = function(){
   ADMIN_PW = '786';
@@ -1206,8 +1194,7 @@ window.onload = function(){
     localStorage.setItem('sitara_ver', DATA_VER);
   }
   loadFromStorage();
-  // Show password screen - do NOT call startApp() here
-  setTimeout(()=>{ const el=document.getElementById('setup-pw'); if(el)el.focus(); },300);
+  startApp();
   setTimeout(async function(){
     if(window._firebaseReady && window._firestore){
       try{
@@ -3620,20 +3607,6 @@ function printReport(){
       .rpt-card{margin-bottom:14px}
       .rpt-card-hdr{background:#f0f4ff;padding:8px 12px;font-weight:700;font-size:13px;border-bottom:1px solid #dbeafe}
       @media print{@page{margin:10mm}}
-
-/* mobile removed */
-
-
-
-/* Setup screen */
-#setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999}
-.setup-box{background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.25);text-align:center}
-.setup-logo{font-size:26px;font-weight:800;color:#1e3a5f;margin-bottom:4px}
-.setup-logo span{color:#2563eb}
-.setup-sub{font-size:13px;color:#999;margin-bottom:28px}
-.setup-btn{width:100%;padding:13px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px}
-.setup-btn:hover{background:#1d4ed8}
-.setup-err{color:#dc2626;font-size:13px;margin-top:10px;display:none}
     </style>
   </head><body>
     <div style="margin-bottom:12px">${stats}</div>
