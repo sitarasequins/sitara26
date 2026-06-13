@@ -1173,7 +1173,7 @@ function saveToBin(){
 }
 
 function deduplicateShapes(){
-  // Remove case-insensitive duplicates, keep first occurrence, normalize to lowercase
+  // Remove case-insensitive duplicates, normalize shapes to lowercase
   const seen=new Set();
   shapes=shapes.filter(s=>{
     const key=s.toLowerCase();
@@ -1181,6 +1181,21 @@ function deduplicateShapes(){
     seen.add(key);
     return true;
   }).map(s=>s.toLowerCase());
+}
+
+function normalizeColors(){
+  // Remove case-insensitive duplicate colors, normalize to UPPERCASE
+  const seen=new Set();
+  colors=colors.filter(c=>{
+    const name=typeof c==='object'?c.name:c;
+    const key=name.toUpperCase();
+    if(seen.has(key))return false;
+    seen.add(key);
+    return true;
+  }).map(c=>{
+    if(typeof c==='object') return{...c,name:c.name.toUpperCase()};
+    return c.toUpperCase();
+  });
 }
 
 function loadFromStorage(){
@@ -1198,10 +1213,21 @@ function loadFromStorage(){
     nextInvNum   = data.nextInvNum   || nextInvNum;
     nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
     deduplicateShapes();
-    // Fix boolean status bug
+    normalizeColors();
+    // Fix boolean status bug + normalize case
     orders.forEach(o=>{
       if(o.status===true) o.status='Delivered';
       if(o.status===false||!o.status) o.status='Pending';
+      o.items=(o.items||[]).map(i=>({...i,
+        color:(i.color||'').toUpperCase(),
+        shape:(i.shape||'').toLowerCase()
+      }));
+    });
+    invoices.forEach(inv=>{
+      inv.items=(inv.items||[]).map(i=>({...i,
+        color:(i.color||'').toUpperCase(),
+        shape:(i.shape||'').toLowerCase()
+      }));
     });
     return true;
   } catch(e){ return false; }
@@ -1280,10 +1306,15 @@ window.onload = function(){
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
             const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
             deduplicateShapes();
+            normalizeColors();
             // Fix boolean status bug
             orders.forEach(o=>{
               if(o.status===true) o.status='Delivered';
               if(o.status===false||!o.status) o.status='Pending';
+              o.items=(o.items||[]).map(i=>({...i,color:(i.color||'').toUpperCase(),shape:(i.shape||'').toLowerCase()}));
+            });
+            invoices.forEach(inv=>{
+              inv.items=(inv.items||[]).map(i=>({...i,color:(i.color||'').toUpperCase(),shape:(i.shape||'').toLowerCase()}));
             });
             saveToBin();
             renderAll();
@@ -1853,7 +1884,8 @@ function getItems(){
   return [...document.querySelectorAll('#items-container .item-row')].map(r=>{
     const combos=r.querySelectorAll('.combo-input');
     const ins=r.querySelectorAll('input[type="number"]');
-    return{color:(combos[0]?.value||'').trim(),shape:(combos[1]?.value||'').trim(),
+    return{color:(combos[0]?.value||'').trim().toUpperCase(),
+           shape:(combos[1]?.value||'').trim().toLowerCase(),
       kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
   }).filter(i=>i.color&&i.shape);
 }
@@ -2014,7 +2046,9 @@ function getInvItems(){
   return [...document.querySelectorAll('#inv-items-container .item-row')].map(r=>{
     const combos=r.querySelectorAll('.combo-input');
     const ins=r.querySelectorAll('input[type="number"]');
-    return{color:(combos[0]?.value||'').trim(),shape:(combos[1]?.value||'').trim(),kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
+    return{color:(combos[0]?.value||'').trim().toUpperCase(),
+           shape:(combos[1]?.value||'').trim().toLowerCase(),
+           kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
   }).filter(i=>i.color&&i.shape);
 }
 function openPartyCombo(inp){
@@ -2075,6 +2109,15 @@ function cancelInvForm(){resetInvForm();}
 function loadInvIntoForm(invId){
   const inv=invoices.find(x=>x.id===invId);if(!inv)return;
   editInvId=invId;
+  // Switch to New Invoice tab
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
+    const el=document.getElementById('tab-'+id);
+    if(el) el.classList.toggle('active',id==='invoices');
+  });
+  document.querySelectorAll('.tab').forEach(b=>{
+    if(b.textContent.trim()==='New Invoice') b.classList.add('active');
+  });
   document.getElementById('inv-form-title').textContent='Edit Invoice — '+invNumLabel(inv.serial);
   document.getElementById('save-inv-btn').textContent='Update invoice';
   const pInput=document.getElementById('if-party-input');
@@ -2209,12 +2252,18 @@ let invReturnTab='invoices';
 function viewInvoice(invId){
   currentPosInvId=invId;
   const inv=invoices.find(x=>x.id===invId);if(!inv)return;
+  // Hide all tabs
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
+    const el=document.getElementById('tab-'+id);
+    if(el) el.classList.remove('active');
+  });
   const items=inv.items||[];
   const rows=items.map(i=>`<tr>
     <td>${i.color}</td><td>${i.shape}</td>
     <td style="text-align:center">${fmtKg(i.kg)}</td>
     <td style="text-align:right">${fmt(i.price)}/kg</td>
-    <td style="text-align:right">${fmt(i.kg*i.price)}</td>
+    <td style="text-align:right">${fmt(Math.round(i.kg*i.price))}</td>
   </tr>`).join('');
   const itemsTotal=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
   const chargeAmt=parseFloat(inv.chargeAmt||0);
@@ -2257,8 +2306,15 @@ function closeInvoice(){
   document.getElementById('inv-content').closest('.inv-wrap').style.display='';
   document.body.classList.remove('pos-mode');
   currentPosInvId=null;
-  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',i===1));
-  ['orders','invoices','catalog','production'].forEach((id,i)=>document.getElementById('tab-'+id).classList.toggle('active',i===1));
+  // Return to Invoice List tab
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
+    const el=document.getElementById('tab-'+id);
+    if(el) el.classList.toggle('active',id==='invlist');
+  });
+  document.querySelectorAll('.tab').forEach(b=>{
+    if(b.textContent.trim()==='Invoice List') b.classList.add('active');
+  });
   renderInvoiceList();
 }
 
