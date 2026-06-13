@@ -40,6 +40,15 @@
       window.nextPaId     = data.nextPaId     || window.nextPaId;
       window.nextInvNum   = data.nextInvNum   || window.nextInvNum;
       window.nextInvoiceNum = data.nextInvoiceNum || window.nextInvoiceNum;
+      // Fix boolean status
+      if(window.orders) window.orders.forEach(o=>{
+        if(o.status===true) o.status='Delivered';
+        if(o.status===false||!o.status) o.status='Pending';
+        o.items=(o.items||[]).map(i=>({...i,color:(i.color||'').toUpperCase(),shape:(i.shape||'').toLowerCase()}));
+      });
+      if(window.invoices) window.invoices.forEach(inv=>{
+        inv.items=(inv.items||[]).map(i=>({...i,color:(i.color||'').toUpperCase(),shape:(i.shape||'').toLowerCase()}));
+      });
       if(window.renderAll) window.renderAll();
       window.setSyncStatus('saved','☁ Synced');
       setTimeout(()=>window.setSyncStatus('','☁ Cloud'), 2000);
@@ -1245,6 +1254,9 @@ function startApp(){
   document.getElementById('app').style.display='block';
   renderAll();
   setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
+  // Re-render after Firebase loads (in case snapshot fires before startApp)
+  setTimeout(()=>{ if(window.renderAll) window.renderAll(); }, 2000);
+  setTimeout(()=>{ if(window.renderAll) window.renderAll(); }, 4000);
 }
 
 function updateOnlineDot(){
