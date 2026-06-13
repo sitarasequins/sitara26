@@ -1197,6 +1197,11 @@ function loadFromStorage(){
     nextInvNum   = data.nextInvNum   || nextInvNum;
     nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
     deduplicateShapes();
+    // Fix boolean status bug
+    orders.forEach(o=>{
+      if(o.status===true) o.status='Delivered';
+      if(o.status===false||!o.status) o.status='Pending';
+    });
     return true;
   } catch(e){ return false; }
 }
@@ -1274,6 +1279,11 @@ window.onload = function(){
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
             const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
             deduplicateShapes();
+            // Fix boolean status bug
+            orders.forEach(o=>{
+              if(o.status===true) o.status='Delivered';
+              if(o.status===false||!o.status) o.status='Pending';
+            });
             saveToBin();
             renderAll();
             setSyncStatus('saved','☁ Cloud ready');
