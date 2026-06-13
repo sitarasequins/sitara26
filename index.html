@@ -327,11 +327,15 @@ tr:hover td{background:#fafafa}
             <div class="stat"><div class="stat-label">Pending Orders</div><div class="stat-val" id="s-pending" style="color:#d97706">0</div></div>
             <div class="stat"><div class="stat-label">Parties</div><div class="stat-val" id="s-parties">0</div></div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <label style="font-size:12px;color:#888;font-weight:500">Filter by date:</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="font-size:12px;color:#888;font-weight:500">Filter:</label>
             <input type="date" id="order-date-filter" onchange="renderOrders()"
               style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
-            <button class="btn btn-sm" onclick="document.getElementById('order-date-filter').value='';renderOrders()">All</button>
+            <select id="order-party-filter" onchange="renderOrders()"
+              style="padding:5px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:180px">
+              <option value="">All Parties</option>
+            </select>
+            <button class="btn btn-sm" onclick="document.getElementById('order-date-filter').value='';document.getElementById('order-party-filter').value='';renderOrders()">✕ Clear</button>
           </div>
         </div>
         <div id="pending-orders-list"></div>
@@ -395,7 +399,11 @@ tr:hover td{background:#fafafa}
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <input type="date" id="inv-date-filter" onchange="renderInvoiceList()"
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
-            <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';renderInvoiceList()" style="font-size:11px">All</button>
+            <select id="inv-party-filter" onchange="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:170px">
+              <option value="">All Parties</option>
+            </select>
+            <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';document.getElementById('inv-party-filter').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
             <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
           </div>
         </div>
@@ -1258,8 +1266,17 @@ function buildPendingMap(){
 function renderOrders(){
   const dateFilter=(document.getElementById('order-date-filter')||{value:''}).value;
   // Filter pending orders by date if selected
+  const partyFilter=(document.getElementById('order-party-filter')||{value:''}).value;
   let filteredOrders=orders.filter(o=>o.status==='Pending');
   if(dateFilter) filteredOrders=filteredOrders.filter(o=>o.date===dateFilter);
+  if(partyFilter) filteredOrders=filteredOrders.filter(o=>o.party===partyFilter);
+  // Populate party dropdown with parties that have pending orders
+  const orderPartyEl=document.getElementById('order-party-filter');
+  if(orderPartyEl){
+    const cur=orderPartyEl.value;
+    const allP=[...new Set(orders.filter(o=>o.status==='Pending').map(o=>o.party))].sort();
+    orderPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}}>${p}</option>`).join('');
+  }
 
   const container=document.getElementById('pending-orders-list');
   const empty=document.getElementById('empty-orders');
@@ -1868,7 +1885,16 @@ function renderInvoiceList(){
     document.getElementById('si-amount').textContent='₹0';return;}
   empty.style.display='none';
   const invDateFilter=(document.getElementById('inv-date-filter')||{value:''}).value;
+  const invPartyFilter=(document.getElementById('inv-party-filter')||{value:''}).value;
   let filtInvoices=invDateFilter?invoices.filter(i=>i.date===invDateFilter):invoices;
+  if(invPartyFilter) filtInvoices=filtInvoices.filter(i=>i.party===invPartyFilter);
+  // Populate party dropdown
+  const invPartyEl=document.getElementById('inv-party-filter');
+  if(invPartyEl){
+    const cur=invPartyEl.value;
+    const allP=[...new Set(invoices.map(i=>i.party))].sort();
+    invPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}}>${p}</option>`).join('');
+  }
   const sorted=[...filtInvoices].sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
   let grand=0;
   tbody.innerHTML=sorted.map((inv,idx)=>{
