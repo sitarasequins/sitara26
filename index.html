@@ -2120,7 +2120,8 @@ function renderInvoiceList(){
 </td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
-        <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">Print</button>
+        <button class="btn btn-sm" onclick="printPOSDirect(${inv.id})" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 POS</button>
+        <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">A4</button>
         <button class="btn btn-sm" onclick="shareInvWhatsApp(${inv.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
         <button class="btn btn-sm btn-danger" onclick="delInvoice(${inv.id})">Delete</button>
       </div></td>
@@ -2780,7 +2781,7 @@ function printOrderPOS(id){
     <div style="height:20mm"></div>`;
   const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
@@ -2790,13 +2791,21 @@ function printOrderPOS(id){
 // POS PRINT
 // ============================================================
 let currentPosInvId=null;
+
+function printPOSDirect(invId){
+  currentPosInvId=invId;
+  printPOS();
+}
+
 function printPOS(){
   if(!currentPosInvId)return;
   const inv=invoices.find(x=>x.id===currentPosInvId);if(!inv)return;
   // Build POS content
   const items=inv.items||[];
   const itemsGrand=Math.round(items.reduce((s,i)=>s+(i.kg*i.price),0));
-  const grand=itemsGrand+parseFloat(inv.chargeAmt||0);
+  const posChargeAmt=parseFloat(inv.chargeAmt||0);
+  const posChargeLabel=inv.chargeLabel||'Extra';
+  const grand=itemsGrand+posChargeAmt;
   const dashes='--------------------------------';
   // Helper to get color display name with alias
   function colorDisplay(colorCode){
@@ -2825,6 +2834,7 @@ function printPOS(){
     <hr class="pos-divider">
     ${itemRows}
     <hr class="pos-divider">
+    ${posChargeAmt>0?`<div class="pos-row"><span>${posChargeLabel}</span><span>${Math.round(posChargeAmt)}</span></div>`:''}
     <hr class="pos-divider">
     <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
     <hr class="pos-divider">
@@ -2833,7 +2843,7 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
