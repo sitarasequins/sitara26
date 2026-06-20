@@ -50,7 +50,7 @@
         window.invoices = data.invoices.map(inv=>{
           const local=(window.invoices||[]).find(x=>x.id===inv.id);
           return {...inv,
-            courier: inv.courier|||(local&&local.courier)||'',
+            courier: inv.courier||(local&&local.courier)||'',
             bags: inv.bags!=null?inv.bags:(local&&local.bags!=null?local.bags:0)
           };
         });
