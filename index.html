@@ -38,6 +38,8 @@
       window.nextPaId     = data.nextPaId     || window.nextPaId;
       window.nextInvNum   = data.nextInvNum   || window.nextInvNum;
       window.nextInvoiceNum = data.nextInvoiceNum || window.nextInvoiceNum;
+      // Track Firebase order count for safety
+      window._firebaseOrderCount = (data.orders||[]).length;
       // Merge orders - preserve local changes, only update from remote if more orders
       if((data.orders||[]).length >= (window.orders||[]).length){
         window.orders = data.orders || window.orders;
@@ -1165,6 +1167,13 @@ function saveToBin(){
 
   // Save to Firebase if ready
   if(window._firebaseReady && window._firestore){
+    // Safety: never save if we have fewer orders/invoices than Firebase
+    if(window._firebaseOrderCount && orders.length < window._firebaseOrderCount){
+      console.warn('Safety block: local orders('+orders.length+') < Firebase orders('+window._firebaseOrderCount+'). Not saving.');
+      setSyncStatus('error','⚠ Save blocked - data mismatch');
+      setTimeout(()=>setSyncStatus('','☁ Cloud'),3000);
+      return;
+    }
     setSyncStatus('saving','☁ Saving...');
     const {setDoc, DATA_DOC, INV_DOC} = window._firestore;
     const payload={colors,shapes,orders,parties,invoices,
@@ -1332,6 +1341,8 @@ window.onload = function(){
             nextInvNum = data.nextInvNum || nextInvNum;
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
             const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
+            // Track Firebase order count for safety
+            window._firebaseOrderCount = (data.orders||[]).length;
             deduplicateShapes();
             normalizeColors();
             // Fix boolean status bug
