@@ -4180,21 +4180,13 @@ async function showAutoBackups(){
 
   if(!found.length){alert('No auto backups found yet.');return;}
 
-  const list=found.map((b,i)=>`${i+1}. ${b.key} — ${b.orders} orders, ${b.invoices} invoices
-   Saved: ${new Date(b.savedAt).toLocaleString()}`).join('
-
-');
-  const choice=prompt('Available backups:
-
-'+list+'
-
-Enter number to restore (or cancel):');
+  const list=found.map((b,i)=>(i+1)+'. '+b.key+' — '+b.orders+' orders, '+b.invoices+' invoices\n   Saved: '+new Date(b.savedAt).toLocaleString()).join('\n\n');
+  const choice=prompt('Available backups:\n\n'+list+'\n\nEnter number to restore (or cancel):');
   if(!choice)return;
   const idx=parseInt(choice)-1;
   if(idx<0||idx>=found.length){alert('Invalid choice.');return;}
 
-  if(!confirm('Restore from '+found[idx].key+'?
-This will replace current data.'))return;
+  if(!confirm('Restore from '+found[idx].key+'?\nThis will replace current data.'))return;
 
   const snap=await getDoc(doc(db,BACKUP_COL,found[idx].key));
   if(snap.exists()){
