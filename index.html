@@ -18,11 +18,13 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const DATA_DOC = doc(db, 'sitara26', 'appdata');
-  const INV_DOC  = doc(db, 'sitara26', 'invoices_backup');
+  const DATA_DOC    = doc(db, 'sitara26', 'appdata');
+  const INV_DOC     = doc(db, 'sitara26', 'invoices_backup');
+  const COURIER_DOC = doc(db, 'sitara26', 'courier_data');
+  const BACKUP_COL  = 'sitara26_backups';
 
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, DATA_DOC, INV_DOC };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL };
   window._firebaseReady = true;
 
   // Listen for real-time updates from other devices
@@ -406,7 +408,7 @@ tr:hover td{background:#f8faff}
           <div class="combo-wrap" style="width:100%">
             <input class="combo-input" id="if-party-input" type="text" placeholder="Type or pick party..." autocomplete="off"
               onfocus="openPartyCombo(this)"
-              oninput="openPartyCombo(this)"
+              oninput="openPartyCombo(this);window._lastSelectedParty=this.value"
               onkeydown="comboKeyDown(event,'inv-party-drop','party-combo')">
             <div class="combo-drop" id="inv-party-drop"></div>
           </div>
@@ -645,6 +647,7 @@ tr:hover td{background:#f8faff}
         <div id="admin-pw-changed" style="color:#166534;font-size:12px;display:none;margin-bottom:12px">&#10003; Password updated</div>
         <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#16a34a;margin-top:12px">Recovery</div>
         <button class="btn" onclick="recoverInvoices()" style="justify-content:center;background:#f0fdf4;border-color:#bbf7d0;color:#166534;margin-bottom:12px;width:100%">🔄 Recover Invoices from Backup</button>
+        <button class="btn" onclick="showAutoBackups()" style="justify-content:center;background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;margin-bottom:12px;width:100%">☁ Restore from Auto Backup</button>
         <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#dc2626">Danger Zone</div>
         <div style="display:flex;flex-direction:column;gap:8px">
           <button class="btn btn-danger" onclick="adminClearOrders()" style="justify-content:center">&#128465; Delete ALL orders</button>
@@ -1175,14 +1178,50 @@ function saveToBin(){
       return;
     }
     setSyncStatus('saving','☁ Saving...');
-    const {setDoc, DATA_DOC, INV_DOC} = window._firestore;
+    const {setDoc, getDoc, DATA_DOC, INV_DOC} = window._firestore;
     const payload={colors,shapes,orders,parties,invoices,
       nextOid,nextPaId,nextInvNum,nextInvoiceNum,
       updatedAt: new Date().toISOString()};
     window._skipNextSnapshot = true;
-    // Save main data
-    setDoc(DATA_DOC, payload)
-      .then(()=>{
+    // Before saving, fetch current Firebase data and preserve courier/bags
+    getDoc(DATA_DOC).then(snap=>{
+      if(snap.exists()){
+        const firebaseData = snap.data();
+        const firebaseInvMap = {};
+        (firebaseData.invoices||[]).forEach(inv=>firebaseInvMap[inv.id]=inv);
+        // Merge: preserve courier/bags from Firebase if local doesn't have them
+        payload.invoices = payload.invoices.map(inv=>{
+          const fb = firebaseInvMap[inv.id];
+          if(fb){
+            return {
+              ...inv,
+              courier: inv.courier || fb.courier || '',
+              bags: inv.bags!=null&&inv.bags!==0 ? inv.bags : (fb.bags||0)
+            };
+          }
+          return inv;
+        });
+        // Also add any invoices that exist in Firebase but not locally (prevents losing invoices on sync)
+        const localInvIds = new Set(payload.invoices.map(i=>i.id));
+        (firebaseData.invoices||[]).forEach(fbInv=>{
+          if(!localInvIds.has(fbInv.id)){
+            payload.invoices.push(fbInv);
+          }
+        });
+        // Sort by serial
+        payload.invoices.sort((a,b)=>a.serial-b.serial);
+        // Also preserve orders from Firebase not in local
+        const firebaseOrdMap = {};
+        (firebaseData.orders||[]).forEach(o=>firebaseOrdMap[o.id]=o);
+        const localOrdIds = new Set(payload.orders.map(o=>o.id));
+        (firebaseData.orders||[]).forEach(fbOrd=>{
+          if(!localOrdIds.has(fbOrd.id)){
+            payload.orders.push(fbOrd);
+          }
+        });
+      }
+      return setDoc(DATA_DOC, payload);
+    }).then(()=>{
         setSyncStatus('saved','☁ Saved');
         setTimeout(()=>setSyncStatus('','☁ Cloud'), 2000);
         showSaveToast('Saved to cloud');
@@ -1274,13 +1313,58 @@ function saveAll(){
 // ============================================================
 // APP START
 // ============================================================
+function getBackupSlot(){
+  const now = new Date();
+  const h = now.getHours();
+  // Morning: before 14:00, Afternoon: 14:00-19:00, Evening: 19:00+
+  if(h < 14) return 'morning';
+  if(h < 19) return 'afternoon';
+  return 'evening';
+}
+
+function autoBackup(){
+  if(!window._firebaseReady || !window._firestore) return;
+  const {db, doc, setDoc, getDoc, BACKUP_COL} = window._firestore;
+  if(!BACKUP_COL) return;
+
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const slot = getBackupSlot();
+  const backupKey = today + '_' + slot; // e.g. 2026-06-22_morning
+  const lsKey = 'sitara_backup_done_' + backupKey;
+
+  // Check if already backed up this slot today
+  if(localStorage.getItem(lsKey)) return;
+
+  // Wait for data to load first
+  setTimeout(()=>{
+    if(!invoices.length && !orders.length) return; // no data yet
+    const backupDoc = doc(db, BACKUP_COL, backupKey);
+    const payload = {
+      colors, shapes, orders, parties, invoices,
+      nextOid, nextPaId, nextInvNum, nextInvoiceNum,
+      savedAt: new Date().toISOString(),
+      slot: slot,
+      date: today
+    };
+    setDoc(backupDoc, payload)
+      .then(()=>{
+        localStorage.setItem(lsKey, '1');
+        console.log('Auto backup saved:', backupKey);
+        showSaveToast('Auto backup saved (' + slot + ')');
+      })
+      .catch(e=>console.error('Auto backup failed:',e));
+  }, 5000); // Wait 5 seconds for Firebase data to load
+}
+
 function startApp(){
   document.getElementById('app').style.display='block';
   renderAll();
   setTimeout(()=>{ resetOrderForm(); resetInvForm(); }, 100);
-  // Re-render after Firebase loads (in case snapshot fires before startApp)
+  // Re-render after Firebase loads
   setTimeout(()=>{ if(window.renderAll) window.renderAll(); }, 2000);
   setTimeout(()=>{ if(window.renderAll) window.renderAll(); }, 4000);
+  // Auto backup
+  setTimeout(autoBackup, 6000);
 }
 
 function updateOnlineDot(){
@@ -1356,6 +1440,20 @@ window.onload = function(){
             });
             saveToBin();
             renderAll();
+            // Load courier data from separate protected doc
+            if(window._firestore && window._firestore.COURIER_DOC){
+              const {getDoc:gd2, COURIER_DOC} = window._firestore;
+              gd2(COURIER_DOC).then(csnap=>{
+                if(csnap.exists()){
+                  const courierData = csnap.data();
+                  invoices.forEach(inv=>{
+                    const c = courierData[String(inv.serial)];
+                    if(c && !inv.courier) inv.courier = c;
+                  });
+                  renderInvoiceList();
+                }
+              }).catch(e=>console.error('Courier load failed:',e));
+            }
             setSyncStatus('saved','☁ Cloud ready');
             setTimeout(()=>setSyncStatus('','☁ Cloud'),2000);
           }
@@ -2113,6 +2211,7 @@ function pickPartyCombo(idx,e){
   const val=drop._data?drop._data[idx].value:'';
   const inp=document.getElementById('if-party-input');
   if(inp)inp.value=val;
+  window._lastSelectedParty=val;
   drop.classList.remove('open');
 }
 
@@ -2131,6 +2230,7 @@ function resetInvForm(){
   document.getElementById('save-inv-btn').textContent='Save invoice';
   const pInput=document.getElementById('if-party-input');
   if(pInput){pInput.value='';pInput.disabled=false;}
+  window._lastSelectedParty='';
   document.getElementById('if-date').value=today();
   document.getElementById('inv-items-container').innerHTML='';
   const rem=document.getElementById('if-remarks');
@@ -2177,7 +2277,9 @@ function loadInvIntoForm(invId){
 }
 function saveInvoice(){
   const pInput=document.getElementById('if-party-input');
-  const party=(pInput?pInput.value:'').trim();
+  // Also check hidden backup field in case combo cleared
+  let party=(pInput?pInput.value:'').trim();
+  if(!party && window._lastSelectedParty) party=window._lastSelectedParty;
   const date=document.getElementById('if-date').value;
   const items=getInvItems();
   const remarks=(document.getElementById('if-remarks').value||'').trim();
@@ -2211,6 +2313,16 @@ function saveCourier(id,val){
     inv.courier=val.trim();
     saveAll();
     renderInvoiceList();
+    // Also save courier to separate Firebase doc for protection
+    if(window._firebaseReady && window._firestore && window._firestore.COURIER_DOC){
+      const {setDoc, getDoc, COURIER_DOC} = window._firestore;
+      getDoc(COURIER_DOC).then(snap=>{
+        const existing = snap.exists() ? snap.data() : {};
+        existing[String(inv.serial)] = inv.courier;
+        return setDoc(COURIER_DOC, existing);
+      }).then(()=>showSaveToast('Courier saved'))
+        .catch(e=>console.error('Courier save failed:',e));
+    }
   }
 }
 function delInvoice(invId){
@@ -4035,6 +4147,73 @@ function sharePendingWhatsApp(mode){
 // ============================================================
 // INVOICE RECOVERY
 // ============================================================
+async function showAutoBackups(){
+  if(!window._firebaseReady || !window._firestore){alert('Firebase not connected.');return;}
+  const {db, doc, getDoc, BACKUP_COL} = window._firestore;
+  if(!BACKUP_COL){alert('Backup not configured.');return;}
+
+  // List last 10 backup slots
+  const slots=[];
+  for(let d=0;d<7;d++){
+    const date=new Date();
+    date.setDate(date.getDate()-d);
+    const dateStr=date.toISOString().split('T')[0];
+    ['evening','afternoon','morning'].forEach(slot=>{
+      slots.push(dateStr+'_'+slot);
+    });
+  }
+
+  // Check which backups exist
+  setSyncStatus('saving','☁ Loading backups...');
+  const found=[];
+  for(const key of slots.slice(0,15)){
+    try{
+      const snap=await getDoc(doc(db,BACKUP_COL,key));
+      if(snap.exists()){
+        const data=snap.data();
+        found.push({key, savedAt:data.savedAt, orders:(data.orders||[]).length, invoices:(data.invoices||[]).length});
+      }
+    }catch(e){}
+  }
+  setSyncStatus('','☁ Cloud');
+
+  if(!found.length){alert('No auto backups found yet.');return;}
+
+  const list=found.map((b,i)=>`${i+1}. ${b.key} — ${b.orders} orders, ${b.invoices} invoices
+   Saved: ${new Date(b.savedAt).toLocaleString()}`).join('
+
+');
+  const choice=prompt('Available backups:
+
+'+list+'
+
+Enter number to restore (or cancel):');
+  if(!choice)return;
+  const idx=parseInt(choice)-1;
+  if(idx<0||idx>=found.length){alert('Invalid choice.');return;}
+
+  if(!confirm('Restore from '+found[idx].key+'?
+This will replace current data.'))return;
+
+  const snap=await getDoc(doc(db,BACKUP_COL,found[idx].key));
+  if(snap.exists()){
+    const data=snap.data();
+    colors=data.colors||colors;
+    shapes=data.shapes||shapes;
+    orders=data.orders||orders;
+    parties=data.parties||parties;
+    invoices=data.invoices||invoices;
+    nextOid=data.nextOid||nextOid;
+    nextPaId=data.nextPaId||nextPaId;
+    nextInvNum=data.nextInvNum||nextInvNum;
+    nextInvoiceNum=data.nextInvoiceNum||nextInvoiceNum;
+    saveToBin();
+    renderAll();
+    closeModal('modal-admin');
+    alert('✅ Restored from '+found[idx].key+'!');
+  }
+}
+
 async function recoverInvoices(){
   let recovered = false;
 
