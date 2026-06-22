@@ -408,7 +408,8 @@ tr:hover td{background:#f8faff}
           <div class="combo-wrap" style="width:100%">
             <input class="combo-input" id="if-party-input" type="text" placeholder="Type or pick party..." autocomplete="off"
               onfocus="openPartyCombo(this)"
-              oninput="openPartyCombo(this);window._lastSelectedParty=this.value"
+              oninput="openPartyCombo(this)"
+              onblur="if(this.value)window._lastSelectedParty=this.value"
               onkeydown="comboKeyDown(event,'inv-party-drop','party-combo')">
             <div class="combo-drop" id="inv-party-drop"></div>
           </div>
