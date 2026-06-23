@@ -2938,17 +2938,21 @@ function printPendingPOS(mode){
   let posContent='';
 
   if(mode==='item'){
-    // ── Item-wise POS ──────────────────────────────────────────
+    // ── Item-wise POS — FIXED: per-party nets, not global pool ─
     const ordByItem={};
     orders.filter(o=>o.status==='Pending').forEach(o=>{
-      o.items.forEach(i=>{
+      o.items.filter(i=>!i.cancelled).forEach(i=>{
         const k=i.color+'||'+i.shape;
-        if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,totalKg:0};
-        ordByItem[k].totalKg+=parseFloat(i.kg||0);
+        if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,parties:{}};
+        ordByItem[k].parties[o.party]=(ordByItem[k].parties[o.party]||0)+parseFloat(i.kg||0);
       });
     });
     const items=Object.values(ordByItem).map(v=>{
-      const net=v.totalKg-(invByItem[v.color+'||'+v.shape]||0);
+      let net=0;
+      Object.entries(v.parties).forEach(([party,ordKg])=>{
+        const invKg=(invByPartyItem[party]&&invByPartyItem[party][v.color+'||'+v.shape])||0;
+        net+=Math.max(0,ordKg-invKg);
+      });
       return net>=1.0?{color:v.color,shape:v.shape,net}:null;
     }).filter(Boolean).sort(numSort);
     const totalNet=items.reduce((s,i)=>s+i.net,0);
