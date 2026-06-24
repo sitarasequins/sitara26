@@ -68,6 +68,8 @@
       if(window.invoices) window.invoices.forEach(inv=>{
         inv.items=(inv.items||[]).map(i=>({...i,color:(i.color||'').toUpperCase(),shape:(i.shape||'').toLowerCase()}));
       });
+      // Sync window vars into local let vars so app functions see live updates
+      if(window._syncToLocal) window._syncToLocal();
       if(window.renderAll) window.renderAll();
       window.setSyncStatus('saved','☁ Synced');
       setTimeout(()=>window.setSyncStatus('','☁ Cloud'), 2000);
@@ -1111,6 +1113,20 @@ let nextOid=1, nextPaId=83, nextInvNum=1, nextInvoiceNum=590;
 // ─────────────────────────────────────────────────────────────────────────
 
 let filt='all', editOid=null, editInvId=null, ovOid=null, pdPartyId=null;
+
+// Bridge: copies window.X vars (set by Firebase module) into local let vars
+// Called by the snapshot listener so renderAll() sees live updates
+window._syncToLocal = function(){
+  if(window.colors!==undefined) colors=window.colors;
+  if(window.shapes!==undefined) shapes=window.shapes;
+  if(window.parties!==undefined) parties=window.parties;
+  if(window.orders!==undefined) orders=window.orders;
+  if(window.invoices!==undefined) invoices=window.invoices;
+  if(window.nextOid!==undefined) nextOid=window.nextOid;
+  if(window.nextPaId!==undefined) nextPaId=window.nextPaId;
+  if(window.nextInvNum!==undefined) nextInvNum=window.nextInvNum;
+  if(window.nextInvoiceNum!==undefined) nextInvoiceNum=window.nextInvoiceNum;
+};
 let prodSort='qty-desc';
 let orderSort='date';
 let invSort='date';
@@ -1425,7 +1441,6 @@ window.onload = function(){
             nextPaId = data.nextPaId || nextPaId;
             nextInvNum = data.nextInvNum || nextInvNum;
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
-            const needsUpdate = colors.length>(data.colors||[]).length || shapes.length>(data.shapes||[]).length || parties.length>(data.parties||[]).length;
             // Track Firebase order count for safety
             window._firebaseOrderCount = (data.orders||[]).length;
             deduplicateShapes();
@@ -1564,7 +1579,7 @@ function renderOrders(){
   if(orderPartyEl){
     const cur=orderPartyEl.value;
     const allP=[...new Set(orders.filter(o=>o.status==='Pending').map(o=>o.party))].sort();
-    orderPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}}>${p}</option>`).join('');
+    orderPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
   }
 
   const container=document.getElementById('pending-orders-list');
@@ -2352,7 +2367,7 @@ function renderInvoiceList(){
   if(invPartyEl){
     const cur=invPartyEl.value;
     const allP=[...new Set(invoices.map(i=>i.party))].sort();
-    invPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}}>${p}</option>`).join('');
+    invPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
   }
   let sorted=[...filtInvoices];
   if(invSort==='date') sorted.sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
@@ -2804,13 +2819,7 @@ function renderProduction(){
       const totalNet=itemEntries.reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
       const datesStr=data.dates.sort().join(', ');
       // Get order ids for this party
-      const partyOrderIds=orders.filter(o=>o.status==='Pending'&&o.party===party).map(o=>o.id);
-      const orderBtns=orders.filter(o=>o.status==='Pending'&&o.party===party).map(o=>
-        `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f8f8f8">
-          <span style="font-size:12px;color:#666">${invLabel(o.invNum)} · ${fmtDate(o.date)}</span>
-          <button onclick="cancelOrderPrompt(${o.id})" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1.5px solid #fed7aa;background:#fff7ed;color:#c2410c;cursor:pointer;font-weight:600">✕ Cancel</button>
-        </div>`
-      ).join('');
+
       return `<div class="party-pending-card" style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div>
@@ -2853,23 +2862,31 @@ function exportPendingXLS(){
   const itemRows=[['Color','Shape','Ordered (kg)','Invoiced (kg)','Net Due (kg)','Parties','Dates']];
   const ordByItem={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
-    o.items.forEach(i=>{
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
       const k=i.color+'||'+i.shape;
-      if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,totalKg:0,parties:{},dates:[]};
-      ordByItem[k].totalKg+=parseFloat(i.kg||0);
+      if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,parties:{},dates:[]};
       ordByItem[k].parties[o.party]=(ordByItem[k].parties[o.party]||0)+parseFloat(i.kg||0);
       if(!ordByItem[k].dates.includes(o.date))ordByItem[k].dates.push(o.date);
     });
   });
-  const invByItem={};
-  invoices.forEach(inv=>(inv.items||[]).forEach(i=>{
-    const k=i.color+'||'+i.shape;
-    invByItem[k]=(invByItem[k]||0)+parseFloat(i.kg||0);
-  }));
+  const xlsInvByPartyItem={};
+  invoices.forEach(inv=>{
+    if(!xlsInvByPartyItem[inv.party])xlsInvByPartyItem[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      xlsInvByPartyItem[inv.party][k]=(xlsInvByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
+    });
+  });
   Object.values(ordByItem).forEach(v=>{
-    const invKg=invByItem[v.color+'||'+v.shape]||0;
-    const net=v.totalKg-invKg;
-    if(net>=1.0) itemRows.push([v.color,v.shape,v.totalKg,invKg,net,
+    let net=0, totalOrd=0, totalInv=0;
+    Object.entries(v.parties).forEach(([party,ordKg])=>{
+      const invKg=(xlsInvByPartyItem[party]&&xlsInvByPartyItem[party][v.color+'||'+v.shape])||0;
+      const pNet=Math.max(0,ordKg-invKg);
+      if(pNet>=1.0) net+=pNet;
+      totalOrd+=ordKg;
+      totalInv+=Math.min(invKg,ordKg);
+    });
+    if(net>=1.0) itemRows.push([v.color,v.shape,+totalOrd.toFixed(2),+totalInv.toFixed(2),+net.toFixed(2),
       Object.entries(v.parties).map(([p,kg])=>p+':'+kg+'kg').join(', '),
       v.dates.sort().join(', ')]);
   });
@@ -3289,7 +3306,7 @@ function importFromXLS(input){
       document.getElementById('import-body').innerHTML=
         `<div style="margin-bottom:10px;font-weight:600;color:#166534">File: ${file.name}</div>`+
         log.map(l=>`<div style="padding:4px 0;border-bottom:1px solid #f0f0f0">${l}</div>`).join('')+
-        `<div style="margin-top:12px;font-size:12px;color:#888">All data replaced. Changes ${BIN_ID?'saved to cloud':'saved locally'}.</div>`;
+        `<div style="margin-top:12px;font-size:12px;color:#888">All data replaced. Changes saved to cloud.</div>`;
       document.getElementById('modal-import').classList.add('open');
 
     } catch(err){
@@ -4108,13 +4125,18 @@ function sharePendingWhatsApp(mode){
 
   if(mode==='item'){
     const ordByItem={};
-    orders.filter(o=>o.status==='Pending').forEach(o=>o.items.forEach(i=>{
+    orders.filter(o=>o.status==='Pending').forEach(o=>o.items.filter(i=>!i.cancelled).forEach(i=>{
       const k=i.color+'||'+i.shape;
-      if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,totalKg:0};
-      ordByItem[k].totalKg+=parseFloat(i.kg||0);
+      if(!ordByItem[k])ordByItem[k]={color:i.color,shape:i.shape,parties:{}};
+      ordByItem[k].parties[o.party]=(ordByItem[k].parties[o.party]||0)+parseFloat(i.kg||0);
     }));
     const items=Object.values(ordByItem).map(v=>{
-      const net=v.totalKg-(invByItem[v.color+'||'+v.shape]||0);
+      let net=0;
+      Object.entries(v.parties).forEach(([party,ordKg])=>{
+        const invKg=(invByPartyItem[party]&&invByPartyItem[party][v.color+'||'+v.shape])||0;
+        const pNet=Math.max(0,ordKg-invKg);
+        if(pNet>=1.0) net+=pNet;
+      });
       return net>=1.0?{color:v.color,shape:v.shape,net}:null;
     }).filter(Boolean).sort(numSort);
     const totalNet=items.reduce((s,i)=>s+i.net,0);
@@ -4349,6 +4371,5 @@ function adminResetAll(){
 
 
     <div style="font-size:12px;color:#888" id="mob-sync"></div>
-  </div>
 
 </body></html>
