@@ -3135,7 +3135,7 @@ function printPOS(){
     <hr class="pos-divider">
     ${posChargeAmt>0?`<div class="pos-row"><span>${posChargeLabel}</span><span>${Math.round(posChargeAmt)}</span></div>`:''}
     <hr class="pos-divider">
-    <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
+    <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.bags?' / '+inv.bags+' BAG':''}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
     <hr class="pos-divider">
     <div style="height:20mm"></div>
   `;
@@ -3369,21 +3369,15 @@ function previewDispatch(){
   }).join('');
   document.getElementById('dr-preview').innerHTML=`
     <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="border-bottom:2px solid #000;border-top:2px solid #000">
-        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Date</th>
-        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Inv#</th>
-        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Party</th>
-        <th style="padding:5px 8px;text-align:center;font-weight:600;font-size:11px">WT</th>
-        <th style="padding:5px 8px;text-align:center;font-weight:600;font-size:11px">Bags</th>
-        <th style="padding:5px 8px;text-align:left;font-weight:600;font-size:11px">Remarks</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr style="border-top:2px solid #000">
-        <td colspan="3" style="padding:5px 8px;font-weight:700;font-size:12px">Total — ${data.length} invoices</td>
-        <td style="padding:5px 8px;text-align:center;font-weight:700">${totalWt.toFixed(2)}</td>
-        <td style="padding:5px 8px;text-align:center;font-weight:700">${totalBags||''}</td>
-        <td></td>
-      </tr></tfoot>
+      <tbody>
+        ${rows}
+        <tr style="border-top:2px solid #000">
+          <td colspan="2" style="padding:5px 8px;font-weight:700;font-size:12px">Total — ${data.length}</td>
+          <td style="padding:5px 8px;text-align:center;font-weight:700">${totalWt.toFixed(2)}</td>
+          <td style="padding:5px 8px;text-align:center;font-weight:700">${totalBags||''}</td>
+          <td></td>
+        </tr>
+      </tbody>
     </table>`;
 }
 
@@ -3397,37 +3391,29 @@ function printDispatch(){
   const totalBags=data.reduce((s,inv)=>s+(parseInt(inv.bags||0)),0);
   const rows=data.map(inv=>{
     const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    return `<tr style="border-bottom:1px solid #bbb;height:30mm">
-      <td style="padding:0 8px;vertical-align:middle;font-size:13px">${fmtDate(inv.date)}</td>
-      <td style="padding:0 8px;vertical-align:middle;font-size:13px">${String(inv.serial).padStart(4,'0')}</td>
-      <td style="padding:0 8px;vertical-align:middle;font-size:13px;font-weight:600">${inv.party}</td>
-      <td style="padding:0 8px;vertical-align:middle;text-align:center;font-size:13px">${kg.toFixed(2)}</td>
-      <td style="padding:0 8px;vertical-align:middle;text-align:center;font-size:13px">${inv.bags||''}</td>
-      <td style="padding:0 8px;vertical-align:middle;font-size:13px">${inv.remarks||''}</td>
-    </tr>`;
+    return `<tr style="border-bottom:1px solid #ddd">
+        <tr style="border-bottom:1px solid #bbb">
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:10%">${fmtDate(inv.date)}</td>
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;font-weight:600;width:42%">${inv.party}</td>
+          <td style="padding:4px 8px;vertical-align:middle;text-align:center;font-size:13px;width:13%">${kg.toFixed(2)}</td>
+          <td style="padding:4px 8px;vertical-align:middle;text-align:center;font-size:13px;width:10%">${inv.bags||''}</td>
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:25%">${inv.remarks||''}</td>
+        </tr>`;
   }).join('');
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-      body{font-family:Arial,sans-serif;margin:0;padding:15mm;box-sizing:border-box}
+      body{font-family:Arial,sans-serif;margin:0;padding:10mm;box-sizing:border-box}
       table{width:100%;border-collapse:collapse;table-layout:fixed}
-      @page{size:A4;margin:15mm}
+      @page{size:A4;margin:10mm}
     </style>
   </head><body>
     <table>
       <tbody>
-        <tr style="border-top:2px solid #000;border-bottom:2px solid #000">
-          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:10%">Date</td>
-          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:10%">Inv</td>
-          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:36%">Party Name</td>
-          <td style="padding:6px 8px;font-weight:700;font-size:13px;text-align:center;width:12%">WT (kg)</td>
-          <td style="padding:6px 8px;font-weight:700;font-size:13px;text-align:center;width:10%">Bags</td>
-          <td style="padding:6px 8px;font-weight:700;font-size:13px;width:22%">Remarks</td>
-        </tr>
         ${rows}
         <tr style="border-top:2px solid #000">
-          <td colspan="3" style="padding:8px;font-weight:700;font-size:13px">Total &nbsp; ${data.length} invoices</td>
-          <td style="padding:8px;text-align:center;font-weight:700;font-size:14px">${totalWt.toFixed(2)}</td>
-          <td style="padding:8px;text-align:center;font-weight:700;font-size:14px">${totalBags||''}</td>
+          <td colspan="2" style="padding:5px 8px;font-weight:700;font-size:13px">Total &nbsp; ${data.length}</td>
+          <td style="padding:5px 8px;text-align:center;font-weight:700;font-size:14px">${totalWt.toFixed(2)}</td>
+          <td style="padding:5px 8px;text-align:center;font-weight:700;font-size:14px">${totalBags||''}</td>
           <td></td>
         </tr>
       </tbody>
