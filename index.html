@@ -2739,8 +2739,6 @@ function renderProduction(){
       rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,parties:pendingParties,dates:v.dates});
     }
   });
-  // add invoiced-only items to total
-  Object.entries(invByItem).forEach(([key,invKg])=>{if(!ordByItem[key])totalInvKg+=invKg;});
 
   const summary=document.getElementById('prod-summary');
   const emptyEl=document.getElementById('empty-prod');
