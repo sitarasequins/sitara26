@@ -1511,6 +1511,33 @@ function setF(f,el){
 }
 
 // Build net-pending map: for each party+color+shape, orderedKg minus invoicedKg (across ALL dates)
+// Build invByPartyItem only counting invoices on/after the earliest pending order date
+// for each party+item. This prevents old completed cycles from affecting new orders.
+function buildDateAwareInvByPartyItem(){
+  // First get earliest pending order date per party+item
+  const earliestDate={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
+      const k=o.party+'||'+i.color+'||'+i.shape;
+      if(!earliestDate[k]||o.date<earliestDate[k]) earliestDate[k]=o.date;
+    });
+  });
+  // Build invoice map only counting invoices on/after earliest date
+  const invByPartyItem={};
+  invoices.forEach(inv=>{
+    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
+    (inv.items||[]).forEach(i=>{
+      const k=inv.party+'||'+i.color+'||'+i.shape;
+      const minDate=earliestDate[k];
+      if(minDate && inv.date>=minDate){
+        const key=i.color+'||'+i.shape;
+        invByPartyItem[inv.party][key]=(invByPartyItem[inv.party][key]||0)+parseFloat(i.kg||0);
+      }
+    });
+  });
+  return invByPartyItem;
+}
+
 function buildPendingMap(){
   // ordered[party][color||shape] = totalKg from all pending orders
   const ordered={};
@@ -1518,20 +1545,23 @@ function buildPendingMap(){
     if(!ordered[o.party])ordered[o.party]={};
     o.items.forEach(i=>{
       const k=i.color+'||'+i.shape;
-      if(!ordered[o.party][k])ordered[o.party][k]={ordKg:0,orderRefs:[],price:i.price};
+      if(!ordered[o.party][k])ordered[o.party][k]={ordKg:0,orderRefs:[],price:i.price,earliestDate:o.date};
       ordered[o.party][k].ordKg+=parseFloat(i.kg||0);
       ordered[o.party][k].orderRefs.push({id:o.id,invNum:o.invNum,date:o.date,kg:parseFloat(i.kg||0)});
-      // use latest price seen
       if(i.price>0)ordered[o.party][k].price=i.price;
+      if(o.date<ordered[o.party][k].earliestDate) ordered[o.party][k].earliestDate=o.date;
     });
   });
-  // invoiced[party][color||shape] = totalKg invoiced
+  // invoiced[party][color||shape] = totalKg invoiced ON/AFTER earliest pending order date
   const invoiced={};
   invoices.forEach(inv=>{
     if(!invoiced[inv.party])invoiced[inv.party]={};
     (inv.items||[]).forEach(i=>{
       const k=i.color+'||'+i.shape;
-      invoiced[inv.party][k]=(invoiced[inv.party][k]||0)+parseFloat(i.kg||0);
+      const minDate=ordered[inv.party]&&ordered[inv.party][k]&&ordered[inv.party][k].earliestDate;
+      if(minDate && inv.date>=minDate){
+        invoiced[inv.party][k]=(invoiced[inv.party][k]||0)+parseFloat(i.kg||0);
+      }
     });
   });
   // net
@@ -2653,53 +2683,53 @@ function renderProduction(){
   const search=(document.getElementById('prod-search')||{value:''}).value.trim().toLowerCase();
 
   // ── Build net-pending across ALL pending orders (all dates) ──
-  // ordered[color||shape] = {totalKg, parties:{name->kg}, dates:[]}
+  // ordered[color||shape] = {totalKg, parties:{name->{kg, earliestDate}}, dates:[]}
   const ordByItem={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
     o.items.filter(i=>!i.cancelled).forEach(i=>{
       const key=i.color+'||'+i.shape;
       if(!ordByItem[key])ordByItem[key]={totalKg:0,parties:{},dates:[]};
       ordByItem[key].totalKg+=parseFloat(i.kg||0);
-      ordByItem[key].parties[o.party]=(ordByItem[key].parties[o.party]||0)+parseFloat(i.kg||0);
+      if(!ordByItem[key].parties[o.party])
+        ordByItem[key].parties[o.party]={kg:0,earliestDate:o.date};
+      ordByItem[key].parties[o.party].kg+=parseFloat(i.kg||0);
+      // Track earliest pending order date for this party+item
+      if(o.date < ordByItem[key].parties[o.party].earliestDate)
+        ordByItem[key].parties[o.party].earliestDate=o.date;
       if(!ordByItem[key].dates.includes(o.date)) ordByItem[key].dates.push(o.date);
     });
   });
 
-  // invoiced[color||shape] = totalKg invoiced (ALL invoices, ALL dates)
-  const invByItem={};
-  invoices.forEach(inv=>{
-    (inv.items||[]).forEach(i=>{
-      const key=i.color+'||'+i.shape;
-      invByItem[key]=(invByItem[key]||0)+parseFloat(i.kg||0);
-    });
-  });
-
-  // Also build per-party invoice map for party-wise view
+  // Build per-party invoice map — only count invoices on/after earliest pending order date
+  // This prevents old completed cycles from reducing new order pending quantities
   const invByPartyItem={};
   invoices.forEach(inv=>{
     if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
     (inv.items||[]).forEach(i=>{
       const key=i.color+'||'+i.shape;
-      invByPartyItem[inv.party][key]=(invByPartyItem[inv.party][key]||0)+parseFloat(i.kg||0);
+      // Only count this invoice if it's on/after the earliest pending order date for this party+item
+      const partyData=ordByItem[key]&&ordByItem[key].parties[inv.party];
+      if(partyData && inv.date >= partyData.earliestDate){
+        invByPartyItem[inv.party][key]=(invByPartyItem[inv.party][key]||0)+parseFloat(i.kg||0);
+      }
     });
   });
 
   // ── Build raw item cards ──────────────────────────────────────
-  // Correct approach: net per item = SUM of per-party nets (each capped at 0)
-  // This prevents over-invoiced parties from reducing other parties' pending
   const rawCards=[];
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
     const pendingParties={};
     let itemNet=0;
     let itemInvKg=0;
-    Object.entries(v.parties).forEach(([party,ordKg])=>{
+    Object.entries(v.parties).forEach(([party,pData])=>{
+      const ordKg=pData.kg;
       const pInvKg=(invByPartyItem[party]&&invByPartyItem[party][key])||0;
-      const pNet=Math.max(0, ordKg-pInvKg); // cap at 0 — no negative
-      itemInvKg+=Math.min(pInvKg, ordKg);   // only count invoiced up to ordered
+      const pNet=Math.max(0, ordKg-pInvKg);
+      itemInvKg+=Math.min(pInvKg, ordKg);
       itemNet+=pNet;
       if(pNet>=1.0) pendingParties[party]=pNet;
-      else itemNet-=pNet; // treat <1kg as complete, remove from net
+      else itemNet-=pNet;
     });
     totalOrderKg+=v.totalKg;
     totalInvKg+=itemInvKg;
@@ -2769,16 +2799,25 @@ function renderProduction(){
       if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
       o.items.forEach(i=>{
         const key=i.color+'||'+i.shape;
-        if(!partyMap[o.party].items[key])partyMap[o.party].items[key]={ordKg:0,invKg:0,color:i.color,shape:i.shape};
+        if(!partyMap[o.party].items[key])partyMap[o.party].items[key]={ordKg:0,invKg:0,color:i.color,shape:i.shape,earliestDate:o.date};
         partyMap[o.party].items[key].ordKg+=parseFloat(i.kg||0);
+        // Track earliest pending order date for this party+item
+        if(o.date < partyMap[o.party].items[key].earliestDate)
+          partyMap[o.party].items[key].earliestDate=o.date;
       });
       if(!partyMap[o.party].dates.includes(o.date))partyMap[o.party].dates.push(o.date);
     });
-    // subtract invoiced per party
+    // subtract invoiced per party — only invoices on/after earliest pending order date
     Object.keys(partyMap).forEach(party=>{
-      const pi=invByPartyItem[party]||{};
       Object.keys(partyMap[party].items).forEach(key=>{
-        partyMap[party].items[key].invKg=pi[key]||0;
+        const it=partyMap[party].items[key];
+        const relevantInvKg=invoices
+          .filter(inv=>inv.party===party && inv.date>=it.earliestDate)
+          .reduce((s,inv)=>{
+            const found=(inv.items||[]).find(i=>i.color+'||'+i.shape===key);
+            return s+(found?parseFloat(found.kg||0):0);
+          },0);
+        it.invKg=relevantInvKg;
       });
     });
 
@@ -2869,14 +2908,7 @@ function exportPendingXLS(){
       if(!ordByItem[k].dates.includes(o.date))ordByItem[k].dates.push(o.date);
     });
   });
-  const xlsInvByPartyItem={};
-  invoices.forEach(inv=>{
-    if(!xlsInvByPartyItem[inv.party])xlsInvByPartyItem[inv.party]={};
-    (inv.items||[]).forEach(i=>{
-      const k=i.color+'||'+i.shape;
-      xlsInvByPartyItem[inv.party][k]=(xlsInvByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
-    });
-  });
+  const xlsInvByPartyItem=buildDateAwareInvByPartyItem();
   Object.values(ordByItem).forEach(v=>{
     let net=0, totalOrd=0, totalInv=0;
     Object.entries(v.parties).forEach(([party,ordKg])=>{
@@ -2894,14 +2926,7 @@ function exportPendingXLS(){
 
   // ── Party-wise sheet ──
   const partyRows=[['Party','Color','Shape','Ordered (kg)','Invoiced (kg)','Net Due (kg)','Order Dates']];
-  const invByPartyItem={};
-  invoices.forEach(inv=>{
-    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
-    (inv.items||[]).forEach(i=>{
-      const k=i.color+'||'+i.shape;
-      invByPartyItem[inv.party][k]=(invByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
-    });
-  });
+  const invByPartyItem=buildDateAwareInvByPartyItem();
   const partyMap={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
     if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
@@ -2930,17 +2955,8 @@ function exportPendingXLS(){
 function printPendingPOS(mode){
   mode=mode||'item';
 
-  // Build invoice maps
-  const invByItem={};
-  const invByPartyItem={};
-  invoices.forEach(inv=>{
-    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
-    (inv.items||[]).forEach(i=>{
-      const k=i.color+'||'+i.shape;
-      invByItem[k]=(invByItem[k]||0)+parseFloat(i.kg||0);
-      invByPartyItem[inv.party][k]=(invByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
-    });
-  });
+  // Build date-aware invoice maps (only count invoices on/after earliest pending order date)
+  const invByPartyItem=buildDateAwareInvByPartyItem();
 
   // Numeric sort helper
   function extractNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
@@ -4087,16 +4103,7 @@ function shareReportWhatsApp(){
 
 function sharePendingWhatsApp(mode){
   mode=mode||'item';
-  const invByItem={};
-  const invByPartyItem={};
-  invoices.forEach(inv=>{
-    if(!invByPartyItem[inv.party])invByPartyItem[inv.party]={};
-    (inv.items||[]).forEach(i=>{
-      const k=i.color+'||'+i.shape;
-      invByItem[k]=(invByItem[k]||0)+parseFloat(i.kg||0);
-      invByPartyItem[inv.party][k]=(invByPartyItem[inv.party][k]||0)+parseFloat(i.kg||0);
-    });
-  });
+  const invByPartyItem=buildDateAwareInvByPartyItem();
   function extractNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
   function extractPrefix(s){ return s.replace(/\d+.*$/,''); }
   function numSort(a,b){
