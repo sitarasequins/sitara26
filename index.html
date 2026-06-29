@@ -30,8 +30,9 @@
   // Listen for real-time updates from other devices
   onSnapshot(DATA_DOC, (snap) => {
     if(!snap.exists()) return;
-    if(window._skipNextSnapshot){ window._skipNextSnapshot=false; return; }
     const data = snap.data();
+    // Skip if this snapshot is from our own recent save (within last 3 seconds)
+    if(window._lastSaveTime && (Date.now() - window._lastSaveTime) < 3000) return;
     if(data){
       window.colors       = data.colors       || window.colors;
       window.shapes       = data.shapes       || window.shapes;
@@ -43,21 +44,34 @@
       // Track Firebase order count for safety
       window._firebaseOrderCount = (data.orders||[]).length;
       // Merge orders - preserve local changes, only update from remote if more orders
-      if((data.orders||[]).length >= (window.orders||[]).length){
-        window.orders = data.orders || window.orders;
+      if(data.orders){
+        const remoteOrdMap={};
+        (data.orders||[]).forEach(o=>remoteOrdMap[o.id]=o);
+        const mergedOrders=[...(data.orders||[])];
+        (window.orders||[]).forEach(localOrd=>{
+          if(!remoteOrdMap[localOrd.id]) mergedOrders.push(localOrd);
+        });
+        window.orders = mergedOrders;
       }
       // Merge invoices - preserve courier and local fields
       if(data.invoices && data.invoices.length > 0){
         const remoteInvMap={};
         data.invoices.forEach(inv=>remoteInvMap[inv.id]=inv);
         // Keep local courier/bags if remote doesn't have them
-        window.invoices = data.invoices.map(inv=>{
+        const merged = data.invoices.map(inv=>{
           const local=(window.invoices||[]).find(x=>x.id===inv.id);
           return {...inv,
             courier: inv.courier||(local&&local.courier)||'',
             bags: inv.bags!=null?inv.bags:(local&&local.bags!=null?local.bags:0)
           };
         });
+        // CRITICAL: Preserve any local invoices not yet synced to Firebase
+        // (e.g. just-created invoices still waiting for the 400ms saveAll timer)
+        (window.invoices||[]).forEach(localInv=>{
+          if(!remoteInvMap[localInv.id]) merged.push(localInv);
+        });
+        merged.sort((a,b)=>(a.serial||0)-(b.serial||0));
+        window.invoices = merged;
       }
       // Fix boolean status + normalize case
       if(window.orders) window.orders.forEach(o=>{
@@ -1127,6 +1141,18 @@ window._syncToLocal = function(){
   if(window.nextInvNum!==undefined) nextInvNum=window.nextInvNum;
   if(window.nextInvoiceNum!==undefined) nextInvoiceNum=window.nextInvoiceNum;
 };
+// Bridge: copies local let vars TO window so Firebase module's snapshot listener sees them
+window._syncToWindow = function(){
+  window.colors=colors;
+  window.shapes=shapes;
+  window.parties=parties;
+  window.orders=orders;
+  window.invoices=invoices;
+  window.nextOid=nextOid;
+  window.nextPaId=nextPaId;
+  window.nextInvNum=nextInvNum;
+  window.nextInvoiceNum=nextInvoiceNum;
+};
 let prodSort='qty-desc';
 let orderSort='date';
 let invSort='date';
@@ -1174,6 +1200,8 @@ function setSyncStatus(s, msg){
 }
 
 function saveToBin(){
+  // Sync local let vars to window so Firebase module sees them
+  if(window._syncToWindow) window._syncToWindow();
   // Always save to localStorage as backup
   try{
     const payload={colors,shapes,orders,parties,invoices,
@@ -1187,19 +1215,13 @@ function saveToBin(){
 
   // Save to Firebase if ready
   if(window._firebaseReady && window._firestore){
-    // Safety: never save if we have fewer orders/invoices than Firebase
-    if(window._firebaseOrderCount && orders.length < window._firebaseOrderCount){
-      console.warn('Safety block: local orders('+orders.length+') < Firebase orders('+window._firebaseOrderCount+'). Not saving.');
-      setSyncStatus('error','⚠ Save blocked - data mismatch');
-      setTimeout(()=>setSyncStatus('','☁ Cloud'),3000);
-      return;
-    }
     setSyncStatus('saving','☁ Saving...');
     const {setDoc, getDoc, DATA_DOC, INV_DOC} = window._firestore;
     const payload={colors,shapes,orders,parties,invoices,
       nextOid,nextPaId,nextInvNum,nextInvoiceNum,
       updatedAt: new Date().toISOString()};
     window._skipNextSnapshot = true;
+    window._lastSaveTime = Date.now();
     // Before saving, fetch current Firebase data and preserve courier/bags
     getDoc(DATA_DOC).then(snap=>{
       if(snap.exists()){
@@ -1218,25 +1240,11 @@ function saveToBin(){
           }
           return inv;
         });
-        // Also add any invoices that exist in Firebase but not locally (prevents losing invoices on sync)
-        const localInvIds = new Set(payload.invoices.map(i=>i.id));
-        (firebaseData.invoices||[]).forEach(fbInv=>{
-          if(!localInvIds.has(fbInv.id)){
-            payload.invoices.push(fbInv);
-          }
-        });
         // Sort by serial
         payload.invoices.sort((a,b)=>a.serial-b.serial);
-        // Also preserve orders from Firebase not in local
-        const firebaseOrdMap = {};
-        (firebaseData.orders||[]).forEach(o=>firebaseOrdMap[o.id]=o);
-        const localOrdIds = new Set(payload.orders.map(o=>o.id));
-        (firebaseData.orders||[]).forEach(fbOrd=>{
-          if(!localOrdIds.has(fbOrd.id)){
-            payload.orders.push(fbOrd);
-          }
-        });
       }
+      // Update _firebaseOrderCount to match what we're about to save (so safety block uses fresh count)
+      window._firebaseOrderCount = payload.orders.length;
       return setDoc(DATA_DOC, payload);
     }).then(()=>{
         setSyncStatus('saved','☁ Saved');
@@ -2341,7 +2349,7 @@ function saveInvoice(){
     const maxSerial=invoices.reduce((m,i)=>Math.max(m,i.serial||0),0);
     if(nextInvoiceNum<=maxSerial) nextInvoiceNum=maxSerial+1;
     if(nextInvoiceNum<590) nextInvoiceNum=590;
-    invoices.push({id:Date.now(),serial:nextInvoiceNum++,party,date,items,remarks,chargeLabel,chargeAmt,bags,orderIds:[]});
+    invoices.push({id:Date.now()*1000+Math.floor(Math.random()*1000),serial:nextInvoiceNum++,party,date,items,remarks,chargeLabel,chargeAmt,bags,orderIds:[]});
   }
   resetInvForm();
   saveAll();renderInvoiceList();
@@ -3056,7 +3064,10 @@ function printPendingPOS(mode){
   posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Courier New",monospace;font-size:21px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:26px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:6px 0}.pos-row{display:flex;justify-content:space-between;font-size:21px;font-weight:700;margin:3px 0}.pos-item-row{display:flex;font-size:20px;font-weight:700;margin:5px 0;white-space:nowrap}.pos-col-item{flex:1;padding-right:4px}.pos-col-kg{width:60px;text-align:right;flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
-  setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
+  // Wait for fonts to load before printing
+  posWin.document.fonts.ready.then(function(){
+    setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},300);
+  });
 }
 
 // ── Print individual order as POS receipt ──
@@ -3097,7 +3108,10 @@ function printOrderPOS(id){
   posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
-  setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
+  // Wait for fonts to load before printing
+  posWin.document.fonts.ready.then(function(){
+    setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},300);
+  });
 }
 
 // ============================================================
@@ -3159,7 +3173,10 @@ function printPOS(){
   posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
-  setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},600);
+  // Wait for fonts to load before printing
+  posWin.document.fonts.ready.then(function(){
+    setTimeout(function(){posWin.print();setTimeout(function(){posWin.close();},1000);},300);
+  });
 }
 
 // ============================================================
