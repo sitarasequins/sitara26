@@ -1184,8 +1184,6 @@ function fmtDate(d){
 // ============================================================
 // SETUP
 // ============================================================
-function showReconnect(){}
-
 const APP_PW = '786';
 
 
@@ -1220,7 +1218,6 @@ function saveToBin(){
     const payload={colors,shapes,orders,parties,invoices,
       nextOid,nextPaId,nextInvNum,nextInvoiceNum,
       updatedAt: new Date().toISOString()};
-    window._skipNextSnapshot = true;
     window._lastSaveTime = Date.now();
     // Before saving, fetch current Firebase data and preserve courier/bags
     getDoc(DATA_DOC).then(snap=>{
@@ -1245,6 +1242,7 @@ function saveToBin(){
       }
       // Update _firebaseOrderCount to match what we're about to save (so safety block uses fresh count)
       window._firebaseOrderCount = payload.orders.length;
+      window._lastSaveTime = Date.now(); // refresh so own snapshot is skipped even after slow getDoc
       return setDoc(DATA_DOC, payload);
     }).then(()=>{
         setSyncStatus('saved','☁ Saved');
@@ -1514,10 +1512,6 @@ function switchTab(t,el){
   if(t==='reports') renderReport();
   if(t==='invoices'){resetInvForm();}
 }
-function setF(f,el){
-  // kept for compatibility but no longer used in orders tab
-}
-
 // Build net-pending map: for each party+color+shape, orderedKg minus invoicedKg (across ALL dates)
 // Build invByPartyItem only counting invoices on/after the earliest pending order date
 // for each party+item. This prevents old completed cycles from affecting new orders.
@@ -2803,7 +2797,7 @@ function renderProduction(){
     const partyMap={};
     orders.filter(o=>o.status==='Pending').forEach(o=>{
       if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
-      o.items.forEach(i=>{
+      o.items.filter(i=>!i.cancelled).forEach(i=>{
         const key=i.color+'||'+i.shape;
         if(!partyMap[o.party].items[key])partyMap[o.party].items[key]={ordKg:0,invKg:0,color:i.color,shape:i.shape,earliestDate:o.date};
         partyMap[o.party].items[key].ordKg+=parseFloat(i.kg||0);
@@ -2936,7 +2930,7 @@ function exportPendingXLS(){
   const partyMap={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
     if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
-    o.items.forEach(i=>{
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
       const k=i.color+'||'+i.shape;
       if(!partyMap[o.party].items[k])partyMap[o.party].items[k]={color:i.color,shape:i.shape,ordKg:0};
       partyMap[o.party].items[k].ordKg+=parseFloat(i.kg||0);
@@ -3021,7 +3015,7 @@ function printPendingPOS(mode){
     const partyMap={};
     orders.filter(o=>o.status==='Pending').forEach(o=>{
       if(!partyMap[o.party])partyMap[o.party]={};
-      o.items.forEach(i=>{
+      o.items.filter(i=>!i.cancelled).forEach(i=>{
         const k=i.color+'||'+i.shape;
         if(!partyMap[o.party][k])partyMap[o.party][k]={color:i.color,shape:i.shape,ordKg:0};
         partyMap[o.party][k].ordKg+=parseFloat(i.kg||0);
@@ -4155,7 +4149,7 @@ function sharePendingWhatsApp(mode){
     const partyMap={};
     orders.filter(o=>o.status==='Pending').forEach(o=>{
       if(!partyMap[o.party])partyMap[o.party]={};
-      o.items.forEach(i=>{
+      o.items.filter(i=>!i.cancelled).forEach(i=>{
         const k=i.color+'||'+i.shape;
         if(!partyMap[o.party][k])partyMap[o.party][k]={color:i.color,shape:i.shape,ordKg:0};
         partyMap[o.party][k].ordKg+=parseFloat(i.kg||0);
