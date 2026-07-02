@@ -484,16 +484,15 @@ tr:hover td{background:#f8faff}
             <span style="font-size:11px;color:#888">to</span>
             <input type="date" id="inv-date-to" onchange="renderInvoiceList()" title="To date"
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
-            <select id="inv-party-filter" onchange="renderInvoiceList()"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:170px">
-              <option value="">All Parties</option>
-            </select>
-            <select id="inv-shape-filter" onchange="renderInvoiceList()"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:110px">
-              <option value="">All Sizes</option>
-            </select>
-            <input type="text" id="inv-item-search" placeholder="🔍 Search color..." oninput="renderInvoiceList()"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:150px">
+            <input type="text" id="inv-party-filter" list="dl-inv-parties" placeholder="All Parties" oninput="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:160px">
+            <datalist id="dl-inv-parties"></datalist>
+            <input type="text" id="inv-shape-filter" list="dl-inv-shapes" placeholder="All Sizes" oninput="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:100px">
+            <datalist id="dl-inv-shapes"></datalist>
+            <input type="text" id="inv-item-search" list="dl-inv-colors" placeholder="🔍 Color..." oninput="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:130px">
+            <datalist id="dl-inv-colors"></datalist>
             <button class="btn btn-sm" onclick="document.getElementById('inv-date-from').value='';document.getElementById('inv-date-to').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-shape-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
             <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
             <button class="btn btn-sm" onclick="openDispatchRegister()" style="background:#0f766e;color:#fff;border-color:#0f766e">📋 Dispatch Register</button>
@@ -582,6 +581,10 @@ tr:hover td{background:#f8faff}
           <button id="pw-btn-party" onclick="setProdView('party')"
             style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">
             Party-wise
+          </button>
+          <button id="pw-btn-grid" onclick="setProdView('grid')"
+            style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">
+            Grid
           </button>
         </div>
         <!-- Sort -->
@@ -2463,27 +2466,21 @@ function renderInvoiceList(){
     const monthStart=today().slice(0,8)+'01';
     filtInvoices=invoices.filter(i=>i.date>=monthStart);
   }
-  if(invPartyFilter) filtInvoices=filtInvoices.filter(i=>i.party===invPartyFilter);
+  if(invPartyFilter) filtInvoices=filtInvoices.filter(i=>i.party.toLowerCase().includes(invPartyFilter.toLowerCase()));
   if(invShapeFilter) filtInvoices=filtInvoices.filter(inv=>
-    (inv.items||[]).some(i=>i.shape===invShapeFilter)
+    (inv.items||[]).some(i=>i.shape.toLowerCase().includes(invShapeFilter.toLowerCase()))
   );
   if(invItemSearch) filtInvoices=filtInvoices.filter(inv=>
     (inv.items||[]).some(i=>i.color.toLowerCase().includes(invItemSearch)||i.shape.toLowerCase().includes(invItemSearch))
   );
-  // Populate shape dropdown
-  const invShapeEl=document.getElementById('inv-shape-filter');
-  if(invShapeEl){
-    const curS=invShapeEl.value;
-    const allSh=[...new Set(invoices.flatMap(inv=>(inv.items||[]).map(i=>i.shape)))].sort();
-    invShapeEl.innerHTML='<option value="">All Sizes</option>'+allSh.map(s=>`<option value="${s}" ${s===curS?'selected':''}>${s}</option>`).join('');
-  }
+  // Populate combo datalists
+  const dlP=document.getElementById('dl-inv-parties');
+  if(dlP) dlP.innerHTML=[...new Set(invoices.map(i=>i.party))].sort().map(p=>`<option value="${p}">`).join('');
+  const dlS=document.getElementById('dl-inv-shapes');
+  if(dlS) dlS.innerHTML=[...new Set(invoices.flatMap(inv=>(inv.items||[]).map(i=>i.shape)))].sort().map(s=>`<option value="${s}">`).join('');
+  const dlC=document.getElementById('dl-inv-colors');
+  if(dlC) dlC.innerHTML=[...new Set(invoices.flatMap(inv=>(inv.items||[]).map(i=>i.color)))].sort().map(c=>`<option value="${c}">`).join('');
   // Populate party dropdown
-  const invPartyEl=document.getElementById('inv-party-filter');
-  if(invPartyEl){
-    const cur=invPartyEl.value;
-    const allP=[...new Set(invoices.map(i=>i.party))].sort();
-    invPartyEl.innerHTML='<option value="">All Parties</option>'+allP.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
-  }
   let sorted=[...filtInvoices];
   if(invSort==='date') sorted.sort((a,b)=>b.date.localeCompare(a.date)||(b.serial-a.serial));
   else if(invSort==='party') sorted.sort((a,b)=>a.party.localeCompare(b.party));
@@ -2740,10 +2737,12 @@ function setToday(){ renderProduction(); }
 
 function setProdView(v){
   prodView=v;
-  document.getElementById('pw-btn-item').style.background  = v==='item'  ? '#2563eb' : '#fff';
-  document.getElementById('pw-btn-item').style.color       = v==='item'  ? '#fff'    : '#888';
-  document.getElementById('pw-btn-party').style.background = v==='party' ? '#2563eb' : '#fff';
-  document.getElementById('pw-btn-party').style.color      = v==='party' ? '#fff'    : '#888';
+  [['pw-btn-item','item'],['pw-btn-party','party'],['pw-btn-grid','grid']].forEach(([id,mode])=>{
+    const b=document.getElementById(id);
+    if(!b)return;
+    b.style.background = v===mode ? '#2563eb' : '#fff';
+    b.style.color      = v===mode ? '#fff'    : '#888';
+  });
   renderProduction();
 }
 
@@ -2839,6 +2838,86 @@ function renderProduction(){
     return;
   }
   emptyEl.style.display='none';
+
+  if(prodView==='grid'){
+    // ── GRID VIEW: color rows × shape columns, split into chunks ─
+    function gridAlias(colorCode){
+      const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
+      return (c && typeof c==='object' && c.alias) ? c.alias : '';
+    }
+    let cards=[...rawCards];
+    if(search) cards=cards.filter(c=>
+      c.color.toLowerCase().includes(search)||
+      c.shape.toLowerCase().includes(search)||
+      gridAlias(c.color).toLowerCase().includes(search)
+    );
+    if(!cards.length){
+      summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
+      return;
+    }
+    // Pivot: color -> shape -> net
+    const pivot={};
+    const shapeSet=new Set();
+    cards.forEach(c=>{
+      if(!pivot[c.color])pivot[c.color]={};
+      pivot[c.color][c.shape]=(pivot[c.color][c.shape]||0)+c.net;
+      shapeSet.add(c.shape);
+    });
+    // Sort shapes: n-series by number, then fc/k, then rest
+    function shapeCat(s){
+      if(/^\d+n$/.test(s)) return 0;
+      if(/fc$|k$/.test(s)) return 1;
+      return 2;
+    }
+    function shapeNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
+    const allShapes=[...shapeSet].sort((a,b)=>{
+      const ca=shapeCat(a),cb=shapeCat(b);
+      if(ca!==cb)return ca-cb;
+      const na=shapeNum(a),nb=shapeNum(b);
+      if(na!==nb)return na-nb;
+      return a.localeCompare(b);
+    });
+    // Split into chunks of max 8 columns
+    const chunks=[];
+    for(let i=0;i<allShapes.length;i+=8) chunks.push(allShapes.slice(i,i+8));
+    // Build one table per chunk
+    const tables=chunks.map(chunkShapes=>{
+      // Rows: colors with pending in at least one shape of this chunk
+      const rowColors=Object.keys(pivot).filter(col=>chunkShapes.some(s=>pivot[col][s]>0));
+      if(!rowColors.length)return '';
+      // Sort rows by chunk total desc
+      const rowTotal=col=>chunkShapes.reduce((s,sh)=>s+(pivot[col][sh]||0),0);
+      rowColors.sort((a,b)=>rowTotal(b)-rowTotal(a));
+      const colTotals=chunkShapes.map(sh=>rowColors.reduce((s,col)=>s+(pivot[col][sh]||0),0));
+      const grandTotal=colTotals.reduce((s,v)=>s+v,0);
+      const head=`<tr style="background:#f0f4ff">
+        <th style="padding:3px 8px;text-align:left;border:1px solid #e0e7ff;color:#2563eb;font-size:11px;white-space:nowrap">COLOR</th>
+        ${chunkShapes.map(sh=>`<th style="padding:3px 8px;border:1px solid #e0e7ff;color:#2563eb;font-size:11px;text-align:center">${sh}</th>`).join('')}
+        <th style="padding:3px 8px;border:1px solid #e0e7ff;color:#92400e;font-size:11px;text-align:center;background:#fef3c7">TOTAL</th>
+      </tr>`;
+      const body=rowColors.map(col=>{
+        const alias=gridAlias(col);
+        return `<tr>
+          <td style="padding:3px 8px;border:1px solid #eee;white-space:nowrap"><b>${col}</b>${alias?`<span style="color:#888;font-size:11px">/${alias}</span>`:''}</td>
+          ${chunkShapes.map(sh=>{
+            const v=pivot[col][sh]||0;
+            return `<td style="padding:3px 8px;border:1px solid #eee;text-align:center;${v>0?'font-weight:600;color:#d97706':'color:#ddd'}">${v>0?v.toFixed(2):'—'}</td>`;
+          }).join('')}
+          <td style="padding:3px 8px;border:1px solid #eee;text-align:center;font-weight:700;background:#fffbeb">${rowTotal(col).toFixed(2)}</td>
+        </tr>`;
+      }).join('');
+      const foot=`<tr style="border-top:2px solid #1a1a1a">
+        <td style="padding:3px 8px;border:1px solid #eee;font-weight:700;font-size:11px">TOTAL</td>
+        ${colTotals.map(v=>`<td style="padding:3px 8px;border:1px solid #eee;text-align:center;font-weight:700;font-size:11px">${v>0?v.toFixed(2):'—'}</td>`).join('')}
+        <td style="padding:3px 8px;border:1px solid #eee;text-align:center;font-weight:700;background:#fef3c7">${grandTotal.toFixed(2)}</td>
+      </tr>`;
+      return `<div style="overflow-x:auto;margin-bottom:16px"><table style="border-collapse:collapse;font-size:12px;width:100%">${head}${body}${foot}</table></div>`;
+    }).join('');
+    summary.innerHTML=statsBar+
+      `<div style="font-size:11px;color:#888;margin-bottom:10px">Grid view · only shapes with pending shown · Net due = Ordered − Invoiced</div>`+
+      tables;
+    return;
+  }
 
   if(prodView==='item'){
     // ── ITEM-WISE VIEW ──────────────────────────────────────────
