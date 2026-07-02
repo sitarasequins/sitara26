@@ -479,15 +479,22 @@ tr:hover td{background:#f8faff}
 
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <input type="date" id="inv-date-filter" onchange="renderInvoiceList()"
+            <input type="date" id="inv-date-from" onchange="renderInvoiceList()" title="From date"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
+            <span style="font-size:11px;color:#888">to</span>
+            <input type="date" id="inv-date-to" onchange="renderInvoiceList()" title="To date"
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
             <select id="inv-party-filter" onchange="renderInvoiceList()"
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:170px">
               <option value="">All Parties</option>
             </select>
+            <select id="inv-shape-filter" onchange="renderInvoiceList()"
+              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;max-width:110px">
+              <option value="">All Sizes</option>
+            </select>
             <input type="text" id="inv-item-search" placeholder="🔍 Search color..." oninput="renderInvoiceList()"
               style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:150px">
-            <button class="btn btn-sm" onclick="document.getElementById('inv-date-filter').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
+            <button class="btn btn-sm" onclick="document.getElementById('inv-date-from').value='';document.getElementById('inv-date-to').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-shape-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
             <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
             <button class="btn btn-sm" onclick="openDispatchRegister()" style="background:#0f766e;color:#fff;border-color:#0f766e">📋 Dispatch Register</button>
           </div>
@@ -1540,6 +1547,63 @@ function buildDateAwareInvByPartyItem(){
   return invByPartyItem;
 }
 
+// Total net pending kg using the SAME logic as the Pending Work screen
+// (date-aware invoices, per-party nets >=1kg, item nets >=1kg).
+// Optional party/color/shape filters for the Reports tab.
+function computePendingNetKg(selP,selC,selS){
+  const invByPartyItem=buildDateAwareInvByPartyItem();
+  const ordByItem={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    if(selP && o.party!==selP) return;
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
+      if(selC && i.color!==selC) return;
+      if(selS && i.shape!==selS) return;
+      const key=i.color+'||'+i.shape;
+      if(!ordByItem[key])ordByItem[key]={parties:{}};
+      ordByItem[key].parties[o.party]=(ordByItem[key].parties[o.party]||0)+parseFloat(i.kg||0);
+    });
+  });
+  let total=0;
+  Object.entries(ordByItem).forEach(([key,v])=>{
+    let itemNet=0;
+    Object.entries(v.parties).forEach(([party,ordKg])=>{
+      const invKg=(invByPartyItem[party]&&invByPartyItem[party][key])||0;
+      const pNet=Math.max(0,ordKg-invKg);
+      if(pNet>=1.0) itemNet+=pNet;
+    });
+    if(itemNet>=1.0) total+=itemNet;
+  });
+  return total;
+}
+
+// Per-party and per-item pending nets (same rules as the Pending Work screen).
+// Used by the Reports tab so its "pending" columns match the main screen.
+function buildPendingNets(selP,selC,selS){
+  const invByPartyItem=buildDateAwareInvByPartyItem();
+  const ord={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    if(selP && o.party!==selP) return;
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
+      if(selC && i.color!==selC) return;
+      if(selS && i.shape!==selS) return;
+      const k=o.party+'||'+i.color+'||'+i.shape;
+      ord[k]=(ord[k]||0)+parseFloat(i.kg||0);
+    });
+  });
+  const byParty={},byItem={};
+  Object.entries(ord).forEach(([k,ordKg])=>{
+    const parts=k.split('||');
+    const party=parts[0], color=parts[1], shape=parts[2];
+    const invKg=(invByPartyItem[party]&&invByPartyItem[party][color+'||'+shape])||0;
+    const pNet=Math.max(0,ordKg-invKg);
+    if(pNet>=1.0){
+      byParty[party]=(byParty[party]||0)+pNet;
+      byItem[color+'||'+shape]=(byItem[color+'||'+shape]||0)+pNet;
+    }
+  });
+  return {byParty,byItem};
+}
+
 function buildPendingMap(){
   // ordered[party][color||shape] = totalKg from all pending orders
   const ordered={};
@@ -2386,14 +2450,33 @@ function renderInvoiceList(){
     document.getElementById('si-total').textContent=0;
     document.getElementById('si-amount').textContent='₹0';return;}
   empty.style.display='none';
-  const invDateFilter=(document.getElementById('inv-date-filter')||{value:''}).value;
+  const invDateFrom=(document.getElementById('inv-date-from')||{value:''}).value;
+  const invDateTo=(document.getElementById('inv-date-to')||{value:''}).value;
   const invPartyFilter=(document.getElementById('inv-party-filter')||{value:''}).value;
+  const invShapeFilter=(document.getElementById('inv-shape-filter')||{value:''}).value;
   const invItemSearch=(document.getElementById('inv-item-search')||{value:''}).value.trim().toLowerCase();
-  let filtInvoices=invDateFilter?invoices.filter(i=>i.date===invDateFilter):invoices;
+  let filtInvoices;
+  if(invDateFrom||invDateTo){
+    filtInvoices=invoices.filter(i=>(!invDateFrom||i.date>=invDateFrom)&&(!invDateTo||i.date<=invDateTo));
+  } else {
+    // Default: current month only
+    const monthStart=today().slice(0,8)+'01';
+    filtInvoices=invoices.filter(i=>i.date>=monthStart);
+  }
   if(invPartyFilter) filtInvoices=filtInvoices.filter(i=>i.party===invPartyFilter);
+  if(invShapeFilter) filtInvoices=filtInvoices.filter(inv=>
+    (inv.items||[]).some(i=>i.shape===invShapeFilter)
+  );
   if(invItemSearch) filtInvoices=filtInvoices.filter(inv=>
     (inv.items||[]).some(i=>i.color.toLowerCase().includes(invItemSearch)||i.shape.toLowerCase().includes(invItemSearch))
   );
+  // Populate shape dropdown
+  const invShapeEl=document.getElementById('inv-shape-filter');
+  if(invShapeEl){
+    const curS=invShapeEl.value;
+    const allSh=[...new Set(invoices.flatMap(inv=>(inv.items||[]).map(i=>i.shape)))].sort();
+    invShapeEl.innerHTML='<option value="">All Sizes</option>'+allSh.map(s=>`<option value="${s}" ${s===curS?'selected':''}>${s}</option>`).join('');
+  }
   // Populate party dropdown
   const invPartyEl=document.getElementById('inv-party-filter');
   if(invPartyEl){
@@ -2429,10 +2512,9 @@ function renderInvoiceList(){
   <input type="text" value="${(inv.courier||'').replace(/"/g,'&quot;')}" placeholder="courier..." id="courier-${inv.id}" style="font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:6px;width:110px">
   <button onclick="saveCourier(${inv.id},document.getElementById('courier-'+${inv.id}).value)" style="font-size:13px;padding:3px 7px;border:1px solid #16a34a;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;margin-left:2px">✓</button>
 </td>
-      <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+      <td><div style="display:flex;gap:5px;flex-wrap:nowrap;white-space:nowrap">
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
         <button class="btn btn-sm" onclick="printPOSDirect(${inv.id})" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 POS</button>
-        <button class="btn btn-sm btn-primary" onclick="viewInvoice(${inv.id})">A4</button>
         <button class="btn btn-sm" onclick="shareInvWhatsApp(${inv.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
         <button class="btn btn-sm btn-danger" onclick="delInvoice(${inv.id})">Delete</button>
       </div></td>
@@ -3397,7 +3479,7 @@ function previewDispatch(){
       <tbody>
         ${rows}
         <tr style="border-top:2px solid #000">
-          <td colspan="2" style="padding:5px 8px;font-weight:700;font-size:12px">Total — ${data.length}</td>
+          <td colspan="3" style="padding:5px 8px;font-weight:700;font-size:12px">Total — ${data.length}</td>
           <td style="padding:5px 8px;text-align:center;font-weight:700">${totalWt.toFixed(2)}</td>
           <td style="padding:5px 8px;text-align:center;font-weight:700">${totalBags||''}</td>
           <td></td>
@@ -3416,13 +3498,13 @@ function printDispatch(){
   const totalBags=data.reduce((s,inv)=>s+(parseInt(inv.bags||0)),0);
   const rows=data.map(inv=>{
     const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    return `<tr style="border-bottom:1px solid #ddd">
-        <tr style="border-bottom:1px solid #bbb">
-          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:10%">${fmtDate(inv.date)}</td>
-          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;font-weight:600;width:42%">${inv.party}</td>
-          <td style="padding:4px 8px;vertical-align:middle;text-align:center;font-size:13px;width:13%">${kg.toFixed(2)}</td>
-          <td style="padding:4px 8px;vertical-align:middle;text-align:center;font-size:13px;width:10%">${inv.bags||''}</td>
-          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:25%">${inv.remarks||''}</td>
+    return `<tr style="border-bottom:1px solid #bbb">
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:9%">${fmtDate(inv.date)}</td>
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:9%">${String(inv.serial).padStart(4,'0')}</td>
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;font-weight:600;width:37%">${inv.party}</td>
+          <td style="padding:4px 8px;vertical-align:middle;text-align:center;font-size:13px;width:12%">${kg.toFixed(2)}</td>
+          <td style="padding:4px 8px;vertical-align:middle;text-align:center;font-size:13px;width:9%">${inv.bags||''}</td>
+          <td style="padding:4px 8px;vertical-align:middle;font-size:13px;width:24%">${inv.remarks||''}</td>
         </tr>`;
   }).join('');
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -3436,7 +3518,7 @@ function printDispatch(){
       <tbody>
         ${rows}
         <tr style="border-top:2px solid #000">
-          <td colspan="2" style="padding:5px 8px;font-weight:700;font-size:13px">Total &nbsp; ${data.length}</td>
+          <td colspan="3" style="padding:5px 8px;font-weight:700;font-size:13px">Total &nbsp; ${data.length}</td>
           <td style="padding:5px 8px;text-align:center;font-weight:700;font-size:14px">${totalWt.toFixed(2)}</td>
           <td style="padding:5px 8px;text-align:center;font-weight:700;font-size:14px">${totalBags||''}</td>
           <td></td>
@@ -3631,7 +3713,7 @@ function renderReport(){
   // Stats
   const totalOrdKg=fOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
   const totalInvKg=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
-  const totalInvAmt=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0)*parseFloat(i.price||0),0),0);
+  const totalInvAmt=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0),0);
   const pendingOrd=fOrders.filter(o=>o.status==='Pending').length;
   const pendingKg=fOrders.filter(o=>o.status==='Pending').reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
 
@@ -3649,7 +3731,7 @@ function renderReport(){
     <div class="stat"><div class="stat-label">Ordered kg</div><div class="stat-val">${totalOrdKg.toFixed(2)}</div></div>
     <div class="stat"><div class="stat-label">Invoices</div><div class="stat-val">${fInvoices.length}</div></div>
     <div class="stat"><div class="stat-label">Invoiced kg</div><div class="stat-val" style="color:#16a34a">${totalInvKg.toFixed(2)}</div></div>
-    <div class="stat"><div class="stat-label">Pending kg</div><div class="stat-val" style="color:#d97706">${(totalOrdKg-totalInvKg).toFixed(2)}</div></div>
+    <div class="stat"><div class="stat-label">Pending kg</div><div class="stat-val" style="color:#d97706">${computePendingNetKg(selP,selC,selS).toFixed(2)}</div></div>
     <div class="stat"><div class="stat-label">Invoice Amt</div><div class="stat-val" style="color:#2563eb">${fmt(totalInvAmt)}</div></div>`;
 
   if(rptView==='summary')   rptSummary(fOrders,fInvoices,contentEl);
@@ -3670,6 +3752,8 @@ function rptTbl(headers,rows){
 
 // ── SUMMARY VIEW ─────────────────────────────────────────────
 function rptSummary(fOrders,fInvoices,el){
+  const {selP,selC,selS}=rptFilterData();
+  const pend=buildPendingNets(selP,selC,selS);
   // Top parties by ordered kg
   const pm={};
   fOrders.forEach(o=>{
@@ -3681,7 +3765,7 @@ function rptSummary(fOrders,fInvoices,el){
   fInvoices.forEach(inv=>{
     if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};
     pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
   });
 
   const partyRows=Object.entries(pm).sort((a,b)=>b[1].ordKg-a[1].ordKg).map(([p,d])=>[
@@ -3689,7 +3773,7 @@ function rptSummary(fOrders,fInvoices,el){
     d.orders,
     `${d.ordKg.toFixed(2)}`,
     `${d.invKg.toFixed(2)}`,
-    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`,
+    `<span style="color:#d97706;font-weight:600">${(pend.byParty[p]||0).toFixed(2)}</span>`,
     `<strong style="color:#2563eb">${fmt(d.invAmt)}</strong>`
   ]);
 
@@ -3708,7 +3792,7 @@ function rptSummary(fOrders,fInvoices,el){
   const itemRows=Object.values(im).sort((a,b)=>b.ordKg-a.ordKg).slice(0,10).map(d=>[
     `<strong>${d.color}</strong>`,d.shape,
     `${d.ordKg.toFixed(2)}`,`${d.invKg.toFixed(2)}`,
-    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`
+    `<span style="color:#d97706;font-weight:600">${(pend.byItem[d.color+'||'+d.shape]||0).toFixed(2)}</span>`
   ]);
 
   el.innerHTML=`
@@ -3744,7 +3828,7 @@ function rptOrders(fOrders,el){
 function rptInvoices(fInvoices,el){
   const rows=[...fInvoices].sort((a,b)=>b.date.localeCompare(a.date)).map(inv=>{
     const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
     const items=(inv.items||[]).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg).toFixed(2)}kg@${i.price}`).join(' | ');
     return[
       inv.date,
@@ -3761,21 +3845,20 @@ function rptInvoices(fInvoices,el){
 
 // ── PENDING VIEW ──────────────────────────────────────────────
 function rptPending(fOrders,fInvoices,el){
-  // Build per-party per-item pending (ordered - invoiced)
+  // Build per-party per-item pending (date-aware: only invoices on/after earliest pending order date)
+  const invByPartyItem=buildDateAwareInvByPartyItem();
   const pm={};
   fOrders.filter(o=>o.status==='Pending').forEach(o=>{
-    o.items.forEach(i=>{
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
       const k=o.party+'||'+i.color+'||'+i.shape;
       if(!pm[k])pm[k]={party:o.party,color:i.color,shape:i.shape,ordKg:0,invKg:0,dates:[]};
       pm[k].ordKg+=parseFloat(i.kg||0);
       if(!pm[k].dates.includes(o.date))pm[k].dates.push(o.date);
     });
   });
-  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
-    const k=inv.party+'||'+i.color+'||'+i.shape;
-    if(!pm[k])pm[k]={party:inv.party,color:i.color,shape:i.shape,ordKg:0,invKg:0,dates:[]};
-    pm[k].invKg+=parseFloat(i.kg||0);
-  }));
+  Object.values(pm).forEach(d=>{
+    d.invKg=(invByPartyItem[d.party]&&invByPartyItem[d.party][d.color+'||'+d.shape])||0;
+  });
   const rows=Object.values(pm)
     .map(d=>({...d,netKg:d.ordKg-d.invKg}))
     .filter(d=>d.netKg>=1.0)
@@ -3797,6 +3880,8 @@ function rptPending(fOrders,fInvoices,el){
 
 // ── PARTY-WISE VIEW ───────────────────────────────────────────
 function rptPartyWise(fOrders,fInvoices,el){
+  const {selP,selC,selS}=rptFilterData();
+  const pend=buildPendingNets(selP,selC,selS);
   const pm={};
   fOrders.forEach(o=>{
     if(!pm[o.party])pm[o.party]={orders:0,ordKg:0,invKg:0,invAmt:0,pending:0,delivered:0};
@@ -3808,7 +3893,7 @@ function rptPartyWise(fOrders,fInvoices,el){
   fInvoices.forEach(inv=>{
     if(!pm[inv.party])pm[inv.party]={orders:0,ordKg:0,invKg:0,invAmt:0,pending:0,delivered:0};
     pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
   });
   const rows=Object.entries(pm).sort((a,b)=>b[1].ordKg-a[1].ordKg).map(([p,d])=>[
     `<strong>${p}</strong>`,
@@ -3817,7 +3902,7 @@ function rptPartyWise(fOrders,fInvoices,el){
     `<span class="rpt-badge-d">${d.delivered}</span>`,
     `${d.ordKg.toFixed(2)}`,
     `${d.invKg.toFixed(2)}`,
-    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`,
+    `<span style="color:#d97706;font-weight:600">${(pend.byParty[p]||0).toFixed(2)}</span>`,
     `<strong style="color:#2563eb">${fmt(d.invAmt)}</strong>`
   ]);
   el.innerHTML=`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">👥 Party-wise Report</div></div>
@@ -3826,6 +3911,8 @@ function rptPartyWise(fOrders,fInvoices,el){
 
 // ── ITEM-WISE VIEW ────────────────────────────────────────────
 function rptItemWise(fOrders,fInvoices,el){
+  const {selP,selC,selS}=rptFilterData();
+  const pend=buildPendingNets(selP,selC,selS);
   const im={};
   fOrders.forEach(o=>o.items.forEach(i=>{
     const k=i.color+'||'+i.shape;
@@ -3844,7 +3931,7 @@ function rptItemWise(fOrders,fInvoices,el){
     d.shape,
     `${d.ordKg.toFixed(2)}`,
     `${d.invKg.toFixed(2)}`,
-    `<span style="color:#d97706;font-weight:600">${(d.ordKg-d.invKg).toFixed(2)}</span>`,
+    `<span style="color:#d97706;font-weight:600">${(pend.byItem[d.color+'||'+d.shape]||0).toFixed(2)}</span>`,
     `<strong style="color:#2563eb">${fmt(d.invAmt)}</strong>`,
     `<span style="font-size:11px;color:#888">${[...d.parties].join(', ')}</span>`
   ]);
@@ -3855,15 +3942,17 @@ function rptItemWise(fOrders,fInvoices,el){
 // Export all views to XLS
 function exportReportXLS(){
   if(typeof XLSX==='undefined'){alert('XLSX not loaded');return;}
-  const {fOrders,fInvoices}=rptFilterData();
+  const {fOrders,fInvoices,selP,selC,selS}=rptFilterData();
+  const pend=buildPendingNets(selP,selC,selS);
+  const invByPartyItemXls=buildDateAwareInvByPartyItem();
   const wb=XLSX.utils.book_new();
 
   // Summary
   const pm={};
   fOrders.forEach(o=>{if(!pm[o.party])pm[o.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};pm[o.party].orders++;pm[o.party].ordKg+=o.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);if(o.status==='Pending')pm[o.party].pending++;});
-  fInvoices.forEach(inv=>{if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);});
+  fInvoices.forEach(inv=>{if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0,orders:0,pending:0};pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);});
   const sRows=[['Party','Orders','Pending','Ordered kg','Invoiced kg','Pending kg','Inv Amount']];
-  Object.entries(pm).forEach(([p,d])=>sRows.push([p,d.orders,d.pending,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2),Math.round(d.invAmt)]));
+  Object.entries(pm).forEach(([p,d])=>sRows.push([p,d.orders,d.pending,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(pend.byParty[p]||0).toFixed(2),Math.round(d.invAmt)]));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sRows),'Party Summary');
 
   // Orders
@@ -3878,23 +3967,21 @@ function exportReportXLS(){
   const iRows=[['Date','Invoice#','Party','Total kg','Amount','Items']];
   fInvoices.sort((a,b)=>b.date.localeCompare(a.date)).forEach(inv=>{
     const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
     iRows.push([inv.date,invNumLabel(inv.serial),inv.party,+kg.toFixed(2),Math.round(amt),(inv.items||[]).map(i=>i.color+' '+i.shape+' '+i.kg+'kg@'+i.price).join(', ')]);
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(iRows),'Invoices');
 
   // Pending
   const pendMap={};
-  fOrders.filter(o=>o.status==='Pending').forEach(o=>o.items.forEach(i=>{
+  fOrders.filter(o=>o.status==='Pending').forEach(o=>o.items.filter(i=>!i.cancelled).forEach(i=>{
     const k=o.party+'||'+i.color+'||'+i.shape;
     if(!pendMap[k])pendMap[k]={party:o.party,color:i.color,shape:i.shape,ordKg:0,invKg:0};
     pendMap[k].ordKg+=parseFloat(i.kg||0);
   }));
-  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
-    const k=inv.party+'||'+i.color+'||'+i.shape;
-    if(!pendMap[k])pendMap[k]={party:inv.party,color:i.color,shape:i.shape,ordKg:0,invKg:0};
-    pendMap[k].invKg+=parseFloat(i.kg||0);
-  }));
+  Object.values(pendMap).forEach(d=>{
+    d.invKg=(invByPartyItemXls[d.party]&&invByPartyItemXls[d.party][d.color+'||'+d.shape])||0;
+  });
   const pRows=[['Party','Color','Shape','Ordered kg','Invoiced kg','Net Pending kg']];
   Object.values(pendMap).filter(d=>d.ordKg-d.invKg>=1.0).sort((a,b)=>(b.ordKg-b.invKg)-(a.ordKg-a.invKg)).forEach(d=>pRows.push([d.party,d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2)]));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pRows),'Pending');
@@ -3904,7 +3991,7 @@ function exportReportXLS(){
   fOrders.forEach(o=>o.items.forEach(i=>{const k=i.color+'||'+i.shape;if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0,invAmt:0};im[k].ordKg+=parseFloat(i.kg||0);}));
   fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{const k=i.color+'||'+i.shape;if(!im[k])im[k]={color:i.color,shape:i.shape,ordKg:0,invKg:0,invAmt:0};im[k].invKg+=parseFloat(i.kg||0);im[k].invAmt+=parseFloat(i.kg||0)*parseFloat(i.price||0);}));
   const mRows=[['Color','Shape','Ordered kg','Invoiced kg','Pending kg','Inv Amount']];
-  Object.values(im).sort((a,b)=>b.ordKg-a.ordKg).forEach(d=>mRows.push([d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(d.ordKg-d.invKg).toFixed(2),Math.round(d.invAmt)]));
+  Object.values(im).sort((a,b)=>b.ordKg-a.ordKg).forEach(d=>mRows.push([d.color,d.shape,+d.ordKg.toFixed(2),+d.invKg.toFixed(2),+(pend.byItem[d.color+'||'+d.shape]||0).toFixed(2),Math.round(d.invAmt)]));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mRows),'Item-wise');
 
   XLSX.writeFile(wb,'Sitara_Report_'+today()+'.xlsx');
@@ -3949,7 +4036,7 @@ function shareInvoiceWhatsApp(){
   if(!inv) return;
   const items = inv.items||[];
   const totalKg = items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
-  const totalAmt = items.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+  const totalAmt = items.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
   const serialNum = String(inv.serial).padStart(4,'0');
   const line = '- - - - - - - - - - - - - -';
   let msg = inv.party+'\n';
@@ -4066,9 +4153,10 @@ function printReport(){
 
 function shareReportWhatsApp(){
   const {fOrders,fInvoices,selP,selC,selS,from,to}=rptFilterData();
+  const pendWA=buildPendingNets(selP,selC,selS);
   const totalOrdKg=fOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
   const totalInvKg=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0),0),0);
-  const totalInvAmt=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0)*parseFloat(i.price||0),0),0);
+  const totalInvAmt=fInvoices.reduce((s,inv)=>s+(inv.items||[]).reduce((ss,i)=>ss+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0),0);
   const pendingOrd=fOrders.filter(o=>o.status==='Pending').length;
   const line='- - - - - - - - - - - - - -';
 
@@ -4084,7 +4172,7 @@ function shareReportWhatsApp(){
   msg+='Ordered kg:  '+totalOrdKg.toFixed(2)+'\n';
   msg+='Invoices:    '+fInvoices.length+'\n';
   msg+='Invoiced kg: '+totalInvKg.toFixed(2)+'\n';
-  msg+='Pending kg:  '+(totalOrdKg-totalInvKg).toFixed(2)+'\n';
+  msg+='Pending kg:  '+(pendWA.byParty?Object.values(pendWA.byParty).reduce((s,v)=>s+v,0):0).toFixed(2)+'\n';
   if(totalInvAmt>0) msg+='Inv Amount:  '+Math.round(totalInvAmt)+'\n';
   msg+=line+'\n';
 
@@ -4097,10 +4185,10 @@ function shareReportWhatsApp(){
   fInvoices.forEach(inv=>{
     if(!pm[inv.party])pm[inv.party]={ordKg:0,invKg:0,invAmt:0};
     pm[inv.party].invKg+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0);
+    pm[inv.party].invAmt+=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
   });
   Object.entries(pm).sort((a,b)=>b[1].ordKg-a[1].ordKg).forEach(([p,d])=>{
-    const net=(d.ordKg-d.invKg).toFixed(2);
+    const net=(pendWA.byParty[p]||0).toFixed(2);
     msg+=p+'\n';
     msg+='  Ord:'+d.ordKg.toFixed(2)+' Inv:'+d.invKg.toFixed(2)+' Pend:'+net;
     if(d.invAmt>0) msg+=' Amt:'+Math.round(d.invAmt);
