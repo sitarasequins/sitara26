@@ -571,44 +571,31 @@ tr:hover td{background:#f8faff}
   <div id="tab-production" class="view">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <div style="font-size:16px;font-weight:700;color:#1a1a1a">Pending Work</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <!-- View toggle -->
-        <div style="display:flex;border:1.5px solid #ddd;border-radius:8px;overflow:hidden">
-          <button id="pw-btn-item" onclick="setProdView('item')"
-            style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#2563eb;color:#fff">
-            Item-wise
-          </button>
-          <button id="pw-btn-party" onclick="setProdView('party')"
-            style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">
-            Party-wise
-          </button>
-          <button id="pw-btn-grid" onclick="setProdView('grid')"
-            style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">
-            Grid
-          </button>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        <span style="background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:3px 12px"><b id="pw-due" style="color:#d97706;font-size:14px">0.00</b></span>
+        <span style="width:1px;height:22px;background:#eee"></span>
+        <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
+          <button id="pw-btn-color" onclick="setProdView('color')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#2563eb;color:#fff">Color Grid</button>
+          <button id="pw-btn-shape" onclick="setProdView('shape')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Size Grid</button>
+          <button id="pw-btn-partygrid" onclick="setProdView('partygrid')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Party Grid</button>
         </div>
-        <!-- Sort -->
-        <button class="sbtn active" id="sb-qty-desc" onclick="setProdSort('qty-desc',this)">Qty <span class="arr">↓</span></button>
-        <button class="sbtn" id="sb-qty-asc" onclick="setProdSort('qty-asc',this)">Qty <span class="arr">↑</span></button>
-        <button class="sbtn" id="sb-oldest" onclick="setProdSort('oldest',this)">Oldest first</button>
-        <button id="pw-aging-btn" onclick="toggleAgingFilter()" style="padding:5px 12px;border:1.5px solid #dc2626;border-radius:7px;font-size:11px;color:#dc2626;background:#fff;cursor:pointer;font-weight:600">⚠ 15+ days</button>
-        <!-- Export & Print -->
-        <button class="btn btn-sm" onclick="exportPendingXLS()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8">📊 Export XLS</button>
-        <button class="btn btn-sm" onclick="printPendingPOS('item')" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 Item POS</button>
-        <button class="btn btn-sm" onclick="printPendingPOS('party')" style="background:#374151;color:#fff;border-color:#374151">🧾 Party POS</button>
-        <button class="btn btn-sm" onclick="sharePendingWhatsApp('item')" style="background:#25D366;color:#fff;border-color:#25D366">💬 Item WA</button>
-        <button class="btn btn-sm" onclick="sharePendingWhatsApp('party')" style="background:#128C7E;color:#fff;border-color:#128C7E">💬 Party WA</button>
-
-        <!-- Search & filters -->
-        <input id="prod-search" type="text" placeholder="🔍 Search item / party…"
-          oninput="renderProduction()"
-          style="padding:6px 12px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:170px;outline:none">
-        <input id="pw-size-filter" type="text" list="dl-pw-shapes" placeholder="Size (3n…)" oninput="renderProduction()"
-          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:90px;outline:none">
-        <datalist id="dl-pw-shapes"></datalist>
+        <span style="width:1px;height:22px;background:#eee"></span>
+        <button id="pw-sort-old" onclick="togglePwSort('old')" style="padding:4px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:11px;color:#888;background:#fff;cursor:pointer;font-weight:600">Old ⇅</button>
+        <button id="pw-sort-qty" onclick="togglePwSort('qty')" style="padding:4px 10px;border:1.5px solid #1e40af;border-radius:7px;font-size:11px;color:#fff;background:#1e40af;cursor:pointer;font-weight:600">Qty ↓</button>
+        <span style="width:1px;height:22px;background:#eee"></span>
         <input id="pw-party-filter" type="text" list="dl-pw-parties" placeholder="Party" oninput="renderProduction()"
-          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:110px;outline:none">
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:100px;outline:none">
         <datalist id="dl-pw-parties"></datalist>
+        <input id="pw-color-filter" type="text" list="dl-pw-colors" placeholder="Color" oninput="renderProduction()"
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:85px;outline:none">
+        <datalist id="dl-pw-colors"></datalist>
+        <input id="pw-size-filter" type="text" list="dl-pw-shapes" placeholder="Size" oninput="renderProduction()"
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:65px;outline:none">
+        <datalist id="dl-pw-shapes"></datalist>
+        <span style="width:1px;height:22px;background:#eee"></span>
+        <button onclick="printPendingGrid()" style="padding:4px 11px;background:#1a1a1a;color:#fff;border:1.5px solid #1a1a1a;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">🖨 A4</button>
+        <button onclick="pwPrintPOS()" style="padding:4px 11px;background:#374151;color:#fff;border:1.5px solid #374151;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">🧾 POS</button>
+        <button onclick="pwShareWA()" style="padding:4px 11px;background:#25D366;color:#fff;border:1.5px solid #25D366;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">💬 WA</button>
       </div>
     </div>
     <div id="prod-summary"></div>
@@ -1171,9 +1158,7 @@ window._syncToWindow = function(){
   window.nextInvNum=nextInvNum;
   window.nextInvoiceNum=nextInvoiceNum;
 };
-let prodSort='qty-desc';
-let gridMode='color';   // grid view sub-mode: 'color' or 'shape'
-let agingFilter=false;  // show only 15+ days old pending
+let prodSort='qty-desc'; // 'qty-desc'|'qty-asc'|'old-asc'|'old-desc'
 let orderSort='date';
 let invSort='date';
 
@@ -2741,13 +2726,13 @@ function editOrderFromAnywhere(id){
 // ============================================================
 // PENDING WORK
 // ============================================================
-let prodView='item'; // 'item' or 'party'
+let prodView='color'; // 'color' | 'shape' | 'partygrid'
 
 function setToday(){ renderProduction(); }
 
 function setProdView(v){
   prodView=v;
-  [['pw-btn-item','item'],['pw-btn-party','party'],['pw-btn-grid','grid']].forEach(([id,mode])=>{
+  [['pw-btn-color','color'],['pw-btn-shape','shape'],['pw-btn-partygrid','partygrid']].forEach(([id,mode])=>{
     const b=document.getElementById(id);
     if(!b)return;
     b.style.background = v===mode ? '#2563eb' : '#fff';
@@ -2755,28 +2740,35 @@ function setProdView(v){
   });
   renderProduction();
 }
-
-function setProdSort(s, el){
-  prodSort=s;
-  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
+function togglePwSort(kind){
+  if(kind==='qty') prodSort = prodSort==='qty-desc' ? 'qty-asc' : 'qty-desc';
+  else             prodSort = prodSort==='old-asc'  ? 'old-desc': 'old-asc';
   renderProduction();
 }
-
-function sortNetCards(cards){
-  const c=[...cards];
-  switch(prodSort){
-    case 'qty-desc': return c.sort((a,b)=>b.net-a.net);
-    case 'qty-asc':  return c.sort((a,b)=>a.net-b.net);
-    case 'oldest':   return c.sort((a,b)=>(a.minDate||'9999').localeCompare(b.minDate||'9999'));
-    default: return c;
+function pwUpdateSortButtons(){
+  const qb=document.getElementById('pw-sort-qty'), ob=document.getElementById('pw-sort-old');
+  const qtyActive=prodSort.startsWith('qty'), oldActive=prodSort.startsWith('old');
+  if(qb){
+    qb.textContent='Qty '+(prodSort==='qty-asc'?'↑':'↓');
+    qb.style.background=qtyActive?'#1e40af':'#fff';
+    qb.style.color=qtyActive?'#fff':'#888';
+    qb.style.borderColor=qtyActive?'#1e40af':'#ddd';
+  }
+  if(ob){
+    ob.textContent='Old '+(prodSort==='old-desc'?'↓':'↑');
+    ob.style.background=oldActive?'#1e40af':'#fff';
+    ob.style.color=oldActive?'#fff':'#888';
+    ob.style.borderColor=oldActive?'#1e40af':'#ddd';
   }
 }
-function setGridMode(m){ gridMode=m; renderProduction(); }
+function pwPrintPOS(){ printPendingPOS(prodView==='partygrid'?'party':'item'); }
+function pwShareWA(){ sharePendingWhatsApp(prodView==='partygrid'?'party':'item'); }
+
+
 function printPendingGrid(){
   const d=window._gridPrintData;
   if(!d||!d.rows.length){alert('Nothing to print');return;}
-  const title='PENDING — '+(d.mode==='color'?'Color-wise':'Shape-wise');
+  const title='PENDING — '+d.mode;
   const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
     <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
     ${r.items.map(i=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
@@ -2799,24 +2791,9 @@ function printPendingGrid(){
   win.focus();
   setTimeout(()=>{win.print();setTimeout(()=>win.close(),1000);},400);
 }
-function toggleAgingFilter(){
-  agingFilter=!agingFilter;
-  const b=document.getElementById('pw-aging-btn');
-  if(b){ b.style.background=agingFilter?'#dc2626':'#fff'; b.style.color=agingFilter?'#fff':'#dc2626'; }
-  renderProduction();
-}
-function pwGotoParty(p){
-  const s=document.getElementById('prod-search');
-  if(s)s.value=p;
-  setProdView('party');
-}
-function pwAgeDays(dateStr){
-  if(!dateStr)return 0;
-  return Math.floor((Date.now()-new Date(dateStr+'T00:00:00').getTime())/86400000);
-}
+
 
 function renderProduction(){
-  const search=(document.getElementById('prod-search')||{value:''}).value.trim().toLowerCase();
 
   // ── Build net-pending across ALL pending orders (all dates) ──
   // ordered[color||shape] = {totalKg, parties:{name->{kg, earliestDate}}, dates:[]}
@@ -2881,259 +2858,126 @@ function renderProduction(){
   const summary=document.getElementById('prod-summary');
   const emptyEl=document.getElementById('empty-prod');
 
-  // Stats bar (always shown)
-  // ── Pending page filters (size / party / aging) ──────────────
+  // ── Filters (party / color / size) ────────────────────────────
   const pwSize=(document.getElementById('pw-size-filter')||{value:''}).value.trim().toLowerCase();
   const pwParty=(document.getElementById('pw-party-filter')||{value:''}).value.trim().toLowerCase();
-  const agedCount=rawCards.filter(c=>pwAgeDays(c.minDate)>=15).length;
-  const agingBtn=document.getElementById('pw-aging-btn');
-  if(agingBtn) agingBtn.textContent='⚠ 15+ days ('+agedCount+')';
-  if(pwSize)  rawCards=rawCards.filter(c=>c.shape.toLowerCase().includes(pwSize));
-  if(pwParty) rawCards=rawCards.filter(c=>Object.keys(c.parties).some(p=>p.toLowerCase().includes(pwParty)));
-  if(agingFilter) rawCards=rawCards.filter(c=>pwAgeDays(c.minDate)>=15);
-  if(pwSize||pwParty||agingFilter){
-    totalNetKg=rawCards.reduce((s,c)=>s+c.net,0);
+  const pwColor=(document.getElementById('pw-color-filter')||{value:''}).value.trim().toLowerCase();
+  function pwAlias(colorCode){
+    const cc=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
+    return (cc && typeof cc==='object' && cc.alias) ? cc.alias : '';
   }
+  if(pwSize)  rawCards=rawCards.filter(c=>c.shape.toLowerCase().includes(pwSize));
+  if(pwColor) rawCards=rawCards.filter(c=>c.color.toLowerCase().includes(pwColor)||pwAlias(c.color).toLowerCase().includes(pwColor));
+  if(pwParty){
+    // Keep only matching parties inside each card, drop cards with none
+    rawCards=rawCards.map(c=>{
+      const parties={};
+      let net=0;
+      Object.entries(c.parties).forEach(([p,kg])=>{
+        if(p.toLowerCase().includes(pwParty)){parties[p]=kg;net+=kg;}
+      });
+      return net>0?{...c,parties,net}:null;
+    }).filter(Boolean);
+  }
+  totalNetKg=rawCards.reduce((s,c)=>s+c.net,0);
+  const dueEl=document.getElementById('pw-due');
+  if(dueEl) dueEl.textContent=totalNetKg.toFixed(2);
+  pwUpdateSortButtons();
   // Populate filter datalists
   const dlSh=document.getElementById('dl-pw-shapes');
-  if(dlSh) dlSh.innerHTML=[...new Set(rawCards.map(c=>c.shape))].sort().map(s=>`<option value="${s}">`).join('');
+  if(dlSh) dlSh.innerHTML=[...new Set(rawCards.map(c=>c.shape))].sort().map(x=>`<option value="${x}">`).join('');
   const dlPa=document.getElementById('dl-pw-parties');
-  if(dlPa) dlPa.innerHTML=[...new Set(rawCards.flatMap(c=>Object.keys(c.parties)))].sort().map(p=>`<option value="${p}">`).join('');
+  if(dlPa) dlPa.innerHTML=[...new Set(rawCards.flatMap(c=>Object.keys(c.parties)))].sort().map(x=>`<option value="${x}">`).join('');
+  const dlCo=document.getElementById('dl-pw-colors');
+  if(dlCo) dlCo.innerHTML=[...new Set(rawCards.map(c=>c.color))].sort().map(x=>`<option value="${x}">`).join('');
 
-  const statsBar=`<div style="display:flex;gap:8px;margin-bottom:14px;position:sticky;top:0;z-index:20;background:#f4f6f9;padding:6px 0">
-    <div class="stat"><div class="stat-label">Net Due (kg)</div><div class="stat-val" style="font-size:18px;color:#d97706">${totalNetKg.toFixed(2)}</div></div>
-    <div class="stat"><div class="stat-label">Items Pending</div><div class="stat-val" style="font-size:18px">${rawCards.length}</div></div>
-  </div>`;
-
-  if(!rawCards.length && !orders.filter(o=>o.status==='Pending').length){
-    emptyEl.style.display='block';
-    summary.innerHTML=statsBar;
+  if(!rawCards.length){
+    if(!orders.filter(o=>o.status==='Pending').length) emptyEl.style.display='block';
+    summary.innerHTML='<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0">No pending items match.</div>';
+    window._gridPrintData=null;
     return;
   }
   emptyEl.style.display='none';
 
-  if(prodView==='grid'){
-    // ── GRID VIEW: compact cards, color-wise / shape-wise ───────
-    function gridAlias(colorCode){
-      const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
-      return (c && typeof c==='object' && c.alias) ? c.alias : '';
-    }
-    let cards=[...rawCards];
-    if(search) cards=cards.filter(c=>
-      c.color.toLowerCase().includes(search)||
-      c.shape.toLowerCase().includes(search)||
-      gridAlias(c.color).toLowerCase().includes(search)
-    );
-    const modeBtns=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-      <div style="display:flex;gap:0;border:1.5px solid #ddd;border-radius:7px;overflow:hidden;width:fit-content">
-        <button onclick="setGridMode('color')" style="padding:4px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:${gridMode==='color'?'#2563eb':'#fff'};color:${gridMode==='color'?'#fff':'#888'}">Color-wise</button>
-        <button onclick="setGridMode('shape')" style="padding:4px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:${gridMode==='shape'?'#2563eb':'#fff'};color:${gridMode==='shape'?'#fff':'#888'}">Shape-wise</button>
-      </div>
-      <button onclick="printPendingGrid()" style="padding:4px 14px;font-size:11px;font-weight:600;border:1.5px solid #1a1a1a;border-radius:7px;background:#1a1a1a;color:#fff;cursor:pointer">🖨 Print</button>
+  // ── Unified grid renderer (color / shape / partygrid) ─────────
+  function shapeCat(s){
+    if(/^\d+n$/.test(s)) return 0;
+    if(/fc$|k$/.test(s)) return 1;
+    return 2;
+  }
+  function shapeNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
+  function shapeSort(a,b){
+    const ca=shapeCat(a),cb=shapeCat(b);
+    if(ca!==cb)return ca-cb;
+    const na=shapeNum(a),nb=shapeNum(b);
+    if(na!==nb)return na-nb;
+    return a.localeCompare(b);
+  }
+  // Build groups by view
+  const groups={};
+  if(prodView==='partygrid'){
+    rawCards.forEach(c=>{
+      Object.entries(c.parties).forEach(([party,kg])=>{
+        if(!groups[party])groups[party]={total:0,items:[],minDate:c.minDate};
+        groups[party].total+=kg;
+        groups[party].items.push({sortA:c.color,sortB:c.shape,
+          label:`${c.color}${pwAlias(c.color)?`<span style="color:#999;font-size:9px">/${pwAlias(c.color)}</span>`:''} ${c.shape}`,
+          plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''} ${c.shape}`, net:kg});
+        if(c.minDate<groups[party].minDate)groups[party].minDate=c.minDate;
+      });
+    });
+  } else if(prodView==='shape'){
+    rawCards.forEach(c=>{
+      if(!groups[c.shape])groups[c.shape]={total:0,items:[],minDate:c.minDate};
+      groups[c.shape].total+=c.net;
+      groups[c.shape].items.push({sortA:c.color,sortB:'',
+        label:`${c.color}${pwAlias(c.color)?`<span style="color:#999;font-size:9px">/${pwAlias(c.color)}</span>`:''}`,
+        plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''}`, net:c.net});
+      if(c.minDate<groups[c.shape].minDate)groups[c.shape].minDate=c.minDate;
+    });
+  } else { // color
+    rawCards.forEach(c=>{
+      if(!groups[c.color])groups[c.color]={total:0,items:[],minDate:c.minDate,alias:pwAlias(c.color)};
+      groups[c.color].total+=c.net;
+      groups[c.color].items.push({sortA:c.shape,sortB:'',label:c.shape,plainLabel:c.shape,net:c.net,isShape:true});
+      if(c.minDate<groups[c.color].minDate)groups[c.color].minDate=c.minDate;
+    });
+  }
+  let rows=Object.entries(groups);
+  // Sort groups
+  if(prodSort==='qty-desc')      rows.sort((a,b)=>b[1].total-a[1].total);
+  else if(prodSort==='qty-asc')  rows.sort((a,b)=>a[1].total-b[1].total);
+  else if(prodSort==='old-asc')  rows.sort((a,b)=>(a[1].minDate||'9999').localeCompare(b[1].minDate||'9999'));
+  else                           rows.sort((a,b)=>(b[1].minDate||'').localeCompare(a[1].minDate||''));
+  const grandTotal=rows.reduce((s,[,g])=>s+g.total,0);
+  // Sort items within cards
+  rows.forEach(([,g])=>{
+    g.items.sort((a,b)=>{
+      if(a.isShape) return shapeSort(a.sortA,b.sortA);
+      const c=a.sortA.localeCompare(b.sortA);
+      return c!==0?c:shapeSort(a.sortB||'',b.sortB||'');
+    });
+  });
+  // Save for A4 print
+  const printTitle = prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise';
+  window._gridPrintData={mode:printTitle,rows:rows.map(([key,g])=>({
+    key, alias:g.alias||'', total:g.total,
+    items:g.items.map(i=>({label:i.plainLabel,net:i.net}))
+  })), grandTotal};
+  // Render
+  const cardHtml=rows.map(([key,g])=>{
+    const lines=g.items.map(i=>
+      `<div style="font-size:11px;display:flex;justify-content:space-between;padding:1px 0;gap:6px"><span>${i.label}</span><b style="color:#d97706">${i.net.toFixed(2)}</b></div>`
+    ).join('');
+    return `<div style="border:1px solid #eee;border-radius:8px;padding:6px 9px;background:#fff">
+      <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${key}${g.alias?`<span style="color:#888;font-size:10px;font-weight:500">/${g.alias}</span>`:''}</div>
+      ${lines}
+      <div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>
     </div>`;
-    if(!cards.length){
-      summary.innerHTML=statsBar+modeBtns+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
-      window._gridPrintData=null;
-      return;
-    }
-    function shapeCat(s){
-      if(/^\d+n$/.test(s)) return 0;
-      if(/fc$|k$/.test(s)) return 1;
-      return 2;
-    }
-    function shapeNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
-    function shapeSort(a,b){
-      const ca=shapeCat(a),cb=shapeCat(b);
-      if(ca!==cb)return ca-cb;
-      const na=shapeNum(a),nb=shapeNum(b);
-      if(na!==nb)return na-nb;
-      return a.localeCompare(b);
-    }
-    // Group by color or shape
-    const groups={};
-    cards.forEach(c=>{
-      const key = gridMode==='color' ? c.color : c.shape;
-      if(!groups[key])groups[key]={total:0,items:[]};
-      groups[key].total+=c.net;
-      groups[key].items.push(c);
-    });
-    let rows=Object.entries(groups);
-    rows.sort((a,b)=>prodSort==='qty-asc'?a[1].total-b[1].total:b[1].total-a[1].total);
-    const grandTotal=rows.reduce((s,[,g])=>s+g.total,0);
-    // Save for print
-    window._gridPrintData={mode:gridMode,rows:rows.map(([key,g])=>({
-      key, alias: gridMode==='color'?gridAlias(key):'',
-      total:g.total,
-      items:[...g.items].sort((a,b)=>gridMode==='color'?shapeSort(a.shape,b.shape):a.color.localeCompare(b.color))
-        .map(c=>({label: gridMode==='color'?c.shape:(c.color+(gridAlias(c.color)?'/'+gridAlias(c.color):'')), net:c.net}))
-    })), grandTotal};
-    // Render cards
-    const cardHtml=rows.map(([key,g])=>{
-      const alias = gridMode==='color'?gridAlias(key):'';
-      const items=[...g.items].sort((a,b)=>gridMode==='color'?shapeSort(a.shape,b.shape):a.color.localeCompare(b.color));
-      const lines=items.map(c=>{
-        const label = gridMode==='color'
-          ? c.shape
-          : `${c.color}${gridAlias(c.color)?`<span style="color:#999;font-size:9px">/${gridAlias(c.color)}</span>`:''}`;
-        return `<div style="font-size:11px;display:flex;justify-content:space-between;padding:1px 0;gap:6px"><span>${label}</span><b style="color:#d97706">${c.net.toFixed(2)}</b></div>`;
-      }).join('');
-      return `<div style="border:1px solid #eee;border-radius:8px;padding:6px 9px;background:#fff;break-inside:avoid">
-        <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${key}${alias?`<span style="color:#888;font-size:10px;font-weight:500">/${alias}</span>`:''}</div>
-        ${lines}
-        <div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>
-      </div>`;
-    }).join('');
-    summary.innerHTML=statsBar+modeBtns+
-      `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${gridMode==='color'?'color(s)':'shape(s)'} · Net due = Ordered − Invoiced</div>`+
-      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px">${cardHtml}</div>`;
-    return;
-  }
-
-  if(prodView==='item'){
-    // ── ITEM-WISE VIEW ──────────────────────────────────────────
-    let cards=sortNetCards(rawCards);
-    if(search) cards=cards.filter(c=>
-      c.color.toLowerCase().includes(search)||
-      c.shape.toLowerCase().includes(search)||
-      Object.keys(c.parties).some(p=>p.toLowerCase().includes(search))
-    );
-    if(!cards.length){
-      summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
-      return;
-    }
-    function pwAlias(colorCode){
-      const cc=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
-      return (cc && typeof cc==='object' && cc.alias) ? cc.alias : '';
-    }
-    summary.innerHTML=statsBar+
-      `<div style="font-size:11px;color:#888;margin-bottom:10px">${cards.length} item(s) · Net due = Ordered − Invoiced</div>`+
-      cards.map(c=>{
-        const age=pwAgeDays(c.minDate);
-        const borderColor=age>=15?'#dc2626':age>=7?'#f59e0b':'#16a34a';
-        const ageBadge=age>=15
-          ?`<span style="background:#fee2e2;color:#dc2626;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">${age} DAYS OLD</span>`
-          :age>=7?`<span style="background:#fef3c7;color:#b45309;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">${age} DAYS</span>`:'';
-        const isNew=pwAgeDays(c.maxDate)<=1;
-        const newBadge=isNew?`<span style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">NEW${pwAgeDays(c.maxDate)===0?' TODAY':''}</span>`:'';
-        const pct=c.ordKg>0?Math.min(100,Math.round(c.invKg/c.ordKg*100)):0;
-        const alias=pwAlias(c.color);
-        const partyBreakdown=Object.entries(c.parties)
-          .map(([p,kg])=>`<span onclick="pwGotoParty(decodeURIComponent('${encodeURIComponent(p)}'))" style="background:#f0f4ff;border-radius:4px;padding:1px 8px;font-size:11px;color:#2563eb;cursor:pointer">${p}: ${fmtKg(kg)}</span>`)
-          .join('');
-        return `<div class="prod-card" style="border-left:4px solid ${borderColor};display:block">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="font-size:14px;font-weight:700">${c.color}${alias?`<span style="color:#888;font-size:11px;font-weight:500">/${alias}</span>`:''} <span style="color:#aaa">◆</span> ${c.shape}</span>
-            ${ageBadge}${newBadge}
-            <span style="margin-left:auto;font-size:19px;font-weight:800;color:#d97706">${fmtKg(c.net)}</span>
-          </div>
-          ${c.invKg>0?`<div style="display:flex;align-items:center;gap:6px;margin:5px 0 3px">
-            <div style="flex:1;height:5px;background:#f1f5f9;border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#16a34a"></div></div>
-            <span style="font-size:10px;color:#16a34a;font-weight:600">${pct}% done (${fmtKg(c.invKg)} / ${fmtKg(c.ordKg)})</span>
-          </div>`:''}
-          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:4px">
-            ${partyBreakdown}
-            <span style="font-size:10px;color:#999;margin-left:auto;white-space:nowrap">📅 ${fmtDate(c.minDate)}${c.minDate!==c.maxDate?' → '+fmtDate(c.maxDate):''} · ${c.orderCount} order${c.orderCount>1?'s':''}</span>
-          </div>
-        </div>`;
-      }).join('');
-
-  } else {
-    // ── PARTY-WISE VIEW ─────────────────────────────────────────
-    // Build per-party net pending
-    const partyMap={};
-    orders.filter(o=>o.status==='Pending').forEach(o=>{
-      if(!partyMap[o.party])partyMap[o.party]={items:{},dates:[]};
-      o.items.filter(i=>!i.cancelled).forEach(i=>{
-        const key=i.color+'||'+i.shape;
-        if(!partyMap[o.party].items[key])partyMap[o.party].items[key]={ordKg:0,invKg:0,color:i.color,shape:i.shape,earliestDate:o.date};
-        partyMap[o.party].items[key].ordKg+=parseFloat(i.kg||0);
-        // Track earliest pending order date for this party+item
-        if(o.date < partyMap[o.party].items[key].earliestDate)
-          partyMap[o.party].items[key].earliestDate=o.date;
-      });
-      if(!partyMap[o.party].dates.includes(o.date))partyMap[o.party].dates.push(o.date);
-    });
-    // subtract invoiced per party — only invoices on/after earliest pending order date
-    Object.keys(partyMap).forEach(party=>{
-      Object.keys(partyMap[party].items).forEach(key=>{
-        const it=partyMap[party].items[key];
-        const relevantInvKg=invoices
-          .filter(inv=>inv.party===party && inv.date>=it.earliestDate)
-          .reduce((s,inv)=>{
-            const found=(inv.items||[]).find(i=>i.color+'||'+i.shape===key);
-            return s+(found?parseFloat(found.kg||0):0);
-          },0);
-        it.invKg=relevantInvKg;
-      });
-    });
-
-    let partyNames=Object.keys(partyMap);
-    if(search) partyNames=partyNames.filter(p=>
-      p.toLowerCase().includes(search)||
-      Object.values(partyMap[p].items).some(it=>
-        it.color.toLowerCase().includes(search)||it.shape.toLowerCase().includes(search)
-      )
-    );
-    if(!partyNames.length){
-      summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No parties match your search.</div>';
-      return;
-    }
-
-    // Sort parties by total net pending
-    partyNames.sort((a,b)=>{
-      const netA=Object.values(partyMap[a].items).reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
-      const netB=Object.values(partyMap[b].items).reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
-      return prodSort==='qty-asc'?netA-netB:netB-netA;
-    });
-
-    const partyCards=partyNames.map(party=>{
-      const data=partyMap[party];
-      const itemEntries=Object.values(data.items);
-      let rows=itemEntries.map(it=>{
-        const net=it.ordKg-it.invKg;
-        if(net<1.0)return '';
-        return `<tr>
-          <td style="padding:6px 8px;font-size:12px;font-weight:600">${it.color}</td>
-          <td style="padding:6px 8px;font-size:12px;color:#888">${it.shape}</td>
-          <td style="padding:6px 8px;font-size:12px;text-align:right;color:#888">${fmtKg(it.ordKg)}</td>
-          <td style="padding:6px 8px;font-size:12px;text-align:right;color:#16a34a">${it.invKg>0?fmtKg(it.invKg):'-'}</td>
-          <td style="padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#d97706">${fmtKg(net)}</td>
-        </tr>`;
-      }).filter(Boolean).join('');
-      if(!rows)return '';
-      const totalNet=itemEntries.reduce((s,i)=>s+Math.max(0,i.ordKg-i.invKg),0);
-      const datesStr=data.dates.sort().join(', ');
-      // Get order ids for this party
-
-      return `<div class="party-pending-card" style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div>
-            <div style="font-size:14px;font-weight:700">${party}</div>
-            <div style="font-size:11px;color:#aaa">Orders dated: ${datesStr}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:20px;font-weight:700;color:#d97706">${fmtKg(totalNet)}</div>
-            <div style="font-size:11px;color:#aaa">net due</div>
-          </div>
-        </div>
-
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="border-bottom:1.5px solid #f0f0f0">
-            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:left">Color</th>
-            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:left">Shape</th>
-            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Ordered</th>
-            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Invoiced</th>
-            <th style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;padding:3px 8px;text-align:right">Net Due</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
-    }).filter(Boolean).join('');
-
-    summary.innerHTML=statsBar+
-      `<div style="font-size:11px;color:#888;margin-bottom:10px">${partyNames.length} part${partyNames.length===1?'y':'ies'} · Net due = Ordered − Invoiced</div>`+
-      partyCards;
-  }
+  }).join('');
+  summary.innerHTML=
+    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · Net due = Ordered − Invoiced</div>`+
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${prodView==='partygrid'?'200px':'170px'},1fr));gap:6px">${cardHtml}</div>`;
 }
 
 // ============================================================
