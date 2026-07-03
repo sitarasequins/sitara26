@@ -480,22 +480,22 @@ tr:hover td{background:#f8faff}
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <input type="date" id="inv-date-from" onchange="renderInvoiceList()" title="From date"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
-            <span style="font-size:11px;color:#888">to</span>
+              style="padding:4px 6px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:118px">
+            <span style="font-size:10px;color:#888">to</span>
             <input type="date" id="inv-date-to" onchange="renderInvoiceList()" title="To date"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none">
-            <input type="text" id="inv-party-filter" list="dl-inv-parties" placeholder="All Parties" oninput="renderInvoiceList()"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:160px">
+              style="padding:4px 6px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:118px">
+            <input type="text" id="inv-party-filter" list="dl-inv-parties" placeholder="Party" oninput="renderInvoiceList()"
+              style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:115px">
             <datalist id="dl-inv-parties"></datalist>
-            <input type="text" id="inv-shape-filter" list="dl-inv-shapes" placeholder="All Sizes" oninput="renderInvoiceList()"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:100px">
+            <input type="text" id="inv-shape-filter" list="dl-inv-shapes" placeholder="Size" oninput="renderInvoiceList()"
+              style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:70px">
             <datalist id="dl-inv-shapes"></datalist>
-            <input type="text" id="inv-item-search" list="dl-inv-colors" placeholder="🔍 Color..." oninput="renderInvoiceList()"
-              style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:130px">
+            <input type="text" id="inv-item-search" list="dl-inv-colors" placeholder="🔍 Color" oninput="renderInvoiceList()"
+              style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:90px">
             <datalist id="dl-inv-colors"></datalist>
-            <button class="btn btn-sm" onclick="document.getElementById('inv-date-from').value='';document.getElementById('inv-date-to').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-shape-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:11px">✕ Clear</button>
-            <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">📤 Export Tally XML</button>
-            <button class="btn btn-sm" onclick="openDispatchRegister()" style="background:#0f766e;color:#fff;border-color:#0f766e">📋 Dispatch Register</button>
+            <button class="btn btn-sm" onclick="document.getElementById('inv-date-from').value='';document.getElementById('inv-date-to').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-shape-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:10px;padding:4px 8px">✕</button>
+            <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;font-size:11px;padding:4px 10px">📤 Tally XML</button>
+            <button class="btn btn-sm" onclick="openDispatchRegister()" style="background:#0f766e;color:#fff;border-color:#0f766e;font-size:11px;padding:4px 10px">📋 Dispatch</button>
           </div>
         </div>
         <table>
@@ -590,6 +590,8 @@ tr:hover td{background:#f8faff}
         <!-- Sort -->
         <button class="sbtn active" id="sb-qty-desc" onclick="setProdSort('qty-desc',this)">Qty <span class="arr">↓</span></button>
         <button class="sbtn" id="sb-qty-asc" onclick="setProdSort('qty-asc',this)">Qty <span class="arr">↑</span></button>
+        <button class="sbtn" id="sb-oldest" onclick="setProdSort('oldest',this)">Oldest first</button>
+        <button id="pw-aging-btn" onclick="toggleAgingFilter()" style="padding:5px 12px;border:1.5px solid #dc2626;border-radius:7px;font-size:11px;color:#dc2626;background:#fff;cursor:pointer;font-weight:600">⚠ 15+ days</button>
         <!-- Export & Print -->
         <button class="btn btn-sm" onclick="exportPendingXLS()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8">📊 Export XLS</button>
         <button class="btn btn-sm" onclick="printPendingPOS('item')" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 Item POS</button>
@@ -597,10 +599,16 @@ tr:hover td{background:#f8faff}
         <button class="btn btn-sm" onclick="sharePendingWhatsApp('item')" style="background:#25D366;color:#fff;border-color:#25D366">💬 Item WA</button>
         <button class="btn btn-sm" onclick="sharePendingWhatsApp('party')" style="background:#128C7E;color:#fff;border-color:#128C7E">💬 Party WA</button>
 
-        <!-- Search -->
+        <!-- Search & filters -->
         <input id="prod-search" type="text" placeholder="🔍 Search item / party…"
           oninput="renderProduction()"
-          style="padding:6px 12px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:190px;outline:none">
+          style="padding:6px 12px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:170px;outline:none">
+        <input id="pw-size-filter" type="text" list="dl-pw-shapes" placeholder="Size (3n…)" oninput="renderProduction()"
+          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:90px;outline:none">
+        <datalist id="dl-pw-shapes"></datalist>
+        <input id="pw-party-filter" type="text" list="dl-pw-parties" placeholder="Party" oninput="renderProduction()"
+          style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:110px;outline:none">
+        <datalist id="dl-pw-parties"></datalist>
       </div>
     </div>
     <div id="prod-summary"></div>
@@ -1164,6 +1172,8 @@ window._syncToWindow = function(){
   window.nextInvoiceNum=nextInvoiceNum;
 };
 let prodSort='qty-desc';
+let gridMode='color';   // grid view sub-mode: 'color' or 'shape'
+let agingFilter=false;  // show only 15+ days old pending
 let orderSort='date';
 let invSort='date';
 
@@ -2758,8 +2768,51 @@ function sortNetCards(cards){
   switch(prodSort){
     case 'qty-desc': return c.sort((a,b)=>b.net-a.net);
     case 'qty-asc':  return c.sort((a,b)=>a.net-b.net);
+    case 'oldest':   return c.sort((a,b)=>(a.minDate||'9999').localeCompare(b.minDate||'9999'));
     default: return c;
   }
+}
+function setGridMode(m){ gridMode=m; renderProduction(); }
+function printPendingGrid(){
+  const d=window._gridPrintData;
+  if(!d||!d.rows.length){alert('Nothing to print');return;}
+  const title='PENDING — '+(d.mode==='color'?'Color-wise':'Shape-wise');
+  const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
+    <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
+    ${r.items.map(i=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
+    <div style="font-size:10px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:2px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
+  </div>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:8mm}
+    @page{size:A4;margin:8mm}
+  </style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px">
+      <span style="font-size:14px;font-weight:700">${title}</span>
+      <span style="font-size:11px">${fmtDate(today())} · Total: ${d.grandTotal.toFixed(2)} kg</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">${cards}</div>
+    <div style="border-top:2px solid #000;margin-top:8px;padding-top:4px;font-size:12px;font-weight:700;text-align:right">GRAND TOTAL: ${d.grandTotal.toFixed(2)} kg</div>
+  </body></html>`;
+  const win=window.open('','_blank','width=800,height=900');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{win.print();setTimeout(()=>win.close(),1000);},400);
+}
+function toggleAgingFilter(){
+  agingFilter=!agingFilter;
+  const b=document.getElementById('pw-aging-btn');
+  if(b){ b.style.background=agingFilter?'#dc2626':'#fff'; b.style.color=agingFilter?'#fff':'#dc2626'; }
+  renderProduction();
+}
+function pwGotoParty(p){
+  const s=document.getElementById('prod-search');
+  if(s)s.value=p;
+  setProdView('party');
+}
+function pwAgeDays(dateStr){
+  if(!dateStr)return 0;
+  return Math.floor((Date.now()-new Date(dateStr+'T00:00:00').getTime())/86400000);
 }
 
 function renderProduction(){
@@ -2799,7 +2852,7 @@ function renderProduction(){
   });
 
   // ── Build raw item cards ──────────────────────────────────────
-  const rawCards=[];
+  let rawCards=[];
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
     const pendingParties={};
@@ -2819,7 +2872,9 @@ function renderProduction(){
     if(itemNet>=1.0){
       totalNetKg+=itemNet;
       const [color,shape]=key.split('||');
-      rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,parties:pendingParties,dates:v.dates});
+      const sortedDates=[...v.dates].sort();
+      rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,parties:pendingParties,dates:v.dates,
+        minDate:sortedDates[0]||'',maxDate:sortedDates[sortedDates.length-1]||'',orderCount:v.dates.length});
     }
   });
 
@@ -2827,7 +2882,25 @@ function renderProduction(){
   const emptyEl=document.getElementById('empty-prod');
 
   // Stats bar (always shown)
-  const statsBar=`<div style="display:flex;gap:8px;margin-bottom:14px">
+  // ── Pending page filters (size / party / aging) ──────────────
+  const pwSize=(document.getElementById('pw-size-filter')||{value:''}).value.trim().toLowerCase();
+  const pwParty=(document.getElementById('pw-party-filter')||{value:''}).value.trim().toLowerCase();
+  const agedCount=rawCards.filter(c=>pwAgeDays(c.minDate)>=15).length;
+  const agingBtn=document.getElementById('pw-aging-btn');
+  if(agingBtn) agingBtn.textContent='⚠ 15+ days ('+agedCount+')';
+  if(pwSize)  rawCards=rawCards.filter(c=>c.shape.toLowerCase().includes(pwSize));
+  if(pwParty) rawCards=rawCards.filter(c=>Object.keys(c.parties).some(p=>p.toLowerCase().includes(pwParty)));
+  if(agingFilter) rawCards=rawCards.filter(c=>pwAgeDays(c.minDate)>=15);
+  if(pwSize||pwParty||agingFilter){
+    totalNetKg=rawCards.reduce((s,c)=>s+c.net,0);
+  }
+  // Populate filter datalists
+  const dlSh=document.getElementById('dl-pw-shapes');
+  if(dlSh) dlSh.innerHTML=[...new Set(rawCards.map(c=>c.shape))].sort().map(s=>`<option value="${s}">`).join('');
+  const dlPa=document.getElementById('dl-pw-parties');
+  if(dlPa) dlPa.innerHTML=[...new Set(rawCards.flatMap(c=>Object.keys(c.parties)))].sort().map(p=>`<option value="${p}">`).join('');
+
+  const statsBar=`<div style="display:flex;gap:8px;margin-bottom:14px;position:sticky;top:0;z-index:20;background:#f4f6f9;padding:6px 0">
     <div class="stat"><div class="stat-label">Net Due (kg)</div><div class="stat-val" style="font-size:18px;color:#d97706">${totalNetKg.toFixed(2)}</div></div>
     <div class="stat"><div class="stat-label">Items Pending</div><div class="stat-val" style="font-size:18px">${rawCards.length}</div></div>
   </div>`;
@@ -2840,7 +2913,7 @@ function renderProduction(){
   emptyEl.style.display='none';
 
   if(prodView==='grid'){
-    // ── GRID VIEW: color rows × shape columns, split into chunks ─
+    // ── GRID VIEW: compact cards, color-wise / shape-wise ───────
     function gridAlias(colorCode){
       const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
       return (c && typeof c==='object' && c.alias) ? c.alias : '';
@@ -2851,71 +2924,68 @@ function renderProduction(){
       c.shape.toLowerCase().includes(search)||
       gridAlias(c.color).toLowerCase().includes(search)
     );
+    const modeBtns=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+      <div style="display:flex;gap:0;border:1.5px solid #ddd;border-radius:7px;overflow:hidden;width:fit-content">
+        <button onclick="setGridMode('color')" style="padding:4px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:${gridMode==='color'?'#2563eb':'#fff'};color:${gridMode==='color'?'#fff':'#888'}">Color-wise</button>
+        <button onclick="setGridMode('shape')" style="padding:4px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:${gridMode==='shape'?'#2563eb':'#fff'};color:${gridMode==='shape'?'#fff':'#888'}">Shape-wise</button>
+      </div>
+      <button onclick="printPendingGrid()" style="padding:4px 14px;font-size:11px;font-weight:600;border:1.5px solid #1a1a1a;border-radius:7px;background:#1a1a1a;color:#fff;cursor:pointer">🖨 Print</button>
+    </div>`;
     if(!cards.length){
-      summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
+      summary.innerHTML=statsBar+modeBtns+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
+      window._gridPrintData=null;
       return;
     }
-    // Pivot: color -> shape -> net
-    const pivot={};
-    const shapeSet=new Set();
-    cards.forEach(c=>{
-      if(!pivot[c.color])pivot[c.color]={};
-      pivot[c.color][c.shape]=(pivot[c.color][c.shape]||0)+c.net;
-      shapeSet.add(c.shape);
-    });
-    // Sort shapes: n-series by number, then fc/k, then rest
     function shapeCat(s){
       if(/^\d+n$/.test(s)) return 0;
       if(/fc$|k$/.test(s)) return 1;
       return 2;
     }
     function shapeNum(s){ const m=s.match(/\d+/); return m?parseInt(m[0]):0; }
-    const allShapes=[...shapeSet].sort((a,b)=>{
+    function shapeSort(a,b){
       const ca=shapeCat(a),cb=shapeCat(b);
       if(ca!==cb)return ca-cb;
       const na=shapeNum(a),nb=shapeNum(b);
       if(na!==nb)return na-nb;
       return a.localeCompare(b);
+    }
+    // Group by color or shape
+    const groups={};
+    cards.forEach(c=>{
+      const key = gridMode==='color' ? c.color : c.shape;
+      if(!groups[key])groups[key]={total:0,items:[]};
+      groups[key].total+=c.net;
+      groups[key].items.push(c);
     });
-    // Split into chunks of max 8 columns
-    const chunks=[];
-    for(let i=0;i<allShapes.length;i+=8) chunks.push(allShapes.slice(i,i+8));
-    // Build one table per chunk
-    const tables=chunks.map(chunkShapes=>{
-      // Rows: colors with pending in at least one shape of this chunk
-      const rowColors=Object.keys(pivot).filter(col=>chunkShapes.some(s=>pivot[col][s]>0));
-      if(!rowColors.length)return '';
-      // Sort rows by chunk total desc
-      const rowTotal=col=>chunkShapes.reduce((s,sh)=>s+(pivot[col][sh]||0),0);
-      rowColors.sort((a,b)=>rowTotal(b)-rowTotal(a));
-      const colTotals=chunkShapes.map(sh=>rowColors.reduce((s,col)=>s+(pivot[col][sh]||0),0));
-      const grandTotal=colTotals.reduce((s,v)=>s+v,0);
-      const head=`<tr style="background:#f0f4ff">
-        <th style="padding:3px 8px;text-align:left;border:1px solid #e0e7ff;color:#2563eb;font-size:11px;white-space:nowrap">COLOR</th>
-        ${chunkShapes.map(sh=>`<th style="padding:3px 8px;border:1px solid #e0e7ff;color:#2563eb;font-size:11px;text-align:center">${sh}</th>`).join('')}
-        <th style="padding:3px 8px;border:1px solid #e0e7ff;color:#92400e;font-size:11px;text-align:center;background:#fef3c7">TOTAL</th>
-      </tr>`;
-      const body=rowColors.map(col=>{
-        const alias=gridAlias(col);
-        return `<tr>
-          <td style="padding:3px 8px;border:1px solid #eee;white-space:nowrap"><b>${col}</b>${alias?`<span style="color:#888;font-size:11px">/${alias}</span>`:''}</td>
-          ${chunkShapes.map(sh=>{
-            const v=pivot[col][sh]||0;
-            return `<td style="padding:3px 8px;border:1px solid #eee;text-align:center;${v>0?'font-weight:600;color:#d97706':'color:#ddd'}">${v>0?v.toFixed(2):'—'}</td>`;
-          }).join('')}
-          <td style="padding:3px 8px;border:1px solid #eee;text-align:center;font-weight:700;background:#fffbeb">${rowTotal(col).toFixed(2)}</td>
-        </tr>`;
+    let rows=Object.entries(groups);
+    rows.sort((a,b)=>prodSort==='qty-asc'?a[1].total-b[1].total:b[1].total-a[1].total);
+    const grandTotal=rows.reduce((s,[,g])=>s+g.total,0);
+    // Save for print
+    window._gridPrintData={mode:gridMode,rows:rows.map(([key,g])=>({
+      key, alias: gridMode==='color'?gridAlias(key):'',
+      total:g.total,
+      items:[...g.items].sort((a,b)=>gridMode==='color'?shapeSort(a.shape,b.shape):a.color.localeCompare(b.color))
+        .map(c=>({label: gridMode==='color'?c.shape:(c.color+(gridAlias(c.color)?'/'+gridAlias(c.color):'')), net:c.net}))
+    })), grandTotal};
+    // Render cards
+    const cardHtml=rows.map(([key,g])=>{
+      const alias = gridMode==='color'?gridAlias(key):'';
+      const items=[...g.items].sort((a,b)=>gridMode==='color'?shapeSort(a.shape,b.shape):a.color.localeCompare(b.color));
+      const lines=items.map(c=>{
+        const label = gridMode==='color'
+          ? c.shape
+          : `${c.color}${gridAlias(c.color)?`<span style="color:#999;font-size:9px">/${gridAlias(c.color)}</span>`:''}`;
+        return `<div style="font-size:11px;display:flex;justify-content:space-between;padding:1px 0;gap:6px"><span>${label}</span><b style="color:#d97706">${c.net.toFixed(2)}</b></div>`;
       }).join('');
-      const foot=`<tr style="border-top:2px solid #1a1a1a">
-        <td style="padding:3px 8px;border:1px solid #eee;font-weight:700;font-size:11px">TOTAL</td>
-        ${colTotals.map(v=>`<td style="padding:3px 8px;border:1px solid #eee;text-align:center;font-weight:700;font-size:11px">${v>0?v.toFixed(2):'—'}</td>`).join('')}
-        <td style="padding:3px 8px;border:1px solid #eee;text-align:center;font-weight:700;background:#fef3c7">${grandTotal.toFixed(2)}</td>
-      </tr>`;
-      return `<div style="overflow-x:auto;margin-bottom:16px"><table style="border-collapse:collapse;font-size:12px;width:100%">${head}${body}${foot}</table></div>`;
+      return `<div style="border:1px solid #eee;border-radius:8px;padding:6px 9px;background:#fff;break-inside:avoid">
+        <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${key}${alias?`<span style="color:#888;font-size:10px;font-weight:500">/${alias}</span>`:''}</div>
+        ${lines}
+        <div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>
+      </div>`;
     }).join('');
-    summary.innerHTML=statsBar+
-      `<div style="font-size:11px;color:#888;margin-bottom:10px">Grid view · only shapes with pending shown · Net due = Ordered − Invoiced</div>`+
-      tables;
+    summary.innerHTML=statsBar+modeBtns+
+      `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${gridMode==='color'?'color(s)':'shape(s)'} · Net due = Ordered − Invoiced</div>`+
+      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px">${cardHtml}</div>`;
     return;
   }
 
@@ -2931,23 +3001,38 @@ function renderProduction(){
       summary.innerHTML=statsBar+'<div style="text-align:center;color:#bbb;font-size:13px;padding:20px 0">No items match your search.</div>';
       return;
     }
+    function pwAlias(colorCode){
+      const cc=colors.find(x=>(typeof x==='object'?x.name:x)===colorCode);
+      return (cc && typeof cc==='object' && cc.alias) ? cc.alias : '';
+    }
     summary.innerHTML=statsBar+
       `<div style="font-size:11px;color:#888;margin-bottom:10px">${cards.length} item(s) · Net due = Ordered − Invoiced</div>`+
       cards.map(c=>{
+        const age=pwAgeDays(c.minDate);
+        const borderColor=age>=15?'#dc2626':age>=7?'#f59e0b':'#16a34a';
+        const ageBadge=age>=15
+          ?`<span style="background:#fee2e2;color:#dc2626;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">${age} DAYS OLD</span>`
+          :age>=7?`<span style="background:#fef3c7;color:#b45309;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">${age} DAYS</span>`:'';
+        const isNew=pwAgeDays(c.maxDate)<=1;
+        const newBadge=isNew?`<span style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">NEW${pwAgeDays(c.maxDate)===0?' TODAY':''}</span>`:'';
+        const pct=c.ordKg>0?Math.min(100,Math.round(c.invKg/c.ordKg*100)):0;
+        const alias=pwAlias(c.color);
         const partyBreakdown=Object.entries(c.parties)
-          .map(([p,kg])=>`<span style="background:#f0f4ff;border-radius:4px;padding:1px 7px;font-size:11px;color:#2563eb;margin-right:4px">${p}: ${fmtKg(kg)}</span>`)
+          .map(([p,kg])=>`<span onclick="pwGotoParty(decodeURIComponent('${encodeURIComponent(p)}'))" style="background:#f0f4ff;border-radius:4px;padding:1px 8px;font-size:11px;color:#2563eb;cursor:pointer">${p}: ${fmtKg(kg)}</span>`)
           .join('');
-        const datesStr=c.dates.sort().map(d=>`<span style="font-size:10px;color:#bbb;background:#f5f5f5;border-radius:3px;padding:1px 5px;margin-right:3px">${d}</span>`).join('');
-        return `<div class="prod-card">
-          <div style="flex:1">
-            <div class="prod-item-label" style="margin-bottom:5px">🎨 ${c.color} &nbsp;<span style="color:#aaa">◆</span>&nbsp; ${c.shape}</div>
-            <div style="margin-bottom:3px">${partyBreakdown}</div>
-            <div>${datesStr}</div>
-            ${c.invKg>0?`<div style="font-size:11px;color:#16a34a;margin-top:3px">Invoiced: ${fmtKg(c.invKg)}</div>`:''}
+        return `<div class="prod-card" style="border-left:4px solid ${borderColor};display:block">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:14px;font-weight:700">${c.color}${alias?`<span style="color:#888;font-size:11px;font-weight:500">/${alias}</span>`:''} <span style="color:#aaa">◆</span> ${c.shape}</span>
+            ${ageBadge}${newBadge}
+            <span style="margin-left:auto;font-size:19px;font-weight:800;color:#d97706">${fmtKg(c.net)}</span>
           </div>
-          <div style="text-align:right;min-width:72px">
-            <div class="prod-kg" style="color:#d97706">${fmtKg(c.net)}</div>
-            <div style="font-size:11px;color:#aaa">net due</div>
+          ${c.invKg>0?`<div style="display:flex;align-items:center;gap:6px;margin:5px 0 3px">
+            <div style="flex:1;height:5px;background:#f1f5f9;border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#16a34a"></div></div>
+            <span style="font-size:10px;color:#16a34a;font-weight:600">${pct}% done (${fmtKg(c.invKg)} / ${fmtKg(c.ordKg)})</span>
+          </div>`:''}
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:4px">
+            ${partyBreakdown}
+            <span style="font-size:10px;color:#999;margin-left:auto;white-space:nowrap">📅 ${fmtDate(c.minDate)}${c.minDate!==c.maxDate?' → '+fmtDate(c.maxDate):''} · ${c.orderCount} order${c.orderCount>1?'s':''}</span>
           </div>
         </div>`;
       }).join('');
