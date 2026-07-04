@@ -358,6 +358,7 @@ tr:hover td{background:#f8faff}
     <button class="tab active" onclick="switchTab(&#39;invlist&#39;,this)">Invoice List</button>
     <button class="tab" onclick="switchTab(&#39;catalog&#39;,this)">Create</button>
     <button class="tab" onclick="switchTab('production',this)">Pending Work</button>
+    <button class="tab" onclick="switchTab('comparison',this)">Comparison</button>
     <button class="tab" onclick="switchTab('reports',this)">📊 Reports</button>
   </div>
 
@@ -723,6 +724,31 @@ tr:hover td{background:#f8faff}
     </div>
   </div>
   <!-- REPORTS -->
+  <div id="tab-comparison" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <h2 style="font-size:20px;font-weight:800;margin:0">Comparison</h2>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        <input type="date" id="cmp-from" onchange="renderComparison()" style="padding:4px 6px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:118px">
+        <span style="font-size:10px;color:#888">to</span>
+        <input type="date" id="cmp-to" onchange="renderComparison()" style="padding:4px 6px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:118px">
+        <input type="text" id="cmp-party" list="dl-cmp-parties" placeholder="Party" oninput="renderComparison()"
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:140px">
+        <datalist id="dl-cmp-parties"></datalist>
+        <button onclick="document.getElementById('cmp-from').value='';document.getElementById('cmp-to').value='';document.getElementById('cmp-party').value='';renderComparison()" style="padding:4px 8px;border:1.5px solid #ddd;border-radius:6px;font-size:10px;color:#888;background:#fff;cursor:pointer">✕</button>
+        <span style="width:1px;height:22px;background:#eee"></span>
+        <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
+          <button id="cmp-btn-comparison" onclick="setCmpView('comparison')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#2563eb;color:#fff">Comparison</button>
+          <button id="cmp-btn-orders" onclick="setCmpView('orders')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Orders</button>
+          <button id="cmp-btn-invoices" onclick="setCmpView('invoices')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Invoices</button>
+        </div>
+        <span style="width:1px;height:22px;background:#eee"></span>
+        <button onclick="printComparisonA4()" style="padding:4px 11px;background:#1a1a1a;color:#fff;border:1.5px solid #1a1a1a;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">🖨 A4</button>
+        <button onclick="shareComparisonWA()" style="padding:4px 11px;background:#25D366;color:#fff;border:1.5px solid #25D366;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">💬 WA</button>
+      </div>
+    </div>
+    <div id="cmp-content"></div>
+  </div>
+
   <div id="tab-reports" class="view">
 
     <!-- FILTER BAR -->
@@ -773,6 +799,7 @@ tr:hover td{background:#f8faff}
       <button class="rpt-vbtn"        id="rvb-pending"   onclick="setRptView('pending',this)">⏳ Pending</button>
       <button class="rpt-vbtn"        id="rvb-partywise" onclick="setRptView('partywise',this)">👥 Party-wise</button>
       <button class="rpt-vbtn"        id="rvb-itemwise"  onclick="setRptView('itemwise',this)">🎨 Item-wise</button>
+      <button class="rpt-vbtn"        id="rvb-trend"     onclick="setRptView('trend',this)">📈 Trend</button>
     </div>
 
     <!-- STATS BAR -->
@@ -1511,11 +1538,12 @@ function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderPa
 function switchTab(t,el){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
+  ['orders','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
     const el2=document.getElementById('tab-'+id);
     if(el2) el2.classList.toggle('active',id===t);
   });
   if(t==='reports') renderReport();
+  if(t==='comparison') renderComparison();
   if(t==='invoices'){resetInvForm();}
 }
 // Build net-pending map: for each party+color+shape, orderedKg minus invoicedKg (across ALL dates)
@@ -3735,6 +3763,334 @@ function rptFilterData(){
   return {fOrders,fInvoices,selP,selC,selS,from,to};
 }
 
+// ============================================================
+// REPORTS — TREND & FORECAST
+// ============================================================
+let rptTrendColor='', rptTrendSize='';
+function rptTrend(el){
+  // Last 6 months including current (partial)
+  const months=[];
+  const now=new Date();
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),
+      label:d.toLocaleString('en',{month:'short'})+(d.getFullYear()!==now.getFullYear()?' '+String(d.getFullYear()).slice(2):'')});
+  }
+  const curKey=months[5].key;
+  const c=rptTrendColor.trim().toLowerCase();
+  const s=rptTrendSize.trim().toLowerCase();
+  // demand = ordered kg (all orders, non-cancelled items)
+  function monthlyFor(colorL,shapeL){
+    const m={};months.forEach(x=>m[x.key]=0);
+    orders.forEach(o=>{
+      const mk=o.date.slice(0,7);
+      if(!(mk in m))return;
+      o.items.filter(i=>!i.cancelled).forEach(i=>{
+        if(colorL && i.color.toLowerCase()!==colorL && !i.color.toLowerCase().includes(colorL))return;
+        if(shapeL && i.shape.toLowerCase()!==shapeL && !i.shape.toLowerCase().includes(shapeL))return;
+        m[mk]+=parseFloat(i.kg||0);
+      });
+    });
+    return months.map(x=>m[x.key]);
+  }
+  function forecastFrom(vals){
+    // Use last 3 COMPLETE months (indices 2,3,4); current (5) is partial
+    const a=vals[2],b=vals[3],cv=vals[4];
+    const avg=(a+b+cv)/3;
+    const slope=(cv-a)/2;
+    return Math.max(0,avg+slope);
+  }
+  // Controls (persist via globals; onchange so typing isn't interrupted)
+  const controls=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input type="text" list="dl-trend-colors" placeholder="Color" value="${rptTrendColor}"
+      onchange="rptTrendColor=this.value;renderReport()"
+      style="padding:4px 10px;border:1.5px solid ${rptTrendColor?'#2563eb':'#ddd'};border-radius:6px;font-size:11px;width:100px;outline:none">
+    <datalist id="dl-trend-colors">${[...new Set(orders.flatMap(o=>o.items.map(i=>i.color)))].sort().map(x=>`<option value="${x}">`).join('')}</datalist>
+    <input type="text" list="dl-trend-shapes" placeholder="Size (all)" value="${rptTrendSize}"
+      onchange="rptTrendSize=this.value;renderReport()"
+      style="padding:4px 10px;border:1.5px solid ${rptTrendSize?'#2563eb':'#ddd'};border-radius:6px;font-size:11px;width:85px;outline:none">
+    <datalist id="dl-trend-shapes">${[...new Set(orders.flatMap(o=>o.items.map(i=>i.shape)))].sort().map(x=>`<option value="${x}">`).join('')}</datalist>
+    ${(rptTrendColor||rptTrendSize)?`<button onclick="rptTrendColor='';rptTrendSize='';renderReport()" style="padding:4px 8px;border:1.5px solid #ddd;border-radius:6px;font-size:10px;color:#888;background:#fff;cursor:pointer">✕</button>`:''}
+    <span style="font-size:10px;color:#888">Demand = ordered kg · last 6 months</span>
+  </div>`;
+  if(c||s){
+    // ── Single item chart ──
+    const vals=monthlyFor(c,s);
+    const fc=forecastFrom(vals);
+    const maxV=Math.max(...vals,fc,1);
+    const W=640,H=190,baseY=150,maxBar=120,bw=52,gap=36,x0=40;
+    let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:680px">`;
+    svg+=`<line x1="30" y1="${baseY}" x2="${W-10}" y2="${baseY}" stroke="#ddd"/>`;
+    vals.forEach((v,i)=>{
+      const h=Math.max(2,v/maxV*maxBar);
+      const x=x0+i*(bw+gap);
+      const isCur=i===5;
+      svg+=`<rect x="${x}" y="${baseY-h}" width="${bw}" height="${h}" fill="${isCur?'#2563eb':'#93c5fd'}"/>`;
+      svg+=`<text x="${x+bw/2}" y="${baseY-h-5}" font-size="10" text-anchor="middle" fill="${isCur?'#1e40af':'#666'}" font-weight="${isCur?'700':'400'}">${v.toFixed(0)}</text>`;
+      svg+=`<text x="${x+bw/2}" y="${baseY+15}" font-size="11" text-anchor="middle" fill="#888">${months[i].label}${isCur?' (part)':''}</text>`;
+    });
+    // forecast bar
+    const fh=Math.max(2,fc/maxV*maxBar);
+    const fx=x0+6*(bw+gap);
+    svg+=`<rect x="${fx}" y="${baseY-fh}" width="${bw}" height="${fh}" fill="#f59e0b" opacity="0.5" stroke="#f59e0b" stroke-dasharray="4 3" stroke-width="2"/>`;
+    svg+=`<text x="${fx+bw/2}" y="${baseY-fh-5}" font-size="10" text-anchor="middle" fill="#b45309" font-weight="700">~${fc.toFixed(0)}</text>`;
+    const nm=new Date(now.getFullYear(),now.getMonth()+1,1);
+    svg+=`<text x="${fx+bw/2}" y="${baseY+15}" font-size="11" text-anchor="middle" fill="#b45309" font-weight="700">${nm.toLocaleString('en',{month:'short'})} est.</text>`;
+    svg+='</svg>';
+    const prev=vals[3],last=vals[4];
+    const growth=prev>0?Math.round((last-prev)/prev*100):0;
+    const growthTxt=prev>0?(growth>=0?'↗ growing +':'↘ falling ')+growth+'% last month':'—';
+    el.innerHTML=controls+`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">📈 ${rptTrendColor||'All colors'}${rptTrendSize?' '+rptTrendSize:''} — monthly demand</div></div>
+      <div style="padding:10px 14px">${svg}
+      <div style="display:flex;gap:8px;margin-top:6px;font-size:10px;flex-wrap:wrap">
+        <span style="background:${growth>=0?'#f0fdf4':'#fef2f2'};color:${growth>=0?'#16a34a':'#dc2626'};border-radius:5px;padding:2px 9px;font-weight:600">${growthTxt}</span>
+        <span style="background:#fffbeb;color:#b45309;border-radius:5px;padding:2px 9px;font-weight:600">Next month forecast: ~${fc.toFixed(0)} kg (3-month trend, rough estimate)</span>
+      </div></div></div>`;
+    return;
+  }
+  // ── Top movers overview ──
+  const itemMap={};
+  const keys=months.map(x=>x.key);
+  orders.forEach(o=>{
+    const mk=o.date.slice(0,7);
+    const idx=keys.indexOf(mk);
+    if(idx===-1)return;
+    o.items.filter(i=>!i.cancelled).forEach(i=>{
+      const k=i.color+'||'+i.shape;
+      if(!itemMap[k])itemMap[k]={color:i.color,shape:i.shape,vals:[0,0,0,0,0,0]};
+      itemMap[k].vals[idx]+=parseFloat(i.kg||0);
+    });
+  });
+  const rows=Object.values(itemMap)
+    .map(it=>({...it,last:it.vals[4],prev:it.vals[3],fc:forecastFrom(it.vals)}))
+    .filter(it=>it.last>0||it.prev>0)
+    .sort((a,b)=>b.last-a.last)
+    .slice(0,15);
+  const maxLast=Math.max(...rows.map(r=>r.last),1);
+  const lastMonthLabel=months[4].label;
+  const prevMonthLabel=months[3].label;
+  const trs=rows.map(r=>{
+    const pct=r.prev>0?Math.round((r.last-r.prev)/r.prev*100):(r.last>0?100:0);
+    return `<tr>
+      <td style="padding:3px 8px;border-top:1px solid #f5f5f5;cursor:pointer;color:#2563eb" onclick="rptTrendColor='${r.color.replace(/'/g,"\\'")}';rptTrendSize='${r.shape.replace(/'/g,"\\'")}';renderReport()"><b>${r.color}</b> ${r.shape}</td>
+      <td style="padding:3px 8px;border-top:1px solid #f5f5f5;text-align:right">${r.last.toFixed(1)}</td>
+      <td style="padding:3px 8px;border-top:1px solid #f5f5f5;text-align:right;color:${pct>=0?'#16a34a':'#dc2626'};font-weight:700">${pct>=0?'+':''}${pct}%</td>
+      <td style="padding:3px 8px;border-top:1px solid #f5f5f5;text-align:right;color:#b45309">~${r.fc.toFixed(0)}</td>
+      <td style="padding:3px 8px;border-top:1px solid #f5f5f5;width:32%"><div style="background:#2563eb;height:8px;width:${Math.max(2,r.last/maxLast*100)}%;border-radius:2px"></div></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML=controls+`<div class="rpt-card"><div class="rpt-card-hdr"><div class="rpt-card-title">🔥 Top movers — ${lastMonthLabel} demand vs ${prevMonthLabel}</div></div>
+    <div style="padding:6px 10px"><table style="border-collapse:collapse;font-size:11px;width:100%">
+    <tr style="color:#999;font-size:10px"><td style="padding:2px 8px">ITEM (click for chart)</td><td style="padding:2px 8px;text-align:right">${lastMonthLabel.toUpperCase()} KG</td><td style="padding:2px 8px;text-align:right">VS ${prevMonthLabel.toUpperCase()}</td><td style="padding:2px 8px;text-align:right">FORECAST</td><td></td></tr>
+    ${trs||'<tr><td colspan="5" style="padding:10px;text-align:center;color:#bbb">No order data in recent months</td></tr>'}
+    </table></div></div>`;
+}
+
+// ============================================================
+// COMPARISON PAGE
+// ============================================================
+let cmpView='comparison';
+function setCmpView(v){
+  cmpView=v;
+  [['cmp-btn-comparison','comparison'],['cmp-btn-orders','orders'],['cmp-btn-invoices','invoices']].forEach(([id,mode])=>{
+    const b=document.getElementById(id);
+    if(!b)return;
+    b.style.background = v===mode ? '#2563eb' : '#fff';
+    b.style.color      = v===mode ? '#fff'    : '#888';
+  });
+  renderComparison();
+}
+function cmpFilterData(){
+  const from=(document.getElementById('cmp-from')||{value:''}).value;
+  const to=(document.getElementById('cmp-to')||{value:''}).value;
+  const party=(document.getElementById('cmp-party')||{value:''}).value.trim();
+  let fOrders=orders.filter(o=>(!from||o.date>=from)&&(!to||o.date<=to));
+  let fInvoices=invoices.filter(i=>(!from||i.date>=from)&&(!to||i.date<=to));
+  if(party){
+    fOrders=fOrders.filter(o=>o.party.toLowerCase().includes(party.toLowerCase()));
+    fInvoices=fInvoices.filter(i=>i.party.toLowerCase().includes(party.toLowerCase()));
+  }
+  return {fOrders,fInvoices,party,from,to};
+}
+function renderComparison(){
+  const el=document.getElementById('cmp-content');
+  if(!el)return;
+  // Populate party datalist
+  const dl=document.getElementById('dl-cmp-parties');
+  if(dl) dl.innerHTML=[...new Set([...orders.map(o=>o.party),...invoices.map(i=>i.party)])].sort().map(p=>`<option value="${p}">`).join('');
+  const {fOrders,fInvoices,party}=cmpFilterData();
+  if(!party){
+    el.innerHTML='<div style="text-align:center;color:#bbb;font-size:13px;padding:36px 0">Select a party to see the comparison.</div>';
+    window._cmpPrintData=null;
+    return;
+  }
+  if(cmpView==='orders'){
+    const rows=[...fOrders].sort((a,b)=>b.date.localeCompare(a.date));
+    let totalKg=0;
+    const trs=rows.map(o=>{
+      const kg=o.items.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+      totalKg+=kg;
+      const items=o.items.map(i=>`${i.cancelled?'<s style="color:#bbb">':''}${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}${i.cancelled?'</s>':''}`).join(' · ');
+      const st=o.status==='Pending'?'<span style="background:#fff7ed;color:#c2410c;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">PENDING</span>':'<span style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">DELIVERED</span>';
+      return `<tr>
+        <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap">${o.date}</td>
+        <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><a href="javascript:void(0)" onclick="openOrderView(${o.id})" style="color:#2563eb;font-weight:600">${invLabel(o.invNum)}</a></td>
+        <td style="padding:4px 8px;border:1px solid #eee;font-size:10px;color:#666">${items}</td>
+        <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2563eb">${kg.toFixed(2)}</td>
+        <td style="padding:4px 8px;border:1px solid #eee;text-align:center">${st}</td>
+      </tr>`;
+    }).join('');
+    window._cmpPrintData={type:'orders',party,rows:rows.map(o=>({date:o.date,ref:invLabel(o.invNum),
+      items:o.items.filter(i=>!i.cancelled).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}`).join(' · '),
+      kg:o.items.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0)})),totalKg};
+    el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">🛒 ${rows.length} order(s)</div>
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
+      <tr style="background:#f0f4ff;color:#2563eb"><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">DATE</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ORDER#</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEMS</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">KG</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:center">STATUS</th></tr>
+      ${trs}
+      <tr style="border-top:2px solid #333;background:#fffbeb"><td colspan="3" style="padding:4px 8px;font-weight:700">TOTAL</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${totalKg.toFixed(2)}</td><td></td></tr>
+      </table></div>`;
+    return;
+  }
+  if(cmpView==='invoices'){
+    const rows=[...fInvoices].sort((a,b)=>b.date.localeCompare(a.date));
+    let totalKg=0,totalAmt=0;
+    const trs=rows.map(inv=>{
+      const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+      const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
+      totalKg+=kg;totalAmt+=amt;
+      const items=(inv.items||[]).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}kg@${i.price||0}`).join(' · ');
+      return `<tr>
+        <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap">${inv.date}</td>
+        <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><a href="javascript:void(0)" onclick="viewInvoice(${inv.id})" style="color:#2563eb;font-weight:600">${invLabel(inv.serial)}</a></td>
+        <td style="padding:4px 8px;border:1px solid #eee;font-size:10px;color:#666">${items}</td>
+        <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#16a34a">${kg.toFixed(2)}</td>
+        <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2563eb">${fmt(Math.round(amt))}</td>
+      </tr>`;
+    }).join('');
+    window._cmpPrintData={type:'invoices',party,rows:rows.map(inv=>({date:inv.date,ref:invLabel(inv.serial),
+      items:(inv.items||[]).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}kg@${i.price||0}`).join(' · '),
+      kg:(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0),
+      amt:Math.round((inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0))})),totalKg,totalAmt:Math.round(totalAmt)};
+    el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">🚚 ${rows.length} invoice(s)</div>
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
+      <tr style="background:#f0f4ff;color:#2563eb"><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">DATE</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">INV#</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEMS</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">KG</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">AMOUNT</th></tr>
+      ${trs}
+      <tr style="border-top:2px solid #333;background:#fffbeb"><td colspan="3" style="padding:4px 8px;font-weight:700">TOTAL</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#16a34a">${totalKg.toFixed(2)}</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${fmt(Math.round(totalAmt))}</td></tr>
+      </table></div>`;
+    return;
+  }
+  // ── Comparison matching table ──
+  const map={};
+  fOrders.forEach(o=>o.items.filter(i=>!i.cancelled).forEach(i=>{
+    const k=i.color+'||'+i.shape;
+    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[]};
+    map[k].ordKg+=parseFloat(i.kg||0);
+    if(!map[k].ordDates.includes(o.date))map[k].ordDates.push(o.date);
+  }));
+  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+    const k=i.color+'||'+i.shape;
+    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[]};
+    map[k].supKg+=parseFloat(i.kg||0);
+    if(!map[k].supDates.includes(inv.date))map[k].supDates.push(inv.date);
+  }));
+  const items=Object.values(map).sort((a,b)=>a.color.localeCompare(b.color)||a.shape.localeCompare(b.shape));
+  let tOrd=0,tSup=0;
+  const trs=items.map(it=>{
+    tOrd+=it.ordKg;tSup+=it.supKg;
+    const due=it.ordKg-it.supKg;
+    const dueCell = due>0.009
+      ? `<span style="color:#b45309;font-weight:700">${due.toFixed(2)}</span>`
+      : due<-0.009
+        ? `<span style="color:#16a34a;font-weight:700">+${(-due).toFixed(2)} over</span>`
+        : `<span style="color:#16a34a;font-weight:700">✓</span>`;
+    return `<tr>
+      <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><b>${it.color}</b> ${it.shape}</td>
+      <td style="padding:4px 8px;border:1px solid #eee;font-size:10px">${it.ordDates.sort().map(fmtDate).join(' · ')||'—'}</td>
+      <td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#2563eb;font-weight:600">${it.ordKg?it.ordKg.toFixed(2):'—'}</td>
+      <td style="padding:4px 8px;border:1px solid #eee;font-size:10px;color:#16a34a">${it.supDates.sort().map(fmtDate).join(' · ')||'—'}</td>
+      <td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#16a34a;font-weight:600">${it.supKg?it.supKg.toFixed(2):'—'}</td>
+      <td style="padding:4px 8px;border:1px solid #eee;text-align:right">${dueCell}</td>
+    </tr>`;
+  }).join('');
+  window._cmpPrintData={type:'comparison',party,rows:items.map(it=>({
+    item:it.color+' '+it.shape,
+    ordDates:it.ordDates.sort().map(fmtDate).join(' '),ordKg:it.ordKg,
+    supDates:it.supDates.sort().map(fmtDate).join(' '),supKg:it.supKg,
+    due:it.ordKg-it.supKg})),tOrd,tSup};
+  el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">${items.length} item(s) · ordered vs supplied</div>
+    <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
+    <tr style="background:#f0f4ff;color:#2563eb">
+      <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEM</th>
+      <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left;background:#eff6ff">ORDER DATE</th>
+      <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right;background:#eff6ff">ORD KG</th>
+      <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left;background:#f0fdf4;color:#16a34a">SUPPLY DATE</th>
+      <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right;background:#f0fdf4;color:#16a34a">SUP KG</th>
+      <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right;background:#fffbeb;color:#b45309">DUE</th>
+    </tr>
+    ${trs}
+    <tr style="border-top:2px solid #333;background:#fffbeb">
+      <td style="padding:4px 8px;font-weight:700">TOTAL</td><td></td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${tOrd.toFixed(2)}</td><td></td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#16a34a">${tSup.toFixed(2)}</td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#b45309">${(tOrd-tSup).toFixed(2)}</td>
+    </tr>
+    </table></div>`;
+}
+function printComparisonA4(){
+  const d=window._cmpPrintData;
+  if(!d){alert('Select a party first');return;}
+  const {from,to}=cmpFilterData();
+  const period=(from||to)?((from?fmtDate(from):'start')+' to '+(to?fmtDate(to):'today')):'Full history';
+  let body='';
+  if(d.type==='comparison'){
+    body=`<table><tr style="border-bottom:2px solid #000"><th style="text-align:left;padding:3px 6px">ITEM</th><th style="text-align:left;padding:3px 6px">ORDER DATE</th><th style="text-align:right;padding:3px 6px">ORD</th><th style="text-align:left;padding:3px 6px">SUPPLY DATE</th><th style="text-align:right;padding:3px 6px">SUP</th><th style="text-align:right;padding:3px 6px">DUE</th></tr>
+    ${d.rows.map(r=>`<tr style="border-bottom:1px solid #ccc"><td style="padding:2px 6px"><b>${r.item}</b></td><td style="padding:2px 6px;font-size:10px">${r.ordDates||'—'}</td><td style="padding:2px 6px;text-align:right">${r.ordKg?r.ordKg.toFixed(2):'—'}</td><td style="padding:2px 6px;font-size:10px">${r.supDates||'—'}</td><td style="padding:2px 6px;text-align:right">${r.supKg?r.supKg.toFixed(2):'—'}</td><td style="padding:2px 6px;text-align:right;font-weight:700">${Math.abs(r.due)<0.01?'✓':r.due.toFixed(2)}</td></tr>`).join('')}
+    <tr style="border-top:2px solid #000"><td style="padding:3px 6px;font-weight:700">TOTAL</td><td></td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tOrd.toFixed(2)}</td><td></td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tSup.toFixed(2)}</td><td style="padding:3px 6px;text-align:right;font-weight:700">${(d.tOrd-d.tSup).toFixed(2)}</td></tr></table>`;
+  } else {
+    const isInv=d.type==='invoices';
+    body=`<table><tr style="border-bottom:2px solid #000"><th style="text-align:left;padding:3px 6px">DATE</th><th style="text-align:left;padding:3px 6px">${isInv?'INV#':'ORDER#'}</th><th style="text-align:left;padding:3px 6px">ITEMS</th><th style="text-align:right;padding:3px 6px">KG</th>${isInv?'<th style="text-align:right;padding:3px 6px">AMT</th>':''}</tr>
+    ${d.rows.map(r=>`<tr style="border-bottom:1px solid #ccc"><td style="padding:2px 6px;white-space:nowrap">${fmtDate(r.date)}</td><td style="padding:2px 6px">${r.ref}</td><td style="padding:2px 6px;font-size:10px">${r.items}</td><td style="padding:2px 6px;text-align:right">${r.kg.toFixed(2)}</td>${isInv?`<td style="padding:2px 6px;text-align:right">${r.amt}</td>`:''}</tr>`).join('')}
+    <tr style="border-top:2px solid #000"><td colspan="3" style="padding:3px 6px;font-weight:700">TOTAL</td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.totalKg.toFixed(2)}</td>${isInv?`<td style="padding:3px 6px;text-align:right;font-weight:700">${d.totalAmt}</td>`:''}</tr></table>`;
+  }
+  const title=d.type==='comparison'?'COMPARISON':d.type==='orders'?'ORDERS':'INVOICES';
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:10mm;font-size:11px}
+    table{width:100%;border-collapse:collapse}
+    @page{size:A4;margin:10mm}
+  </style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px">
+      <span style="font-size:14px;font-weight:700">${d.party} — ${title}</span>
+      <span style="font-size:10px">${period} · printed ${fmtDate(today())}</span>
+    </div>${body}</body></html>`;
+  const win=window.open('','_blank','width=800,height=900');
+  if(!win){alert('Please allow popups');return;}
+  win.document.write(html);win.document.close();win.focus();
+  setTimeout(()=>{win.print();setTimeout(()=>win.close(),1000);},400);
+}
+function shareComparisonWA(){
+  const d=window._cmpPrintData;
+  if(!d){alert('Select a party first');return;}
+  const line='- - - - - - - - - - - - - -';
+  let msg='*'+d.party+'*\n';
+  if(d.type==='comparison'){
+    msg+='*Ordered vs Supplied*\n'+line+'\n';
+    d.rows.forEach(r=>{
+      msg+=r.item+'\n';
+      if(r.ordKg) msg+='  Ord: '+r.ordKg.toFixed(2)+' ('+r.ordDates+')\n';
+      if(r.supKg) msg+='  Sup: '+r.supKg.toFixed(2)+' ('+r.supDates+')\n';
+      msg+='  Due: '+(Math.abs(r.due)<0.01?'✓':r.due.toFixed(2))+'\n';
+    });
+    msg+=line+'\nOrd '+d.tOrd.toFixed(2)+' / Sup '+d.tSup.toFixed(2)+' / Due '+(d.tOrd-d.tSup).toFixed(2)+'\n';
+  } else {
+    msg+='*'+(d.type==='invoices'?'Invoices':'Orders')+'*\n'+line+'\n';
+    d.rows.forEach(r=>{
+      msg+=fmtDate(r.date)+' '+r.ref+'  '+r.kg.toFixed(2)+(r.amt?' / '+r.amt:'')+'\n';
+    });
+    msg+=line+'\nTOTAL '+d.totalKg.toFixed(2)+(d.totalAmt?' / '+d.totalAmt:'')+'\n';
+  }
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
 function renderReport(){
   if(!document.getElementById('rpt-type2') && !document.getElementById('rpt-from')) return;
 
@@ -3792,6 +4148,7 @@ function renderReport(){
   else if(rptView==='pending')   rptPending(fOrders,fInvoices,contentEl);
   else if(rptView==='partywise') rptPartyWise(fOrders,fInvoices,contentEl);
   else if(rptView==='itemwise')  rptItemWise(fOrders,fInvoices,contentEl);
+  else if(rptView==='trend')     rptTrend(contentEl);
 }
 
 function rptTbl(headers,rows){
