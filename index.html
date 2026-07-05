@@ -732,9 +732,15 @@ tr:hover td{background:#f8faff}
         <span style="font-size:10px;color:#888">to</span>
         <input type="date" id="cmp-to" onchange="renderComparison()" style="padding:4px 6px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:118px">
         <input type="text" id="cmp-party" list="dl-cmp-parties" placeholder="Party" oninput="renderComparison()"
-          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:140px">
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:130px">
         <datalist id="dl-cmp-parties"></datalist>
-        <button onclick="document.getElementById('cmp-from').value='';document.getElementById('cmp-to').value='';document.getElementById('cmp-party').value='';renderComparison()" style="padding:4px 8px;border:1.5px solid #ddd;border-radius:6px;font-size:10px;color:#888;background:#fff;cursor:pointer">✕</button>
+        <input type="text" id="cmp-color" list="dl-cmp-colors" placeholder="Color" oninput="renderComparison()"
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:85px">
+        <datalist id="dl-cmp-colors"></datalist>
+        <input type="text" id="cmp-size" list="dl-cmp-sizes" placeholder="Size" oninput="renderComparison()"
+          style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:65px">
+        <datalist id="dl-cmp-sizes"></datalist>
+        <button onclick="document.getElementById('cmp-from').value='';document.getElementById('cmp-to').value='';document.getElementById('cmp-party').value='';document.getElementById('cmp-color').value='';document.getElementById('cmp-size').value='';renderComparison()" style="padding:4px 8px;border:1.5px solid #ddd;border-radius:6px;font-size:10px;color:#888;background:#fff;cursor:pointer">✕</button>
         <span style="width:1px;height:22px;background:#eee"></span>
         <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
           <button id="cmp-btn-comparison" onclick="setCmpView('comparison')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#2563eb;color:#fff">Comparison</button>
@@ -3904,105 +3910,141 @@ function cmpFilterData(){
   const from=(document.getElementById('cmp-from')||{value:''}).value;
   const to=(document.getElementById('cmp-to')||{value:''}).value;
   const party=(document.getElementById('cmp-party')||{value:''}).value.trim();
+  const color=(document.getElementById('cmp-color')||{value:''}).value.trim().toLowerCase();
+  const size=(document.getElementById('cmp-size')||{value:''}).value.trim().toLowerCase();
   let fOrders=orders.filter(o=>(!from||o.date>=from)&&(!to||o.date<=to));
   let fInvoices=invoices.filter(i=>(!from||i.date>=from)&&(!to||i.date<=to));
   if(party){
     fOrders=fOrders.filter(o=>o.party.toLowerCase().includes(party.toLowerCase()));
     fInvoices=fInvoices.filter(i=>i.party.toLowerCase().includes(party.toLowerCase()));
   }
-  return {fOrders,fInvoices,party,from,to};
+  return {fOrders,fInvoices,party,color,size,from,to};
+}
+function cmpItemMatch(i,color,size){
+  if(color && !i.color.toLowerCase().includes(color)) return false;
+  if(size && !i.shape.toLowerCase().includes(size)) return false;
+  return true;
 }
 function renderComparison(){
   const el=document.getElementById('cmp-content');
   if(!el)return;
-  // Populate party datalist
+  // Populate datalists
   const dl=document.getElementById('dl-cmp-parties');
   if(dl) dl.innerHTML=[...new Set([...orders.map(o=>o.party),...invoices.map(i=>i.party)])].sort().map(p=>`<option value="${p}">`).join('');
-  const {fOrders,fInvoices,party}=cmpFilterData();
-  if(!party){
-    el.innerHTML='<div style="text-align:center;color:#bbb;font-size:13px;padding:36px 0">Select a party to see the comparison.</div>';
-    window._cmpPrintData=null;
-    return;
-  }
+  const dlc=document.getElementById('dl-cmp-colors');
+  if(dlc) dlc.innerHTML=[...new Set([...orders.flatMap(o=>o.items.map(i=>i.color)),...invoices.flatMap(v=>(v.items||[]).map(i=>i.color))])].sort().map(x=>`<option value="${x}">`).join('');
+  const dls=document.getElementById('dl-cmp-sizes');
+  if(dls) dls.innerHTML=[...new Set([...orders.flatMap(o=>o.items.map(i=>i.shape)),...invoices.flatMap(v=>(v.items||[]).map(i=>i.shape))])].sort().map(x=>`<option value="${x}">`).join('');
+  const {fOrders,fInvoices,party,color,size}=cmpFilterData();
+  const showPartyCol=!party;
+
   if(cmpView==='orders'){
-    const rows=[...fOrders].sort((a,b)=>b.date.localeCompare(a.date));
+    const rows=[];
+    [...fOrders].sort((a,b)=>b.date.localeCompare(a.date)).forEach(o=>{
+      const its=o.items.filter(i=>cmpItemMatch(i,color,size));
+      if(!its.length)return;
+      const kg=its.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+      rows.push({o,its,kg});
+    });
     let totalKg=0;
-    const trs=rows.map(o=>{
-      const kg=o.items.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const trs=rows.map(({o,its,kg})=>{
       totalKg+=kg;
-      const items=o.items.map(i=>`${i.cancelled?'<s style="color:#bbb">':''}${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}${i.cancelled?'</s>':''}`).join(' · ');
+      const items=its.map(i=>`${i.cancelled?'<s style="color:#bbb">':''}${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}${i.cancelled?'</s>':''}`).join(' · ');
       const st=o.status==='Pending'?'<span style="background:#fff7ed;color:#c2410c;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">PENDING</span>':'<span style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">DELIVERED</span>';
       return `<tr>
         <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap">${o.date}</td>
         <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><a href="javascript:void(0)" onclick="openOrderView(${o.id})" style="color:#2563eb;font-weight:600">${invLabel(o.invNum)}</a></td>
+        ${showPartyCol?`<td style="padding:4px 8px;border:1px solid #eee;font-weight:600">${o.party}</td>`:''}
         <td style="padding:4px 8px;border:1px solid #eee;font-size:10px;color:#666">${items}</td>
         <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2563eb">${kg.toFixed(2)}</td>
         <td style="padding:4px 8px;border:1px solid #eee;text-align:center">${st}</td>
       </tr>`;
     }).join('');
-    window._cmpPrintData={type:'orders',party,rows:rows.map(o=>({date:o.date,ref:invLabel(o.invNum),
-      items:o.items.filter(i=>!i.cancelled).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}`).join(' · '),
-      kg:o.items.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0)})),totalKg};
-    el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">🛒 ${rows.length} order(s)</div>
+    window._cmpPrintData={type:'orders',party:party||'All Parties',showPartyCol,rows:rows.map(({o,its,kg})=>({date:o.date,ref:invLabel(o.invNum),party:o.party,
+      items:its.filter(i=>!i.cancelled).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}`).join(' · '),kg})),totalKg};
+    el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">🛒 ${rows.length} order(s)${showPartyCol?' · all parties':''}</div>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
-      <tr style="background:#f0f4ff;color:#2563eb"><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">DATE</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ORDER#</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEMS</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">KG</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:center">STATUS</th></tr>
-      ${trs}
-      <tr style="border-top:2px solid #333;background:#fffbeb"><td colspan="3" style="padding:4px 8px;font-weight:700">TOTAL</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${totalKg.toFixed(2)}</td><td></td></tr>
+      <tr style="background:#f0f4ff;color:#2563eb"><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">DATE</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ORDER#</th>${showPartyCol?'<th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">PARTY</th>':''}<th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEMS</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">KG</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:center">STATUS</th></tr>
+      ${trs||'<tr><td colspan="6" style="padding:14px;text-align:center;color:#bbb">No orders match</td></tr>'}
+      <tr style="border-top:2px solid #333;background:#fffbeb"><td colspan="${showPartyCol?4:3}" style="padding:4px 8px;font-weight:700">TOTAL</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${totalKg.toFixed(2)}</td><td></td></tr>
       </table></div>`;
     return;
   }
+
   if(cmpView==='invoices'){
-    const rows=[...fInvoices].sort((a,b)=>b.date.localeCompare(a.date));
+    const rows=[];
+    [...fInvoices].sort((a,b)=>b.date.localeCompare(a.date)).forEach(inv=>{
+      const its=(inv.items||[]).filter(i=>cmpItemMatch(i,color,size));
+      if(!its.length)return;
+      const kg=its.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+      const fullKg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+      // amount: if item-filtered, show filtered items' amount (no charge); if unfiltered, full amount incl charge
+      const amt=(color||size)
+        ? its.reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)
+        : (inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
+      rows.push({inv,its,kg,amt});
+    });
     let totalKg=0,totalAmt=0;
-    const trs=rows.map(inv=>{
-      const kg=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-      const amt=(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0);
+    const trs=rows.map(({inv,its,kg,amt})=>{
       totalKg+=kg;totalAmt+=amt;
-      const items=(inv.items||[]).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}kg@${i.price||0}`).join(' · ');
+      const items=its.map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}kg@${i.price||0}`).join(' · ');
       return `<tr>
         <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap">${inv.date}</td>
         <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><a href="javascript:void(0)" onclick="viewInvoice(${inv.id})" style="color:#2563eb;font-weight:600">${invLabel(inv.serial)}</a></td>
+        ${showPartyCol?`<td style="padding:4px 8px;border:1px solid #eee;font-weight:600">${inv.party}</td>`:''}
         <td style="padding:4px 8px;border:1px solid #eee;font-size:10px;color:#666">${items}</td>
         <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#16a34a">${kg.toFixed(2)}</td>
         <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2563eb">${fmt(Math.round(amt))}</td>
       </tr>`;
     }).join('');
-    window._cmpPrintData={type:'invoices',party,rows:rows.map(inv=>({date:inv.date,ref:invLabel(inv.serial),
-      items:(inv.items||[]).map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}kg@${i.price||0}`).join(' · '),
-      kg:(inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0),0),
-      amt:Math.round((inv.items||[]).reduce((s,i)=>s+parseFloat(i.kg||0)*parseFloat(i.price||0),0)+parseFloat(inv.chargeAmt||0))})),totalKg,totalAmt:Math.round(totalAmt)};
-    el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">🚚 ${rows.length} invoice(s)</div>
+    window._cmpPrintData={type:'invoices',party:party||'All Parties',showPartyCol,rows:rows.map(({inv,its,kg,amt})=>({date:inv.date,ref:invLabel(inv.serial),party:inv.party,
+      items:its.map(i=>`${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}kg@${i.price||0}`).join(' · '),kg,amt:Math.round(amt)})),totalKg,totalAmt:Math.round(totalAmt)};
+    el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">🚚 ${rows.length} invoice(s)${showPartyCol?' · all parties':''}</div>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
-      <tr style="background:#f0f4ff;color:#2563eb"><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">DATE</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">INV#</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEMS</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">KG</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">AMOUNT</th></tr>
-      ${trs}
-      <tr style="border-top:2px solid #333;background:#fffbeb"><td colspan="3" style="padding:4px 8px;font-weight:700">TOTAL</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#16a34a">${totalKg.toFixed(2)}</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${fmt(Math.round(totalAmt))}</td></tr>
+      <tr style="background:#f0f4ff;color:#2563eb"><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">DATE</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">INV#</th>${showPartyCol?'<th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">PARTY</th>':''}<th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEMS</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">KG</th><th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right">AMOUNT</th></tr>
+      ${trs||'<tr><td colspan="6" style="padding:14px;text-align:center;color:#bbb">No invoices match</td></tr>'}
+      <tr style="border-top:2px solid #333;background:#fffbeb"><td colspan="${showPartyCol?4:3}" style="padding:4px 8px;font-weight:700">TOTAL</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#16a34a">${totalKg.toFixed(2)}</td><td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${fmt(Math.round(totalAmt))}</td></tr>
       </table></div>`;
     return;
   }
-  // ── Comparison matching table ──
+
+  // ── Comparison matching table (single party required) ──
+  if(!party){
+    el.innerHTML='<div style="text-align:center;color:#bbb;font-size:13px;padding:36px 0">Select a party to see the comparison.<br><span style="font-size:11px">Tip: leave party empty and use the Orders / Invoices views for an all-party daily report.</span></div>';
+    window._cmpPrintData=null;
+    return;
+  }
   const map={};
-  fOrders.forEach(o=>o.items.filter(i=>!i.cancelled).forEach(i=>{
+  fOrders.forEach(o=>o.items.filter(i=>!i.cancelled&&cmpItemMatch(i,color,size)).forEach(i=>{
     const k=i.color+'||'+i.shape;
-    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[]};
+    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[],earliest:o.date};
     map[k].ordKg+=parseFloat(i.kg||0);
     if(!map[k].ordDates.includes(o.date))map[k].ordDates.push(o.date);
+    if(o.date<map[k].earliest)map[k].earliest=o.date;
   }));
-  fInvoices.forEach(inv=>(inv.items||[]).forEach(i=>{
+  fInvoices.forEach(inv=>(inv.items||[]).filter(i=>cmpItemMatch(i,color,size)).forEach(i=>{
     const k=i.color+'||'+i.shape;
-    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[]};
-    map[k].supKg+=parseFloat(i.kg||0);
-    if(!map[k].supDates.includes(inv.date))map[k].supDates.push(inv.date);
+    if(map[k]){
+      // Date-aware: only count invoices on/after the earliest order date for this item
+      if(inv.date>=map[k].earliest){
+        map[k].supKg+=parseFloat(i.kg||0);
+        if(!map[k].supDates.includes(inv.date))map[k].supDates.push(inv.date);
+      }
+    } else {
+      // supplied but never ordered (in range) — show for information
+      map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:parseFloat(i.kg||0),ordDates:[],supDates:[inv.date],earliest:''};
+    }
   }));
   const items=Object.values(map).sort((a,b)=>a.color.localeCompare(b.color)||a.shape.localeCompare(b.shape));
-  let tOrd=0,tSup=0;
+  let tOrd=0,tSup=0,tDue=0;
   const trs=items.map(it=>{
     tOrd+=it.ordKg;tSup+=it.supKg;
     const due=it.ordKg-it.supKg;
-    const dueCell = due>0.009
+    const isDue=due>=1.0;
+    if(isDue)tDue+=due;
+    const dueCell=isDue
       ? `<span style="color:#b45309;font-weight:700">${due.toFixed(2)}</span>`
-      : due<-0.009
-        ? `<span style="color:#16a34a;font-weight:700">+${(-due).toFixed(2)} over</span>`
-        : `<span style="color:#16a34a;font-weight:700">✓</span>`;
+      : `<span style="color:#16a34a;font-weight:700">✓</span>`;
     return `<tr>
       <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><b>${it.color}</b> ${it.shape}</td>
       <td style="padding:4px 8px;border:1px solid #eee;font-size:10px">${it.ordDates.sort().map(fmtDate).join(' · ')||'—'}</td>
@@ -4012,12 +4054,14 @@ function renderComparison(){
       <td style="padding:4px 8px;border:1px solid #eee;text-align:right">${dueCell}</td>
     </tr>`;
   }).join('');
-  window._cmpPrintData={type:'comparison',party,rows:items.map(it=>({
-    item:it.color+' '+it.shape,
-    ordDates:it.ordDates.sort().map(fmtDate).join(' '),ordKg:it.ordKg,
-    supDates:it.supDates.sort().map(fmtDate).join(' '),supKg:it.supKg,
-    due:it.ordKg-it.supKg})),tOrd,tSup};
-  el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">${items.length} item(s) · ordered vs supplied</div>
+  window._cmpPrintData={type:'comparison',party,rows:items.map(it=>{
+    const due=it.ordKg-it.supKg;
+    return {item:it.color+' '+it.shape,
+      ordDates:it.ordDates.sort().map(fmtDate).join(' '),ordKg:it.ordKg,
+      supDates:it.supDates.sort().map(fmtDate).join(' '),supKg:it.supKg,
+      dueTxt: due>=1.0?due.toFixed(2):'✓'};
+  }),tOrd,tSup,tDue};
+  el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">${items.length} item(s) · ordered vs supplied · old-cycle invoices before an item's first order are ignored</div>
     <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
     <tr style="background:#f0f4ff;color:#2563eb">
       <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEM</th>
@@ -4027,30 +4071,31 @@ function renderComparison(){
       <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right;background:#f0fdf4;color:#16a34a">SUP KG</th>
       <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:right;background:#fffbeb;color:#b45309">DUE</th>
     </tr>
-    ${trs}
+    ${trs||'<tr><td colspan="6" style="padding:14px;text-align:center;color:#bbb">No items match</td></tr>'}
     <tr style="border-top:2px solid #333;background:#fffbeb">
       <td style="padding:4px 8px;font-weight:700">TOTAL</td><td></td>
       <td style="padding:4px 8px;text-align:right;font-weight:700;color:#2563eb">${tOrd.toFixed(2)}</td><td></td>
       <td style="padding:4px 8px;text-align:right;font-weight:700;color:#16a34a">${tSup.toFixed(2)}</td>
-      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#b45309">${(tOrd-tSup).toFixed(2)}</td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#b45309">${tDue.toFixed(2)}</td>
     </tr>
     </table></div>`;
 }
 function printComparisonA4(){
   const d=window._cmpPrintData;
-  if(!d){alert('Select a party first');return;}
+  if(!d){alert('Nothing to print');return;}
   const {from,to}=cmpFilterData();
   const period=(from||to)?((from?fmtDate(from):'start')+' to '+(to?fmtDate(to):'today')):'Full history';
   let body='';
   if(d.type==='comparison'){
     body=`<table><tr style="border-bottom:2px solid #000"><th style="text-align:left;padding:3px 6px">ITEM</th><th style="text-align:left;padding:3px 6px">ORDER DATE</th><th style="text-align:right;padding:3px 6px">ORD</th><th style="text-align:left;padding:3px 6px">SUPPLY DATE</th><th style="text-align:right;padding:3px 6px">SUP</th><th style="text-align:right;padding:3px 6px">DUE</th></tr>
-    ${d.rows.map(r=>`<tr style="border-bottom:1px solid #ccc"><td style="padding:2px 6px"><b>${r.item}</b></td><td style="padding:2px 6px;font-size:10px">${r.ordDates||'—'}</td><td style="padding:2px 6px;text-align:right">${r.ordKg?r.ordKg.toFixed(2):'—'}</td><td style="padding:2px 6px;font-size:10px">${r.supDates||'—'}</td><td style="padding:2px 6px;text-align:right">${r.supKg?r.supKg.toFixed(2):'—'}</td><td style="padding:2px 6px;text-align:right;font-weight:700">${Math.abs(r.due)<0.01?'✓':r.due.toFixed(2)}</td></tr>`).join('')}
-    <tr style="border-top:2px solid #000"><td style="padding:3px 6px;font-weight:700">TOTAL</td><td></td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tOrd.toFixed(2)}</td><td></td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tSup.toFixed(2)}</td><td style="padding:3px 6px;text-align:right;font-weight:700">${(d.tOrd-d.tSup).toFixed(2)}</td></tr></table>`;
+    ${d.rows.map(r=>`<tr style="border-bottom:1px solid #ccc"><td style="padding:2px 6px"><b>${r.item}</b></td><td style="padding:2px 6px;font-size:10px">${r.ordDates||'—'}</td><td style="padding:2px 6px;text-align:right">${r.ordKg?r.ordKg.toFixed(2):'—'}</td><td style="padding:2px 6px;font-size:10px">${r.supDates||'—'}</td><td style="padding:2px 6px;text-align:right">${r.supKg?r.supKg.toFixed(2):'—'}</td><td style="padding:2px 6px;text-align:right;font-weight:700">${r.dueTxt}</td></tr>`).join('')}
+    <tr style="border-top:2px solid #000"><td style="padding:3px 6px;font-weight:700">TOTAL</td><td></td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tOrd.toFixed(2)}</td><td></td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tSup.toFixed(2)}</td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.tDue.toFixed(2)}</td></tr></table>`;
   } else {
     const isInv=d.type==='invoices';
-    body=`<table><tr style="border-bottom:2px solid #000"><th style="text-align:left;padding:3px 6px">DATE</th><th style="text-align:left;padding:3px 6px">${isInv?'INV#':'ORDER#'}</th><th style="text-align:left;padding:3px 6px">ITEMS</th><th style="text-align:right;padding:3px 6px">KG</th>${isInv?'<th style="text-align:right;padding:3px 6px">AMT</th>':''}</tr>
-    ${d.rows.map(r=>`<tr style="border-bottom:1px solid #ccc"><td style="padding:2px 6px;white-space:nowrap">${fmtDate(r.date)}</td><td style="padding:2px 6px">${r.ref}</td><td style="padding:2px 6px;font-size:10px">${r.items}</td><td style="padding:2px 6px;text-align:right">${r.kg.toFixed(2)}</td>${isInv?`<td style="padding:2px 6px;text-align:right">${r.amt}</td>`:''}</tr>`).join('')}
-    <tr style="border-top:2px solid #000"><td colspan="3" style="padding:3px 6px;font-weight:700">TOTAL</td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.totalKg.toFixed(2)}</td>${isInv?`<td style="padding:3px 6px;text-align:right;font-weight:700">${d.totalAmt}</td>`:''}</tr></table>`;
+    const pc=d.showPartyCol;
+    body=`<table><tr style="border-bottom:2px solid #000"><th style="text-align:left;padding:3px 6px">DATE</th><th style="text-align:left;padding:3px 6px">${isInv?'INV#':'ORDER#'}</th>${pc?'<th style="text-align:left;padding:3px 6px">PARTY</th>':''}<th style="text-align:left;padding:3px 6px">ITEMS</th><th style="text-align:right;padding:3px 6px">KG</th>${isInv?'<th style="text-align:right;padding:3px 6px">AMT</th>':''}</tr>
+    ${d.rows.map(r=>`<tr style="border-bottom:1px solid #ccc"><td style="padding:2px 6px;white-space:nowrap">${fmtDate(r.date)}</td><td style="padding:2px 6px">${r.ref}</td>${pc?`<td style="padding:2px 6px">${r.party}</td>`:''}<td style="padding:2px 6px;font-size:10px">${r.items}</td><td style="padding:2px 6px;text-align:right">${r.kg.toFixed(2)}</td>${isInv?`<td style="padding:2px 6px;text-align:right">${r.amt}</td>`:''}</tr>`).join('')}
+    <tr style="border-top:2px solid #000"><td colspan="${pc?4:3}" style="padding:3px 6px;font-weight:700">TOTAL</td><td style="padding:3px 6px;text-align:right;font-weight:700">${d.totalKg.toFixed(2)}</td>${isInv?`<td style="padding:3px 6px;text-align:right;font-weight:700">${d.totalAmt}</td>`:''}</tr></table>`;
   }
   const title=d.type==='comparison'?'COMPARISON':d.type==='orders'?'ORDERS':'INVOICES';
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
@@ -4069,7 +4114,7 @@ function printComparisonA4(){
 }
 function shareComparisonWA(){
   const d=window._cmpPrintData;
-  if(!d){alert('Select a party first');return;}
+  if(!d){alert('Nothing to share');return;}
   const line='- - - - - - - - - - - - - -';
   let msg='*'+d.party+'*\n';
   if(d.type==='comparison'){
@@ -4078,13 +4123,13 @@ function shareComparisonWA(){
       msg+=r.item+'\n';
       if(r.ordKg) msg+='  Ord: '+r.ordKg.toFixed(2)+' ('+r.ordDates+')\n';
       if(r.supKg) msg+='  Sup: '+r.supKg.toFixed(2)+' ('+r.supDates+')\n';
-      msg+='  Due: '+(Math.abs(r.due)<0.01?'✓':r.due.toFixed(2))+'\n';
+      msg+='  Due: '+r.dueTxt+'\n';
     });
-    msg+=line+'\nOrd '+d.tOrd.toFixed(2)+' / Sup '+d.tSup.toFixed(2)+' / Due '+(d.tOrd-d.tSup).toFixed(2)+'\n';
+    msg+=line+'\nOrd '+d.tOrd.toFixed(2)+' / Sup '+d.tSup.toFixed(2)+' / Due '+d.tDue.toFixed(2)+'\n';
   } else {
     msg+='*'+(d.type==='invoices'?'Invoices':'Orders')+'*\n'+line+'\n';
     d.rows.forEach(r=>{
-      msg+=fmtDate(r.date)+' '+r.ref+'  '+r.kg.toFixed(2)+(r.amt?' / '+r.amt:'')+'\n';
+      msg+=fmtDate(r.date)+' '+r.ref+(d.showPartyCol?' '+r.party:'')+'  '+r.kg.toFixed(2)+(r.amt?' / '+r.amt:'')+'\n';
     });
     msg+=line+'\nTOTAL '+d.totalKg.toFixed(2)+(d.totalAmt?' / '+d.totalAmt:'')+'\n';
   }
