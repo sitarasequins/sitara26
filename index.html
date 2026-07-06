@@ -353,18 +353,19 @@ tr:hover td{background:#f8faff}
   </div>
 
   <div class="tabs">
-    <button class="tab" onclick="switchTab(&#39;orders&#39;,this)">Orders</button>
-    <button class="tab" onclick="switchTab(&#39;invoices&#39;,this)">New Invoice</button>
-    <button class="tab active" onclick="switchTab(&#39;invlist&#39;,this)">Invoice List</button>
-    <button class="tab" onclick="switchTab(&#39;catalog&#39;,this)">Create</button>
-    <button class="tab" onclick="switchTab('production',this)">Pending Work</button>
-    <button class="tab" onclick="switchTab('comparison',this)">Comparison</button>
-    <button class="tab" onclick="switchTab('reports',this)">📊 Reports</button>
+    <button class="tab" data-tab="orders" onclick="switchTab('orders',this)">New Order</button>
+    <button class="tab" data-tab="orderlist" onclick="switchTab('orderlist',this)">Order List</button>
+    <button class="tab" data-tab="invoices" onclick="switchTab('invoices',this)">New Invoice</button>
+    <button class="tab active" data-tab="invlist" onclick="switchTab('invlist',this)">Invoice List</button>
+    <button class="tab" data-tab="catalog" onclick="switchTab('catalog',this)">Create</button>
+    <button class="tab" data-tab="production" onclick="switchTab('production',this)">Pending Work</button>
+    <button class="tab" data-tab="comparison" onclick="switchTab('comparison',this)">Comparison</button>
+    <button class="tab" data-tab="reports" onclick="switchTab('reports',this)">📊 Reports</button>
   </div>
 
-  <!-- ORDERS -->
+  <!-- NEW ORDER (form) -->
   <div id="tab-orders" class="view">
-    <div class="split">
+    <div style="max-width:460px">
       <div class="form-panel">
         <h4 id="order-form-title">New Order</h4>
         <div class="field"><label>Party name</label>
@@ -384,7 +385,12 @@ tr:hover td{background:#f8faff}
         </div>
         <div style="margin-top:8px;font-size:11px;color:#bbb" id="form-status-note">Status: Pending (auto)</div>
       </div>
-      <div>
+    </div>
+  </div>
+
+  <!-- ORDER LIST -->
+  <div id="tab-orderlist" class="view">
+    <div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div class="stat"><div class="stat-label">Pending Orders</div><div class="stat-val" id="s-pending" style="color:#d97706">0</div></div>
@@ -413,7 +419,6 @@ tr:hover td{background:#f8faff}
           </div>
           <div id="cancelled-orders-body"></div>
         </div>
-      </div>
     </div>
   </div>
 
@@ -1544,13 +1549,18 @@ function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderPa
 function switchTab(t,el){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['orders','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
     const el2=document.getElementById('tab-'+id);
     if(el2) el2.classList.toggle('active',id===t);
   });
   if(t==='reports') renderReport();
   if(t==='comparison') renderComparison();
+  if(t==='orderlist') renderOrders();
   if(t==='invoices'){resetInvForm();}
+}
+function gotoTab(t){
+  const btn=document.querySelector('.tab[data-tab="'+t+'"]');
+  if(btn) switchTab(t,btn);
 }
 // Build net-pending map: for each party+color+shape, orderedKg minus invoicedKg (across ALL dates)
 // Build invByPartyItem only counting invoices on/after the earliest pending order date
@@ -1784,7 +1794,7 @@ function renderOrders(){
           ${total>0?`<div style="font-size:11px;color:#888;margin-top:3px">${fmt(total)}</div>`:''}
         </div>
         <div style="display:flex;gap:5px;flex-shrink:0">
-          <button class="btn btn-sm" onclick="loadOrderIntoForm(${o.id})">✏ Edit</button>
+          <button class="btn btn-sm" onclick="editOrderFromAnywhere(${o.id})">✏ Edit</button>
           <button class="btn btn-sm" onclick="printOrderPOS(${o.id})" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾</button>
           <button class="btn btn-sm" onclick="shareOrderWhatsApp(${o.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
           <button class="btn btn-sm" onclick="cancelOrderPrompt(${o.id})" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c">✕ Cancel</button>
@@ -2182,7 +2192,11 @@ function resetOrderForm(){
   document.getElementById('save-order-btn').textContent='Save order';
   addItemRow();
 }
-function cancelOrderForm(){resetOrderForm();}
+function cancelOrderForm(){
+  const wasEditing=!!editOid;
+  resetOrderForm();
+  if(wasEditing) gotoTab('orderlist');
+}
 function loadOrderIntoForm(id){
   const o=orders.find(x=>x.id===id);if(!o)return;
   editOid=id;
@@ -2207,6 +2221,7 @@ function saveOrder(){
     resetOrderForm();
     saveAll();renderOrders();renderInvoiceList();
     showSaveToast('Order updated!');
+    gotoTab('orderlist');
   } else {
     const newOrder={id:nextOid++,invNum:nextInvNum++,party,date:dateVal,status:'Pending',items};
     orders.push(newOrder);
@@ -2752,9 +2767,9 @@ function openOrderView(id){
 }
 function editFromOrderView(){closeModal('modal-order-view');editOrderFromAnywhere(ovOid);}
 function editOrderFromAnywhere(id){
-  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',i===0));
-  ['orders','invoices','catalog','production'].forEach((id2,i)=>document.getElementById('tab-'+id2).classList.toggle('active',i===0));
-  document.getElementById('view-invoice').style.display='none';
+  gotoTab('orders');
+  const vi=document.getElementById('view-invoice');
+  if(vi) vi.style.display='none';
   loadOrderIntoForm(id);
 }
 
