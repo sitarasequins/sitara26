@@ -378,6 +378,10 @@ tr:hover td{background:#f8faff}
           <div class="item-hdr"><span>Color</span><span>Shape</span><span>Kg</span><span>Rate</span><span>Amt</span><span></span></div>
           <div id="items-container"></div>
           <button class="add-item-btn" onclick="addItemRow()">+ Add item</button>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+            <span style="font-size:10px;color:#bbb">⌨ Enter = next cell · Enter on Rate = new row</span>
+            <span id="order-form-total" style="font-size:12px">Total: <b style="color:#2563eb">0.00 kg</b></span>
+          </div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:13px">
           <button class="btn" onclick="cancelOrderForm()">Cancel</button>
@@ -441,6 +445,7 @@ tr:hover td{background:#f8faff}
           <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Items</div>
           <div class="item-hdr"><span>Color</span><span>Shape</span><span>Kg</span><span></span></div>
           <div id="inv-items-container"></div>
+          <div style="font-size:10px;color:#bbb;margin-top:2px">⌨ Enter = next cell · Enter on rate = new row</div>
           <button class="add-item-btn" onclick="addInvItemRow()">+ Add item</button>
         </div>
         <div style="margin-top:10px;margin-bottom:6px;padding:8px 12px;background:#f0f4ff;border-radius:8px;font-size:13px;font-weight:600;color:#1e3a5f">
@@ -2171,6 +2176,7 @@ function addItemRow(item=null){
     <span class="order-amt" style="font-size:12px;color:#2563eb;font-weight:600;text-align:right;padding:4px 2px">${amt}</span>
     <button class="item-del" onclick="this.parentElement.remove()">✕</button>`;
   c.appendChild(d);
+  updateOrderFormTotal();
 }
 function getItems(){
   return [...document.querySelectorAll('#items-container .item-row')].map(r=>{
@@ -2181,6 +2187,58 @@ function getItems(){
       kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
   }).filter(i=>i.color&&i.shape);
 }
+
+// ── Excel-style keyboard flow: Enter = next cell; Enter on last cell of last row = new row ──
+function geKeyNav(e){
+  if(e.key!=='Enter')return;
+  const input=e.target;
+  if(!input.matches('input'))return;
+  e.preventDefault();
+  const container=input.closest('#items-container,#inv-items-container');
+  if(!container)return;
+  const row=input.closest('.item-row');
+  if(!row)return;
+  const cells=[...row.querySelectorAll('input')];
+  const idx=cells.indexOf(input);
+  if(idx<cells.length-1){
+    cells[idx+1].focus();
+    if(cells[idx+1].select)cells[idx+1].select();
+    return;
+  }
+  // Last cell of this row
+  const rows=[...container.querySelectorAll('.item-row')];
+  const rIdx=rows.indexOf(row);
+  if(rIdx<rows.length-1){
+    const nf=rows[rIdx+1].querySelector('input');
+    if(nf){nf.focus();if(nf.select)nf.select();}
+  } else {
+    // Auto-add new row and focus its first cell
+    if(container.id==='items-container') addItemRow(); else addInvItemRow();
+    const newRow=container.querySelector('.item-row:last-child');
+    const nf=newRow&&newRow.querySelector('input');
+    if(nf)nf.focus();
+  }
+}
+function updateOrderFormTotal(){
+  const el=document.getElementById('order-form-total');
+  if(!el)return;
+  let kg=0,amt=0;
+  document.querySelectorAll('#items-container .item-row').forEach(r=>{
+    const ins=r.querySelectorAll('input[type="number"]');
+    const k=parseFloat(ins[0]?.value)||0, p=parseFloat(ins[1]?.value)||0;
+    kg+=k; amt+=k*p;
+  });
+  el.innerHTML='Total: <b style="color:#2563eb">'+kg.toFixed(2)+' kg'+(amt>0?' · ₹'+Math.round(amt).toLocaleString('en-IN'):'')+'</b>';
+}
+// Attach keyboard nav to both item containers (script runs after DOM is parsed)
+(function(){
+  const oc=document.getElementById('items-container');
+  const ic=document.getElementById('inv-items-container');
+  if(oc) oc.addEventListener('keydown', geKeyNav);
+  if(ic) ic.addEventListener('keydown', geKeyNav);
+  if(oc) oc.addEventListener('input', updateOrderFormTotal);
+  if(oc) oc.addEventListener('click', e=>{ if(e.target.matches('.item-del')) setTimeout(updateOrderFormTotal,0); });
+})();
 function resetOrderForm(){
   editOid=null;
   document.getElementById('order-form-title').textContent='New Order';
@@ -3804,6 +3862,7 @@ function rptTrend(el){
   function monthlyFor(colorL,shapeL){
     const m={};months.forEach(x=>m[x.key]=0);
     orders.forEach(o=>{
+      if(o.status==='Cancelled')return;
       const mk=o.date.slice(0,7);
       if(!(mk in m))return;
       o.items.filter(i=>!i.cancelled).forEach(i=>{
@@ -3873,6 +3932,7 @@ function rptTrend(el){
   const itemMap={};
   const keys=months.map(x=>x.key);
   orders.forEach(o=>{
+    if(o.status==='Cancelled')return;
     const mk=o.date.slice(0,7);
     const idx=keys.indexOf(mk);
     if(idx===-1)return;
@@ -3958,14 +4018,17 @@ function renderComparison(){
     [...fOrders].sort((a,b)=>b.date.localeCompare(a.date)).forEach(o=>{
       const its=o.items.filter(i=>cmpItemMatch(i,color,size));
       if(!its.length)return;
-      const kg=its.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0);
-      rows.push({o,its,kg});
+      const isCancelled=o.status==='Cancelled';
+      const kg=isCancelled?0:its.filter(i=>!i.cancelled).reduce((s,i)=>s+parseFloat(i.kg||0),0);
+      rows.push({o,its,kg,isCancelled});
     });
     let totalKg=0;
-    const trs=rows.map(({o,its,kg})=>{
+    const trs=rows.map(({o,its,kg,isCancelled})=>{
       totalKg+=kg;
-      const items=its.map(i=>`${i.cancelled?'<s style="color:#bbb">':''}${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}${i.cancelled?'</s>':''}`).join(' · ');
-      const st=o.status==='Pending'?'<span style="background:#fff7ed;color:#c2410c;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">PENDING</span>':'<span style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">DELIVERED</span>';
+      const items=its.map(i=>`${(i.cancelled||isCancelled)?'<s style="color:#bbb">':''}${i.color} ${i.shape} ${parseFloat(i.kg||0).toFixed(2)}${(i.cancelled||isCancelled)?'</s>':''}`).join(' · ');
+      const st=isCancelled
+        ?'<span style="background:#f3f4f6;color:#9ca3af;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">CANCELLED</span>'
+        :o.status==='Pending'?'<span style="background:#fff7ed;color:#c2410c;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">PENDING</span>':'<span style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:0 7px;font-size:10px;font-weight:700">DELIVERED</span>';
       return `<tr>
         <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap">${o.date}</td>
         <td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap"><a href="javascript:void(0)" onclick="openOrderView(${o.id})" style="color:#2563eb;font-weight:600">${invLabel(o.invNum)}</a></td>
@@ -4030,7 +4093,7 @@ function renderComparison(){
     return;
   }
   const map={};
-  fOrders.forEach(o=>o.items.filter(i=>!i.cancelled&&cmpItemMatch(i,color,size)).forEach(i=>{
+  fOrders.filter(o=>o.status!=='Cancelled').forEach(o=>o.items.filter(i=>!i.cancelled&&cmpItemMatch(i,color,size)).forEach(i=>{
     const k=i.color+'||'+i.shape;
     if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[],earliest:o.date};
     map[k].ordKg+=parseFloat(i.kg||0);
@@ -4285,7 +4348,7 @@ function rptOrders(fOrders,el){
       invLabel(o.invNum),
       `<strong>${o.party}</strong>`,
       `${kg.toFixed(2)} kg`,
-      o.status==='Pending'?`<span class="rpt-badge-p">Pending</span>`:`<span class="rpt-badge-d">Delivered</span>`,
+      o.status==='Cancelled'?`<span style="background:#f3f4f6;color:#9ca3af;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:700">Cancelled</span>`:o.status==='Pending'?`<span class="rpt-badge-p">Pending</span>`:`<span class="rpt-badge-d">Delivered</span>`,
       `<span style="font-size:11px;color:#888">${items}</span>`
     ];
   });
