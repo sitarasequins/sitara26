@@ -367,15 +367,16 @@ tr:hover td{background:#f8faff}
   <div id="tab-orders" class="view">
     <div style="max-width:460px">
       <div class="form-panel">
-        <h4 id="order-form-title">New Order</h4>
-        <div class="field"><label>Party name</label>
-          <input id="f-party" list="party-dl" type="text" placeholder="Type or select party">
+        <h4 id="order-form-title" style="display:none">New Order</h4>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input id="order-voucher-preview" type="text" readonly
+            style="width:90px;padding:6px 8px;border-radius:7px;border:1.5px solid #eee;font-size:12px;color:#888;background:#f9fafb;box-sizing:border-box">
+          <input id="f-party" list="party-dl" type="text" placeholder="Party name"
+            style="flex:1;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box">
           <datalist id="party-dl"></datalist>
+          <input id="f-date" type="date" style="width:150px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box">
         </div>
-        <div class="field"><label>Order date</label><input id="f-date" type="date"></div>
         <div style="margin-top:4px">
-          <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Items</div>
-          <div class="item-hdr"><span>Color</span><span>Shape</span><span>Kg</span><span>Rate</span><span>Amt</span><span></span></div>
           <div id="items-container"></div>
           <button class="add-item-btn" onclick="addItemRow()">+ Add item</button>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
@@ -429,21 +430,22 @@ tr:hover td{background:#f8faff}
   <!-- NEW INVOICE FORM -->
   <div id="tab-invoices" class="view">
     <div class="form-panel" style="max-width:500px;margin:0 auto">
-        <h4 id="inv-form-title">New Invoice</h4>
-        <div class="field"><label>Party name</label>
-          <div class="combo-wrap" style="width:100%">
-            <input class="combo-input" id="if-party-input" type="text" placeholder="Type or pick party..." autocomplete="off"
+        <h4 id="inv-form-title" style="display:none">New Invoice</h4>
+        <div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start">
+          <input id="inv-voucher-preview" type="text" readonly
+            style="width:90px;padding:6px 8px;border-radius:7px;border:1.5px solid #eee;font-size:12px;color:#888;background:#f9fafb;box-sizing:border-box;flex-shrink:0">
+          <div class="combo-wrap" style="flex:1">
+            <input class="combo-input" id="if-party-input" type="text" placeholder="Party name" autocomplete="off"
               onfocus="openPartyCombo(this)"
               oninput="openPartyCombo(this)"
               onblur="if(this.value)window._lastSelectedParty=this.value"
-              onkeydown="comboKeyDown(event,'inv-party-drop','party-combo')">
+              onkeydown="comboKeyDown(event,'inv-party-drop','party-combo')"
+              style="width:100%;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box">
             <div class="combo-drop" id="inv-party-drop"></div>
           </div>
+          <input id="if-date" type="date" style="width:150px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box;flex-shrink:0">
         </div>
-        <div class="field"><label>Invoice date</label><input id="if-date" type="date"></div>
         <div style="margin-top:4px">
-          <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Items</div>
-          <div class="item-hdr"><span>Color</span><span>Shape</span><span>Kg</span><span></span></div>
           <div id="inv-items-container"></div>
           <div style="font-size:10px;color:#bbb;margin-top:2px">⌨ Enter = next cell · Enter on rate = new row</div>
           <button class="add-item-btn" onclick="addInvItemRow()">+ Add item</button>
@@ -2032,8 +2034,9 @@ function makeCombo(list, val, cls){
     comboList=list.map(s=>({value:s,label:s}));
   }
   const listJson=JSON.stringify(comboList).replace(/"/g,'&quot;');
+  const ph = cls==='color-combo' ? 'Color' : cls==='shape-combo' ? 'Shape' : 'Type or pick...';
   return `<div class="combo-wrap">
-    <input class="combo-input ${cls}" type="text" value="${val||''}" placeholder="Type or pick..." autocomplete="off"
+    <input class="combo-input ${cls}" type="text" value="${val||''}" placeholder="${ph}" autocomplete="off"
       onfocus="openComboObj(this,'${uid}',${listJson},'${cls}')"
       oninput="filterComboObj(this,'${uid}',${listJson},'${cls}')"
       onkeydown="comboKeyDown(event,'${uid}','${cls}')">
@@ -2278,6 +2281,8 @@ function resetOrderForm(){
   document.getElementById('party-dl').innerHTML=parties.map(p=>`<option value="${p.name}">`).join('');
   document.getElementById('form-status-note').textContent='Status: Pending (auto)';
   document.getElementById('save-order-btn').textContent='Save order';
+  const ovp=document.getElementById('order-voucher-preview');
+  if(ovp) ovp.value=invLabel(nextInvNum);
   addItemRow();
 }
 function cancelOrderForm(){
@@ -2289,6 +2294,8 @@ function loadOrderIntoForm(id){
   const o=orders.find(x=>x.id===id);if(!o)return;
   editOid=id;
   document.getElementById('order-form-title').textContent='Edit Order — '+invLabel(o.invNum);
+  const ovp=document.getElementById('order-voucher-preview');
+  if(ovp) ovp.value=invLabel(o.invNum);
   document.getElementById('f-party').value=o.party;
   document.getElementById('f-date').value=o.date;
   document.getElementById('items-container').innerHTML='';
@@ -2490,22 +2497,22 @@ function resetInvForm(){
   if(cl)cl.value='';
   const ca=document.getElementById('if-charge-amt');
   if(ca)ca.value='';
+  const ivp=document.getElementById('inv-voucher-preview');
+  if(ivp) ivp.value=invNumLabel(nextInvoiceNum);
   addInvItemRow();
 }
-function cancelInvForm(){resetInvForm();}
+function cancelInvForm(){
+  const wasEditing=!!editInvId;
+  resetInvForm();
+  if(wasEditing) gotoTab('invlist');
+}
 function loadInvIntoForm(invId){
   const inv=invoices.find(x=>x.id===invId);if(!inv)return;
   editInvId=invId;
-  // Switch to New Invoice tab
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
-    const el=document.getElementById('tab-'+id);
-    if(el) el.classList.toggle('active',id==='invoices');
-  });
-  document.querySelectorAll('.tab').forEach(b=>{
-    if(b.textContent.trim()==='New Invoice') b.classList.add('active');
-  });
+  gotoTab('invoices');
   document.getElementById('inv-form-title').textContent='Edit Invoice — '+invNumLabel(inv.serial);
+  const ivp=document.getElementById('inv-voucher-preview');
+  if(ivp) ivp.value=invNumLabel(inv.serial);
   document.getElementById('save-inv-btn').textContent='Update invoice';
   const pInput=document.getElementById('if-party-input');
   if(pInput){pInput.value=inv.party;pInput.disabled=false;}
@@ -2548,13 +2555,7 @@ function saveInvoice(){
   resetInvForm();
   saveAll();renderInvoiceList();
   setSyncStatus('saving','☁ Saving...');
-  // Switch to invoice list after saving
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab')[2].classList.add('active');
-  ['orders','invoices','invlist','catalog','production','reports'].forEach((id,i)=>{
-    const el=document.getElementById('tab-'+id);
-    if(el)el.classList.toggle('active',id==='invlist');
-  });
+  gotoTab('invlist');
 }
 function saveCourier(id,val){
   const inv=invoices.find(x=>x.id==id);
@@ -2665,7 +2666,7 @@ function viewInvoice(invId){
   const inv=invoices.find(x=>x.id===invId);if(!inv)return;
   // Hide all tabs
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
     if(el) el.classList.remove('active');
   });
@@ -2704,11 +2705,6 @@ function viewInvoice(invId){
       <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Remarks</div>
       <div style="font-size:13px;color:#444;line-height:1.6">${inv.remarks}</div>
     </div>`:''}${inv.courier?`<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border-left:3px solid #16a34a"><div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px">&#x1F69A; Courier</div><div style="font-size:13px">${inv.courier}</div></div>`:''}`;
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','invoices','catalog','production','reports'].forEach(id=>{
-    const el=document.getElementById('tab-'+id);
-    if(el) el.classList.remove('active');
-  });
   document.getElementById('view-invoice').style.display='block';
 }
 function closeInvoice(){
@@ -2718,14 +2714,7 @@ function closeInvoice(){
   document.body.classList.remove('pos-mode');
   currentPosInvId=null;
   // Return to Invoice List tab
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','invoices','invlist','catalog','production','reports'].forEach(id=>{
-    const el=document.getElementById('tab-'+id);
-    if(el) el.classList.toggle('active',id==='invlist');
-  });
-  document.querySelectorAll('.tab').forEach(b=>{
-    if(b.textContent.trim()==='Invoice List') b.classList.add('active');
-  });
+  gotoTab('invlist');
   renderInvoiceList();
 }
 
@@ -2821,12 +2810,14 @@ function printPartyLedger(){
   document.getElementById('view-ledger').style.display='block';
   document.getElementById('view-invoice').style.display='none';
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','invoices','catalog','production'].forEach(id=>document.getElementById('tab-'+id).classList.remove('active'));
+  ['orders','orderlist','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
+    const el=document.getElementById('tab-'+id);
+    if(el) el.classList.remove('active');
+  });
 }
 function closeLedger(){
   document.getElementById('view-ledger').style.display='none';
-  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',i===2));
-  ['orders','invoices','catalog','production'].forEach((id,i)=>document.getElementById('tab-'+id).classList.toggle('active',i===2));
+  gotoTab('invlist');
 }
 
 // ============================================================
@@ -2917,7 +2908,7 @@ function pwPrintPOS(){
   posContent+=`<div class="pos-row bold"><span>GRAND TOTAL</span><span>${d.grandTotal.toFixed(2)}</span></div><hr class="pos-divider">`;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-row.bold{font-weight:700}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-row.bold{font-weight:700}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   posWin.document.fonts.ready.then(function(){
@@ -3370,7 +3361,7 @@ function printOrderPOS(id){
     <div style="height:20mm"></div>`;
   const posWin=window.open('','_blank','width=400,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   // Wait for fonts to load before printing
@@ -3435,7 +3426,7 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,cursive;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   // Wait for fonts to load before printing
