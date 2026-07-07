@@ -1935,6 +1935,35 @@ document.getElementById('new-shape').addEventListener('keydown',e=>{if(e.key==='
 // ============================================================
 // PARTIES
 // ============================================================
+// Build a WhatsApp link: direct-to-chat if the party has a saved number, else generic share
+function waLink(partyName, msg){
+  let p=null;
+  if(partyName){
+    const t=partyName.trim().toLowerCase();
+    p=parties.find(x=>x.name.toLowerCase()===t);
+    if(!p){
+      const matches=parties.filter(x=>x.name.toLowerCase().includes(t));
+      if(matches.length===1)p=matches[0];
+    }
+  }
+  let num=p&&p.phone?String(p.phone).replace(/\D/g,''):'';
+  if(num.length===10)num='91'+num;
+  return num
+    ? 'https://wa.me/'+num+'?text='+encodeURIComponent(msg)
+    : 'https://wa.me/?text='+encodeURIComponent(msg);
+}
+function editPartyPhone(id){
+  const p=parties.find(x=>x.id===id);if(!p)return;
+  const cur=p.phone||'';
+  const inp=prompt('WhatsApp number for '+p.name+'\n(10 digits, or with country code):',cur);
+  if(inp===null)return;
+  const digits=inp.replace(/\D/g,'');
+  if(digits==='' ){ delete p.phone; saveAll(); renderParties(); showSaveToast('Number removed'); return; }
+  if(digits.length<10||digits.length>15){alert('Enter a valid number (10 digits, or with country code).');return;}
+  p.phone=digits;
+  saveAll();renderParties();
+  showSaveToast('WhatsApp number saved');
+}
 function renderParties(){
   const countEl=document.getElementById('party-count');
   if(countEl)countEl.textContent='('+parties.length+')';
@@ -1944,8 +1973,9 @@ function renderParties(){
   parties.forEach(p=>{
     const row=document.createElement('div');
     row.className='party-row-item';
-    row.innerHTML=`<span style="font-size:13px;font-weight:600">${p.name}</span>
+    row.innerHTML=`<span style="font-size:13px;font-weight:600">${p.name}${p.phone?`<span style="font-size:10px;color:#25D366;font-weight:500;margin-left:8px">📱 ${p.phone}</span>`:''}</span>
       <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="editPartyPhone(${p.id})" style="${p.phone?'background:#f0fdf4;border-color:#bbf7d0;color:#16a34a':''}">📱</button>
         <button class="btn btn-sm" onclick="openPartyDetail(${p.id})">View</button>
         <button class="btn btn-sm" onclick="editPartyInline(${p.id})">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="delParty(${p.id})">Delete</button>
@@ -4211,7 +4241,7 @@ function shareComparisonWA(){
     });
     msg+=line+'\nTOTAL '+d.totalKg.toFixed(2)+(d.totalAmt?' / '+d.totalAmt:'')+'\n';
   }
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  window.open(waLink((d.party!=='All Parties'?d.party:''),msg),'_blank');
 }
 
 function renderReport(){
@@ -4559,7 +4589,7 @@ function shareInvWhatsApp(invId){
   msg+=line+'\n';
   if(inv.remarks) msg+=inv.remarks+'\n';
   if(inv.courier) msg+=inv.courier+'\n';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  window.open(waLink(inv.party,msg),'_blank');
 }
 
 function shareInvoiceWhatsApp(){
@@ -4586,7 +4616,7 @@ function shareInvoiceWhatsApp(){
   if(totalAmt>0) msg += 'AMT    '+Math.round(totalAmt)+'\n';
   msg += line+'\n';
   if(inv.remarks) msg += inv.remarks+'\n';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  window.open(waLink(inv.party,msg),'_blank');
 }
 
 function showSaveToast(msg,isError){
@@ -4645,7 +4675,7 @@ function shareOrderWhatsApp(orderId){
   msg += line+'\n';
   msg += 'WT     '+totalKg.toFixed(2)+'\n';
   msg += line+'\n';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  window.open(waLink(o.party,msg),'_blank');
   const t=document.getElementById('wa-toast'); if(t)t.remove();
 }
 
