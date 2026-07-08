@@ -355,7 +355,7 @@ tr:hover td{background:#f8faff}
   <div class="tabs">
     <button class="tab" data-tab="orders" onclick="switchTab('orders',this)">New Order</button>
     <button class="tab" data-tab="orderlist" onclick="switchTab('orderlist',this)">Order List</button>
-    <button class="tab" data-tab="invoices" onclick="switchTab('invoices',this)">New Invoice</button>
+    <button class="tab" data-tab="invoices" onclick="editInvId=null;switchTab('invoices',this)">New Invoice</button>
     <button class="tab active" data-tab="invlist" onclick="switchTab('invlist',this)">Invoice List</button>
     <button class="tab" data-tab="catalog" onclick="switchTab('catalog',this)">Create</button>
     <button class="tab" data-tab="production" onclick="switchTab('production',this)">Pending Work</button>
@@ -1563,7 +1563,7 @@ function switchTab(t,el){
   if(t==='reports') renderReport();
   if(t==='comparison') renderComparison();
   if(t==='orderlist') renderOrders();
-  if(t==='invoices'){resetInvForm();}
+  if(t==='invoices' && !editInvId){resetInvForm();}
 }
 function gotoTab(t){
   const btn=document.querySelector('.tab[data-tab="'+t+'"]');
