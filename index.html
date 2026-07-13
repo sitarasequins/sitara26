@@ -293,6 +293,9 @@ tr:hover td{background:#f8faff}
 .pos-inv .pos-item-row{display:flex;font-size:21px;font-weight:700;margin:6px 0;align-items:center;white-space:nowrap}
 .pos-inv .pos-col-item{flex:1;padding-right:4px}
 .pos-inv .pos-col-kg{width:52px;text-align:right;flex-shrink:0}
+.pos-inv .pos-row2{display:flex;font-size:21px;font-weight:700;margin:3px 0}
+.pos-inv .pos-total{font-size:21px;font-weight:700;margin:3px 0;text-align:left}
+.pos-inv .pos-item{font-family:'Courier New',monospace;font-size:18px;font-weight:700;margin:4px 0;text-align:left;white-space:nowrap}
 .pos-inv .pos-col-rate{width:58px;text-align:right;flex-shrink:0}
 .pos-inv .pos-col-amt{width:66px;text-align:right;flex-shrink:0}
 .pos-inv .pos-col-item{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3397,7 +3400,6 @@ function printPOS(){
     return colorCode;
   }
   const itemRows=items.map(i=>{
-    const amt=Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0));
     const cObj=colors.find(x=>(typeof x==='object'?x.name:x)===i.color);
     const alias=cObj&&typeof cObj==='object'&&cObj.alias?cObj.alias:'';
     const hasAmt=parseFloat(i.price||0)>0;
@@ -3405,7 +3407,11 @@ function printPOS(){
     const rate=parseFloat(i.price||0).toFixed(0);
     const colorAlias=alias?i.color+'/'+alias:i.color;
     const calc=hasAmt?`${kg}x${rate}`:`${kg}`;
-    return `<div class="pos-item"><span style="font-size:20px">${amt>0?amt:''}</span>&nbsp;&nbsp;${i.shape} ${colorAlias} ${calc}</div>`;
+    // Left-aligned fixed columns: shape (4) | color (14) | kg x rate
+    const shapeCol=(i.shape||'').padEnd(4,' ');
+    const colorCol=colorAlias.padEnd(14,' ');
+    const lineTxt=(shapeCol+' '+colorCol+' '+calc);
+    return `<div class="pos-item">${lineTxt.replace(/ /g,'&nbsp;')}</div>`;
   }).join('');
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
   // Format serial as plain number only e.g. 0001
@@ -3413,20 +3419,20 @@ function printPOS(){
   document.getElementById('pos-inv-content').innerHTML=`
     <div class="pos-title">${inv.party}</div>
     <hr class="pos-divider">
-    <div class="pos-row"><span>${serialNum}</span><span>${fmtDate(inv.date)}</span></div>
+    <div class="pos-row2"><span>${serialNum}</span><span style="margin-left:24px">${fmtDate(inv.date)}</span></div>
     <hr class="pos-divider">
     ${itemRows}
     <hr class="pos-divider">
-    ${posChargeAmt>0?`<div class="pos-row"><span>${posChargeLabel}</span><span>${Math.round(posChargeAmt)}</span></div>`:''}
+    ${posChargeAmt>0?`<div class="pos-item">${(posChargeLabel+'  '+Math.round(posChargeAmt)).replace(/ /g,'&nbsp;')}</div>`:''}
     <hr class="pos-divider">
-    <div class="pos-row bold">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.bags?' / '+inv.bags+' BAG':''}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
+    <div class="pos-total">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.bags?' / '+inv.bags+' BAG':''}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
     <hr class="pos-divider">
     <div style="height:20mm"></div>
   `;
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row{display:flex;justify-content:space-between;font-size:23px;font-weight:700;margin:3px 0}.pos-item{font-size:17px;font-weight:700;margin:4px 0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm 6mm 2mm 2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row2{display:flex;font-size:22px;font-weight:700;margin:3px 0}.pos-total{font-size:22px;font-weight:700;margin:3px 0;text-align:left}.pos-item{font-family:"Courier New",monospace;font-size:18px;font-weight:700;margin:4px 0;text-align:left;white-space:nowrap}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   // Wait for fonts to load before printing
@@ -4571,8 +4577,7 @@ function shareInvWhatsApp(invId){
     const colorAlias=i.color+alias;
     const kg=parseFloat(i.kg).toFixed(2);
     const rate=i.price>0?'  '+Math.round(i.price):'';
-    const amt=i.price>0?'  '+Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0)):'';
-    msg+=colorAlias+' '+i.shape+'  '+kg+rate+amt+'\n';
+    msg+=colorAlias+' '+i.shape+'  '+kg+rate+'\n';
   });
   msg+=line+'\n';
   msg+='WT     '+totalKg.toFixed(2)+'\n';
@@ -4599,8 +4604,7 @@ function shareInvoiceWhatsApp(){
   items.forEach(i=>{
     const kg=parseFloat(i.kg).toFixed(2);
     const rate=i.price>0?'  '+Math.round(i.price):'';
-    const amt=i.price>0?'  '+Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0)):'';
-    msg += i.color+' '+i.shape+'  '+kg+rate+amt+'\n';
+    msg += i.color+' '+i.shape+'  '+kg+rate+'\n';
   });
   msg += line+'\n';
   msg += 'WT     '+totalKg.toFixed(2)+'\n';
