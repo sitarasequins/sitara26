@@ -156,6 +156,8 @@ tr:hover td{background:#f8faff}
 .item-row-o .oi-color{width:100%;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;box-sizing:border-box}
 .item-row-o .oi-kg{width:70px;flex-shrink:0;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd}
 .oi-drop{position:absolute;z-index:60;top:0;left:calc(100% + 6px);width:230px;max-height:260px;overflow-y:auto;background:#fff;border:1.5px solid #2563eb;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:13px}
+.item-row-i .ii-color-wrap .oi-drop{top:calc(100% + 3px);left:0;width:100%;min-width:230px}
+.item-row-i .oi-shape-drop{top:calc(100% + 3px);left:0}
 .oi-shape-drop{left:0;top:calc(100% + 3px);width:180px}
 .oi-opt{padding:5px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;white-space:nowrap}
 .oi-opt:hover,.oi-opt.sel{background:#e6f0ff}
@@ -2470,10 +2472,10 @@ function moveSel(drop,dir){
   opts[idx].scrollIntoView({block:'nearest'});
 }
 function hideDrops(){
-  document.querySelectorAll('#items-container .oi-drop').forEach(d=>d.style.display='none');
+  document.querySelectorAll('#items-container .oi-drop, #inv-items-container .oi-drop').forEach(d=>d.style.display='none');
 }
 document.addEventListener('click',e=>{
-  if(!e.target.closest('.item-row-o')) hideDrops();
+  if(!e.target.closest('.item-row-o') && !e.target.closest('.item-row-i')) hideDrops();
 });
 function getItems(){
   return [...document.querySelectorAll('#items-container .item-row-o')].map(r=>{
