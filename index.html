@@ -3425,23 +3425,21 @@ function renderProduction(){
   let rawCards=[];
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
+    const [color,shape]=key.split('||');
     const pendingParties={};
     let itemNet=0;
     let itemInvKg=0;
     Object.entries(v.parties).forEach(([party,pData])=>{
-      const ordKg=pData.kg;
-      const pInvKg=(invByPartyItem[party]&&invByPartyItem[party][key])||0;
-      const pNet=Math.max(0, ordKg-pInvKg);
-      itemInvKg+=Math.min(pInvKg, ordKg);
-      itemNet+=pNet;
-      if(pNet>=1.0) pendingParties[party]=pNet;
-      else itemNet-=pNet;
+      // Cycle-based settlement: surplus from old cycles never reduces a fresh order
+      const s=settledPendingFor(party,color,shape);
+      const pNet=s.due;
+      itemInvKg+=s.totalSupplied;
+      if(pNet>=1.0){ pendingParties[party]=pNet; itemNet+=pNet; }
     });
     totalOrderKg+=v.totalKg;
     totalInvKg+=itemInvKg;
     if(itemNet>=1.0){
       totalNetKg+=itemNet;
-      const [color,shape]=key.split('||');
       const sortedDates=[...v.dates].sort();
       rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,parties:pendingParties,dates:v.dates,
         minDate:sortedDates[0]||'',maxDate:sortedDates[sortedDates.length-1]||'',orderCount:v.dates.length});
