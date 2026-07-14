@@ -163,6 +163,19 @@ tr:hover td{background:#f8faff}
 .oi-al{color:#999;font-size:11px;margin-left:8px}
 .oi-none{padding:6px 10px;color:#bbb;font-size:12px}
 .oi-hl{background:#fde68a;color:#111;border-radius:2px;padding:0 1px}
+.item-row-i{display:flex;gap:5px;margin-bottom:5px;align-items:center;position:relative}
+.item-row-i .ii-shape{width:82px;flex-shrink:0;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;background:#f0f7ff;font-weight:600}
+.item-row-i .ii-color-wrap{flex:1;position:relative}
+.item-row-i .ii-color{width:100%;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;box-sizing:border-box}
+.item-row-i .ii-kg{width:56px;flex-shrink:0;font-size:13px;padding:6px 6px;border-radius:7px;border:1.5px solid #ddd}
+.item-row-i .ii-rate{width:56px;flex-shrink:0;font-size:13px;padding:6px 6px;border-radius:7px;border:1.5px solid #ddd}
+.inv-pend-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid #f0f0f0;font-size:13px}
+.inv-pend-row.picked{opacity:.5;background:#f8fafc}
+.inv-pend-row .ipr-shape{width:44px;flex-shrink:0;color:#555;font-weight:600}
+.inv-pend-row .ipr-color{flex:1}
+.inv-pend-row .ipr-pend{width:64px;text-align:right;color:#d97706;font-weight:700}
+.inv-pend-row .ipr-add{background:#2563eb;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0}
+.inv-pend-row .ipr-added{color:#16a34a;font-size:11px;font-weight:700;width:auto;flex-shrink:0}
 .item-row select,.item-row input{font-size:12px;padding:5px 7px;border-radius:7px;border:1.5px solid #ddd;background:#fff;color:#1a1a1a;width:100%}
 .item-del{background:none;border:none;cursor:pointer;color:#bbb;font-size:14px;padding:2px;border-radius:4px}
 .item-del:hover{color:#dc2626;background:#fef2f2}
@@ -454,7 +467,9 @@ tr:hover td{background:#f8faff}
 
   <!-- NEW INVOICE FORM -->
   <div id="tab-invoices" class="view">
-    <div class="form-panel" style="max-width:500px;margin:0 auto">
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <!-- LEFT: invoice form -->
+      <div class="form-panel" style="flex:1;min-width:340px;max-width:560px">
         <h4 id="inv-form-title" style="display:none">New Invoice</h4>
         <div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start">
           <input id="inv-voucher-preview" type="text" readonly
@@ -462,7 +477,8 @@ tr:hover td{background:#f8faff}
           <div class="combo-wrap" style="flex:1">
             <input class="combo-input" id="if-party-input" type="text" placeholder="Party name" autocomplete="off"
               onfocus="openPartyCombo(this)"
-              oninput="openPartyCombo(this)"
+              oninput="openPartyCombo(this);invPartyChanged()"
+              onchange="invPartyChanged()"
               onblur="if(this.value)window._lastSelectedParty=this.value"
               onkeydown="comboKeyDown(event,'inv-party-drop','party-combo')"
               style="width:100%;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box">
@@ -470,10 +486,13 @@ tr:hover td{background:#f8faff}
           </div>
           <input id="if-date" type="date" style="width:150px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box;flex-shrink:0">
         </div>
-        <div style="margin-top:4px">
-          <div id="inv-items-container"></div>
-          <div style="font-size:10px;color:#bbb;margin-top:2px">⌨ Enter = next cell · Enter on rate = new row</div>
+        <div style="display:flex;gap:5px;font-size:10px;color:#999;font-weight:600;padding:0 2px 3px">
+          <span style="width:82px">SHAPE</span><span style="flex:1">COLOR</span><span style="width:56px">KG</span><span style="width:56px">RATE</span><span style="width:22px"></span>
+        </div>
+        <div id="inv-items-container"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
           <button class="add-item-btn" onclick="addInvItemRow()">+ Add item</button>
+          <span style="font-size:10px;color:#bbb">⌨ shape carries down · type color · Enter</span>
         </div>
         <div style="margin-top:10px;margin-bottom:6px;padding:8px 12px;background:#f0f4ff;border-radius:8px;font-size:13px;font-weight:600;color:#1e3a5f">
           Total Weight: <span id="inv-form-weight" style="color:#2563eb">0.00 kg</span>
@@ -504,6 +523,16 @@ tr:hover td{background:#f8faff}
             <button class="btn btn-primary" onclick="saveInvoice()" id="save-inv-btn">Save invoice</button>
           </div>
         </div>
+      </div>
+      <!-- RIGHT: pending picker -->
+      <div id="inv-pending-panel" class="form-panel" style="flex:1;min-width:320px;max-width:560px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:700">📋 Pending from Orders</span>
+          <input id="inv-pending-search" type="text" placeholder="🔍 filter item..." oninput="renderInvPending()"
+            style="padding:5px 9px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;outline:none;width:150px">
+        </div>
+        <div id="inv-pending-list"></div>
+      </div>
     </div>
   </div>
 
@@ -2265,6 +2294,8 @@ function oShapeList(inp){
   drop.style.display='block';
 }
 function oPickShape(el,val){
+  const rowI=el.closest('.item-row-i');
+  if(rowI){ rowI.querySelector('.ii-shape').value=val; hideDrops(); rowI.querySelector('.ii-color').focus(); return; }
   const row=el.closest('.item-row-o');
   row.querySelector('.oi-shape').value=val;
   hideDrops();
@@ -2292,7 +2323,7 @@ function hlMatch(text,q){
   return text.slice(0,i)+'<mark class="oi-hl">'+text.slice(i,i+q.length)+'</mark>'+text.slice(i+q.length);
 }
 function oColorList(inp){
-  const wrap=inp.closest('.oi-color-wrap');
+  const wrap=inp.closest('.oi-color-wrap')||inp.closest('.ii-color-wrap');
   const drop=wrap.querySelector('.oi-drop');
   const q=inp.value.trim().toLowerCase();
   // Match on name OR alias
@@ -2332,6 +2363,8 @@ function oColorList(inp){
   drop.style.display='block';
 }
 function oPickColor(el,val){
+  const rowI=el.closest('.item-row-i');
+  if(rowI){ rowI.querySelector('.ii-color').value=val; hideDrops(); iAfterColor(rowI.querySelector('.ii-color')); return; }
   const row=el.closest('.item-row-o');
   row.querySelector('.oi-color').value=val;
   hideDrops();
@@ -2345,6 +2378,8 @@ function oCreateColor(val,el){
     saveAll();
     showSaveToast('Color "'+name+'" created');
   }
+  const rowI=el.closest('.item-row-i');
+  if(rowI){ rowI.querySelector('.ii-color').value=name; hideDrops(); iAfterColor(rowI.querySelector('.ii-color')); return; }
   const row=el.closest('.item-row-o');
   row.querySelector('.oi-color').value=name;
   hideDrops();
@@ -2613,23 +2648,175 @@ function toggleCancelledOrders(){
 // ============================================================
 function addInvItemRow(item=null){
   const c=document.getElementById('inv-items-container');
-  const d=document.createElement('div');d.className='item-row';
+  const d=document.createElement('div');d.className='item-row-i';
   const selC=item?item.color:'';
-  const selS=item?item.shape:'';
-  d.innerHTML=makeCombo(colors,selC,'color-combo')+makeCombo(shapes,selS,'shape-combo')+
-    `<input type="number" min="0" step="0.01" value="${item?item.kg:''}" placeholder="kg" oninput="updateInvFormTotal()">
-    <input type="number" min="0" value="${item?item.price:''}" placeholder="rate" oninput="updateInvFormTotal()">
-    <button class="item-del" onclick="this.parentElement.remove();updateInvFormTotal()">✕</button>`;
+  const selS=item?item.shape:(getLastInvShape()||'');
+  const kg=item?item.kg:'';
+  const price=item&&item.price?item.price:'';
+  d.innerHTML=`
+    <input class="ii-shape" type="text" value="${selS}" placeholder="shape" autocomplete="off"
+      onfocus="oShapeList(this)" oninput="oShapeList(this)" onkeydown="iShapeKey(event,this)">
+    <div class="ii-color-wrap">
+      <input class="ii-color" type="text" value="${selC}" placeholder="color" autocomplete="off"
+        onfocus="oColorList(this)" oninput="oColorList(this)" onkeydown="iColorKey(event,this)">
+      <div class="oi-drop" style="display:none"></div>
+    </div>
+    <input class="ii-kg" type="number" min="0" step="0.01" value="${kg}" placeholder="kg" oninput="updateInvFormTotal()" onkeydown="iKgKey(event,this)">
+    <input class="ii-rate" type="number" min="0" value="${price}" placeholder="rate" oninput="updateInvFormTotal()" onkeydown="iRateKey(event,this)">
+    <button class="item-del" onclick="this.closest('.item-row-i').remove();updateInvFormTotal()">✕</button>`;
   c.appendChild(d);updateInvFormTotal();
+  return d;
 }
+function getLastInvShape(){
+  const rows=[...document.querySelectorAll('#inv-items-container .item-row-i')];
+  for(let i=rows.length-1;i>=0;i--){
+    const v=rows[i].querySelector('.ii-shape').value.trim();
+    if(v)return v;
+  }
+  return '';
+}
+// Invoice key handlers reuse the same list openers (oShapeList/oColorList work on any input via classes)
+function iShapeKey(e,inp){
+  const drop=inp._drop;
+  if(e.key==='Enter'||e.key==='Tab'){
+    if(drop&&drop.style.display==='block'){
+      const sel=drop.querySelector('.oi-opt.sel')||drop.querySelector('.oi-opt');
+      if(sel){e.preventDefault();sel.dispatchEvent(new Event('mousedown'));return;}
+    }
+    e.preventDefault();hideDrops();
+    inp.closest('.item-row-i').querySelector('.ii-color').focus();
+  } else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();moveSel(drop,e.key==='ArrowDown'?1:-1);}
+  else if(e.key==='Escape'){hideDrops();}
+}
+function iColorKey(e,inp){
+  const wrap=inp.closest('.ii-color-wrap');
+  const drop=wrap.querySelector('.oi-drop');
+  if(e.key==='Enter'||e.key==='Tab'){
+    const q=inp.value.trim().toLowerCase();
+    if(!q){e.preventDefault();return;}
+    let exact=colors.find(c=>colorName(c).toLowerCase()===q);
+    if(!exact) exact=colors.find(c=>colorAlias(c).toLowerCase()===q);
+    if(exact){e.preventDefault();inp.value=colorName(exact);hideDrops();iAfterColor(inp);return;}
+    const sel=drop&&drop.style.display==='block'?drop.querySelector('.oi-opt.sel'):null;
+    if(sel){e.preventDefault();sel.dispatchEvent(new Event('mousedown'));return;}
+    const partial=colors.filter(c=>colorName(c).toLowerCase().includes(q)||colorAlias(c).toLowerCase().includes(q));
+    if(partial.length===1){e.preventDefault();inp.value=colorName(partial[0]);hideDrops();iAfterColor(inp);return;}
+    e.preventDefault();oColorList(inp);
+  } else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();moveSel(drop,e.key==='ArrowDown'?1:-1);}
+  else if(e.key==='Escape'){hideDrops();}
+}
+// After picking a color in an invoice row, auto-fill last-billed rate then focus kg
+function iAfterColor(inp){
+  const row=inp.closest('.item-row-i');
+  const rateEl=row.querySelector('.ii-rate');
+  if(rateEl && !rateEl.value){
+    const party=(document.getElementById('if-party-input')||{value:''}).value.trim();
+    const shape=row.querySelector('.ii-shape').value.trim();
+    const lr=lastBilledRate(party,inp.value.trim(),shape);
+    if(lr>0) rateEl.value=lr;
+  }
+  row.querySelector('.ii-kg').focus();
+  updateInvFormTotal();
+}
+function iKgKey(e,inp){
+  if(e.key==='Enter'){e.preventDefault();inp.closest('.item-row-i').querySelector('.ii-rate').focus();}
+}
+function iRateKey(e,inp){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const rows=[...document.querySelectorAll('#inv-items-container .item-row-i')];
+    const row=inp.closest('.item-row-i');
+    if(rows.indexOf(row)===rows.length-1){
+      const nr=addInvItemRow(); nr.querySelector('.ii-color').focus();
+    } else {
+      rows[rows.indexOf(row)+1].querySelector('.ii-color').focus();
+    }
+  }
+}
+// oPickColor handles both order (.oi-color) and invoice (.ii-color) rows
 function getInvItems(){
-  return [...document.querySelectorAll('#inv-items-container .item-row')].map(r=>{
-    const combos=r.querySelectorAll('.combo-input');
-    const ins=r.querySelectorAll('input[type="number"]');
-    return{color:(combos[0]?.value||'').trim().toUpperCase(),
-           shape:(combos[1]?.value||'').trim().toLowerCase(),
-           kg:parseFloat(ins[0]?.value)||0,price:parseFloat(ins[1]?.value)||0};
+  return [...document.querySelectorAll('#inv-items-container .item-row-i')].map(r=>{
+    return{color:(r.querySelector('.ii-color')?.value||'').trim().toUpperCase(),
+           shape:(r.querySelector('.ii-shape')?.value||'').trim().toLowerCase(),
+           kg:parseFloat(r.querySelector('.ii-kg')?.value)||0,
+           price:parseFloat(r.querySelector('.ii-rate')?.value)||0};
   }).filter(i=>i.color&&i.shape);
+}
+// Last rate billed to this party for this exact item (most recent invoice)
+function lastBilledRate(party,color,shape){
+  if(!party||!color||!shape)return 0;
+  const p=party.toLowerCase(),c=color.toLowerCase(),s=shape.toLowerCase();
+  let best=null;
+  invoices.forEach(inv=>{
+    if(inv.party.toLowerCase()!==p)return;
+    (inv.items||[]).forEach(i=>{
+      if(i.color.toLowerCase()===c && i.shape.toLowerCase()===s && parseFloat(i.price||0)>0){
+        if(!best||inv.date>best.date) best={date:inv.date,price:parseFloat(i.price)};
+      }
+    });
+  });
+  return best?best.price:0;
+}
+// Party changed on invoice -> refresh pending panel
+function invPartyChanged(){
+  clearTimeout(window._invPartyTimer);
+  window._invPartyTimer=setTimeout(renderInvPending,200);
+}
+// Track which pending keys are already added to the invoice (greyed on right)
+window._invPickedKeys=window._invPickedKeys||{};
+function renderInvPending(){
+  const el=document.getElementById('inv-pending-list');
+  if(!el)return;
+  const party=(document.getElementById('if-party-input')||{value:''}).value.trim();
+  if(!party){
+    el.innerHTML='<div style="color:#bbb;font-size:12px;padding:16px 4px;text-align:center">Pick a party to see their pending items.</div>';
+    return;
+  }
+  const map=buildPendingMap();
+  // find party case-insensitively
+  const key=Object.keys(map).find(k=>k.toLowerCase()===party.toLowerCase());
+  let items=key?map[key]:[];
+  const q=(document.getElementById('inv-pending-search')||{value:''}).value.trim().toLowerCase();
+  if(q) items=items.filter(it=>it.color.toLowerCase().includes(q)||it.shape.toLowerCase().includes(q)||(colAliasFor(it.color)||'').toLowerCase().includes(q));
+  if(!items.length){
+    el.innerHTML=`<div style="color:#bbb;font-size:12px;padding:16px 4px;text-align:center">${key?'No pending items match.':'No pending orders for this party.'}</div>`;
+    return;
+  }
+  // sort: shape natural, then color
+  items=[...items].sort((a,b)=>a.shape.localeCompare(b.shape)||a.color.localeCompare(b.color));
+  el.innerHTML=items.map(it=>{
+    const alias=colAliasFor(it.color);
+    const k=it.color+'||'+it.shape;
+    const picked=!!window._invPickedKeys[k];
+    return `<div class="inv-pend-row${picked?' picked':''}" data-k="${k}">
+      <span class="ipr-shape">${it.shape}</span>
+      <span class="ipr-color"><b>${it.color}</b>${alias?`<span style="color:#999;font-size:10px">/${alias}</span>`:''}</span>
+      <span class="ipr-pend">${it.netKg.toFixed(2)}</span>
+      ${picked
+        ? `<span class="ipr-added">✓ added</span>`
+        : `<button class="ipr-add" onclick="invAddPending('${it.color.replace(/'/g,"\\'")}','${it.shape.replace(/'/g,"\\'")}',${it.netKg})">+ Add</button>`}
+    </div>`;
+  }).join('');
+}
+function colAliasFor(colorName_){
+  const c=colors.find(x=>(typeof x==='object'?x.name:x)===colorName_);
+  return (c&&typeof c==='object'&&c.alias)?c.alias:'';
+}
+// Move a pending item into the invoice (left), autofill kg + last rate, grey it on right
+function invAddPending(color,shape,netKg){
+  const party=(document.getElementById('if-party-input')||{value:''}).value.trim();
+  const rate=lastBilledRate(party,color,shape);
+  // Reuse an empty first row if present, else add
+  let rows=[...document.querySelectorAll('#inv-items-container .item-row-i')];
+  let target=rows.find(r=>!r.querySelector('.ii-color').value.trim() && !r.querySelector('.ii-kg').value.trim());
+  if(!target){ target=addInvItemRow(); }
+  target.querySelector('.ii-shape').value=shape;
+  target.querySelector('.ii-color').value=color;
+  target.querySelector('.ii-kg').value=netKg.toFixed(2);
+  target.querySelector('.ii-rate').value=rate>0?rate:'';
+  window._invPickedKeys[color+'||'+shape]=true;
+  updateInvFormTotal();
+  renderInvPending();
 }
 function openPartyCombo(inp){
   const uid='inv-party-drop';
@@ -2687,7 +2874,13 @@ function resetInvForm(){
   if(ca)ca.value='';
   const ivp=document.getElementById('inv-voucher-preview');
   if(ivp) ivp.value=invNumLabel(nextInvoiceNum);
+  window._invPickedKeys={};
+  const pp=document.getElementById('inv-pending-panel');
+  if(pp) pp.style.display='';
+  const ps=document.getElementById('inv-pending-search');
+  if(ps) ps.value='';
   addInvItemRow();
+  renderInvPending();
 }
 function cancelInvForm(){
   const wasEditing=!!editInvId;
@@ -2717,6 +2910,9 @@ function loadInvIntoForm(invId){
   (inv.items||[]).forEach(i=>addInvItemRow(i));
   if(!(inv.items||[]).length)addInvItemRow();
   updateInvFormTotal();
+  // Edit = simpler view: hide the pending picker
+  const pp=document.getElementById('inv-pending-panel');
+  if(pp) pp.style.display='none';
   document.getElementById('inv-form-title').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function saveInvoice(){
