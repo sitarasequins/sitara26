@@ -1626,6 +1626,53 @@ function gotoTab(t){
 // Build net-pending map: for each party+color+shape, orderedKg minus invoicedKg (across ALL dates)
 // Build invByPartyItem only counting invoices on/after the earliest pending order date
 // for each party+item. This prevents old completed cycles from affecting new orders.
+// ============================================================
+// CYCLE-BASED SETTLEMENT (per-order FIFO, surplus never carried forward)
+// Each supply fills the oldest still-open order it is dated on/after.
+// Each order caps at its ordered qty. Leftover supply is discarded.
+// This ensures a fresh order is never reduced by an old cycle's over-supply.
+// ============================================================
+function settleDue(orderList, supplyList){
+  // orderList/supplyList: arrays of {date, kg, seq?}
+  const ords=[...orderList]
+    .sort((a,b)=>a.date.localeCompare(b.date)||((a.seq||0)-(b.seq||0)))
+    .map(o=>({date:o.date, need:parseFloat(o.kg)||0, filled:0}));
+  const sups=[...supplyList]
+    .sort((a,b)=>a.date.localeCompare(b.date)||((a.seq||0)-(b.seq||0)))
+    .map(s=>({date:s.date, rem:parseFloat(s.kg)||0}));
+  sups.forEach(s=>{
+    for(let i=0;i<ords.length && s.rem>0.0001;i++){
+      const o=ords[i];
+      if(o.date>s.date) continue;        // supply cannot fill an order placed later
+      const space=o.need-o.filled;
+      if(space<=0) continue;
+      const take=Math.min(space, s.rem);
+      o.filled+=take; s.rem-=take;
+    }
+    // any leftover s.rem is discarded (no forward carry)
+  });
+  const due=ords.reduce((a,o)=>a+Math.max(0,o.need-o.filled),0);
+  const totalOrd=ords.reduce((a,o)=>a+o.need,0);
+  const totalSupplied=ords.reduce((a,o)=>a+o.filled,0);
+  return {due, totalOrd, totalSupplied};
+}
+// Net pending kg for a single party+color+shape using cycle settlement.
+function settledPendingFor(party,color,shape){
+  const ordList=[],supList=[];
+  orders.filter(o=>o.status==='Pending' && o.party===party).forEach(o=>{
+    o.items.filter(i=>!i.cancelled && i.color===color && i.shape===shape).forEach(i=>{
+      ordList.push({date:o.date,kg:i.kg,seq:o.invNum||o.id||0});
+    });
+  });
+  invoices.filter(inv=>inv.party===party).forEach(inv=>{
+    (inv.items||[]).forEach(i=>{
+      if(i.color===color && i.shape===shape) supList.push({date:inv.date,kg:i.kg,seq:inv.serial||inv.id||0});
+    });
+  });
+  if(!ordList.length) return {due:0,totalOrd:0,totalSupplied:0};
+  return settleDue(ordList,supList);
+}
+
 function buildDateAwareInvByPartyItem(){
   // First get earliest pending order date per party+item
   const earliestDate={};
@@ -1655,27 +1702,21 @@ function buildDateAwareInvByPartyItem(){
 // (date-aware invoices, per-party nets >=1kg, item nets >=1kg).
 // Optional party/color/shape filters for the Reports tab.
 function computePendingNetKg(selP,selC,selS){
-  const invByPartyItem=buildDateAwareInvByPartyItem();
-  const ordByItem={};
+  // Build unique party+item set from pending orders, then settle each by cycle
+  const seen={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
     if(selP && o.party!==selP) return;
     o.items.filter(i=>!i.cancelled).forEach(i=>{
       if(selC && i.color!==selC) return;
       if(selS && i.shape!==selS) return;
-      const key=i.color+'||'+i.shape;
-      if(!ordByItem[key])ordByItem[key]={parties:{}};
-      ordByItem[key].parties[o.party]=(ordByItem[key].parties[o.party]||0)+parseFloat(i.kg||0);
+      seen[o.party+'||'+i.color+'||'+i.shape]=true;
     });
   });
   let total=0;
-  Object.entries(ordByItem).forEach(([key,v])=>{
-    let itemNet=0;
-    Object.entries(v.parties).forEach(([party,ordKg])=>{
-      const invKg=(invByPartyItem[party]&&invByPartyItem[party][key])||0;
-      const pNet=Math.max(0,ordKg-invKg);
-      if(pNet>=1.0) itemNet+=pNet;
-    });
-    if(itemNet>=1.0) total+=itemNet;
+  Object.keys(seen).forEach(k=>{
+    const [party,color,shape]=k.split('||');
+    const due=settledPendingFor(party,color,shape).due;
+    if(due>=1.0) total+=due;
   });
   return total;
 }
@@ -1683,23 +1724,19 @@ function computePendingNetKg(selP,selC,selS){
 // Per-party and per-item pending nets (same rules as the Pending Work screen).
 // Used by the Reports tab so its "pending" columns match the main screen.
 function buildPendingNets(selP,selC,selS){
-  const invByPartyItem=buildDateAwareInvByPartyItem();
-  const ord={};
+  const seen={};
   orders.filter(o=>o.status==='Pending').forEach(o=>{
     if(selP && o.party!==selP) return;
     o.items.filter(i=>!i.cancelled).forEach(i=>{
       if(selC && i.color!==selC) return;
       if(selS && i.shape!==selS) return;
-      const k=o.party+'||'+i.color+'||'+i.shape;
-      ord[k]=(ord[k]||0)+parseFloat(i.kg||0);
+      seen[o.party+'||'+i.color+'||'+i.shape]=true;
     });
   });
   const byParty={},byItem={};
-  Object.entries(ord).forEach(([k,ordKg])=>{
-    const parts=k.split('||');
-    const party=parts[0], color=parts[1], shape=parts[2];
-    const invKg=(invByPartyItem[party]&&invByPartyItem[party][color+'||'+shape])||0;
-    const pNet=Math.max(0,ordKg-invKg);
+  Object.keys(seen).forEach(k=>{
+    const [party,color,shape]=k.split('||');
+    const pNet=settledPendingFor(party,color,shape).due;
     if(pNet>=1.0){
       byParty[party]=(byParty[party]||0)+pNet;
       byItem[color+'||'+shape]=(byItem[color+'||'+shape]||0)+pNet;
@@ -1734,16 +1771,16 @@ function buildPendingMap(){
       }
     });
   });
-  // net
+  // net (cycle-based settlement: surplus never carried to a future order)
   const result={};
   Object.keys(ordered).forEach(party=>{
     const partyItems=[];
     Object.entries(ordered[party]).forEach(([k,v])=>{
-      const invKg=(invoiced[party]&&invoiced[party][k])||0;
-      const netKg=v.ordKg-invKg;
+      const [color,shape]=k.split('||');
+      const s=settledPendingFor(party,color,shape);
+      const netKg=s.due;
       if(netKg>=1.0){
-        const [color,shape]=k.split('||');
-        partyItems.push({color,shape,ordKg:v.ordKg,invKg,netKg,price:v.price,refs:v.orderRefs});
+        partyItems.push({color,shape,ordKg:v.ordKg,invKg:s.totalSupplied,netKg,price:v.price,refs:v.orderRefs});
       }
     });
     if(partyItems.length)result[party]=partyItems;
@@ -4522,7 +4559,9 @@ function renderComparison(){
   let tOrd=0,tSup=0,tDue=0;
   const trs=items.map(it=>{
     tOrd+=it.ordKg;tSup+=it.supKg;
-    const due=it.ordKg-it.supKg;
+    // DUE uses cycle settlement over FULL history for this party+item
+    // (surplus from old cycles never reduces a fresh order).
+    const due=it.ordKg>0 ? settledPendingFor(party,it.color,it.shape).due : 0;
     const isDue=due>=1.0;
     if(isDue)tDue+=due;
     const dueCell=isDue
@@ -4538,7 +4577,7 @@ function renderComparison(){
     </tr>`;
   }).join('');
   window._cmpPrintData={type:'comparison',party,rows:items.map(it=>{
-    const due=it.ordKg-it.supKg;
+    const due=it.ordKg>0 ? settledPendingFor(party,it.color,it.shape).due : 0;
     return {item:it.color+' '+it.shape,
       ordDates:it.ordDates.sort().map(fmtDate).join(' '),ordKg:it.ordKg,
       supDates:it.supDates.sort().map(fmtDate).join(' '),supKg:it.supKg,
