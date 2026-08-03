@@ -563,7 +563,7 @@ tr:hover td{background:#f8faff}
               style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;outline:none;width:90px">
             <datalist id="dl-inv-colors"></datalist>
             <button class="btn btn-sm" onclick="document.getElementById('inv-date-from').value='';document.getElementById('inv-date-to').value='';document.getElementById('inv-party-filter').value='';document.getElementById('inv-shape-filter').value='';document.getElementById('inv-item-search').value='';renderInvoiceList()" style="font-size:10px;padding:4px 8px">✕</button>
-            <button class="btn btn-sm" onclick="exportTallyXML()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;font-size:11px;padding:4px 10px">📤 Tally XML</button>
+            <button class="btn btn-sm" onclick="exportTallySalesXLS()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;font-size:11px;padding:4px 10px">📤 Tally Sales</button>
             <button class="btn btn-sm" onclick="openDispatchRegister()" style="background:#0f766e;color:#fff;border-color:#0f766e;font-size:11px;padding:4px 10px">📋 Dispatch</button>
           </div>
         </div>
@@ -638,6 +638,12 @@ tr:hover td{background:#f8faff}
 
   <!-- PENDING WORK -->
   <div id="tab-production" class="view">
+    <div id="pw-old-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:2000;align-items:center;justify-content:center;padding:20px">
+      <div style="background:#fff;border-radius:12px;padding:18px 20px;max-width:640px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)">
+        <div style="font-size:16px;font-weight:700;margin-bottom:10px;color:#b45309">⏰ Old Pending Orders (30+ days)</div>
+        <div id="pw-old-body"></div>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <div style="font-size:16px;font-weight:700;color:#1a1a1a">Pending Work</div>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
@@ -666,6 +672,7 @@ tr:hover td{background:#f8faff}
         <button onclick="printPendingGrid()" style="padding:4px 11px;background:#1a1a1a;color:#fff;border:1.5px solid #1a1a1a;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">🖨 A4</button>
         <button onclick="pwPrintPOS()" style="padding:4px 11px;background:#374151;color:#fff;border:1.5px solid #374151;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">🧾 POS</button>
         <button onclick="pwShareWA()" style="padding:4px 11px;background:#25D366;color:#fff;border:1.5px solid #25D366;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">💬 WA</button>
+        <button onclick="pwReviewOld()" id="pw-old-btn" style="padding:4px 11px;background:#fff;color:#b45309;border:1.5px solid #fed7aa;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">⏰ Old 30+d</button>
       </div>
     </div>
     <div id="prod-summary"></div>
@@ -3352,6 +3359,82 @@ function pwShareWA(){
   msg+='TOTAL  '+d.grandTotal.toFixed(2)+'\n';
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
+function pwReviewOld(){
+  // Find pending order-items 30+ days old that still have unfulfilled qty
+  const todayD=new Date(today());
+  const cutoff=new Date(todayD); cutoff.setDate(cutoff.getDate()-30);
+  const cutoffISO=cutoff.toISOString().slice(0,10);
+  const oldItems=[];
+  orders.filter(o=>o.status==='Pending' && o.date<=cutoffISO).forEach(o=>{
+    o.items.forEach((it,idx)=>{
+      if(it.cancelled)return;
+      const stillPending=settledPendingFor(o.party,it.color,it.shape).due;
+      if(stillPending>=1.0){
+        const ageDays=Math.floor((todayD-new Date(o.date))/(1000*60*60*24));
+        oldItems.push({oid:o.id,idx,party:o.party,color:it.color,shape:it.shape,kg:it.kg,date:o.date,ageDays});
+      }
+    });
+  });
+  oldItems.sort((a,b)=>a.date.localeCompare(b.date));
+  const box=document.getElementById('pw-old-modal');
+  const body=document.getElementById('pw-old-body');
+  if(!oldItems.length){
+    body.innerHTML='<div style="padding:24px;text-align:center;color:#888">No pending orders older than 30 days. 🎉</div>'+
+      '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button onclick="document.getElementById(\'pw-old-modal\').style.display=\'none\'" style="padding:7px 16px;border:1.5px solid #ddd;border-radius:7px;background:#fff;font-size:13px;cursor:pointer">Close</button></div>';
+  } else {
+    body.innerHTML=
+      '<div style="font-size:12px;color:#888;margin-bottom:8px">'+oldItems.length+' pending item(s) older than 30 days. Tick the ones you can\'t process, then cancel.</div>'+
+      '<div style="max-height:50vh;overflow-y:auto;border:1px solid #eee;border-radius:8px">'+
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+          '<tr style="background:#f8fafc;position:sticky;top:0">'+
+            '<td style="padding:5px 8px"><input type="checkbox" id="pw-old-all" onclick="document.querySelectorAll(\'.pw-old-cb\').forEach(c=>c.checked=this.checked)"></td>'+
+            '<td style="padding:5px 8px;font-weight:700">PARTY</td>'+
+            '<td style="padding:5px 8px;font-weight:700">ITEM</td>'+
+            '<td style="padding:5px 8px;font-weight:700;text-align:right">KG</td>'+
+            '<td style="padding:5px 8px;font-weight:700">DATE</td>'+
+            '<td style="padding:5px 8px;font-weight:700;text-align:right">AGE</td>'+
+          '</tr>'+
+          oldItems.map(it=>
+          '<tr style="border-top:1px solid #f0f0f0">'+
+            '<td style="padding:5px 8px"><input type="checkbox" class="pw-old-cb" data-oid="'+it.oid+'" data-idx="'+it.idx+'"></td>'+
+            '<td style="padding:5px 8px">'+it.party+'</td>'+
+            '<td style="padding:5px 8px"><b>'+it.color+'</b> '+it.shape+'</td>'+
+            '<td style="padding:5px 8px;text-align:right">'+parseFloat(it.kg).toFixed(2)+'</td>'+
+            '<td style="padding:5px 8px;color:#888">'+fmtDate(it.date)+'</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:#b45309;font-weight:600">'+it.ageDays+'d</td>'+
+          '</tr>').join('')+
+        '</table>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">'+
+        '<button onclick="document.getElementById(\'pw-old-modal\').style.display=\'none\'" style="padding:7px 16px;border:1.5px solid #ddd;border-radius:7px;background:#fff;font-size:13px;cursor:pointer">Close</button>'+
+        '<button onclick="pwCancelOldSelected()" style="padding:7px 16px;border:none;border-radius:7px;background:#dc2626;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Cancel selected</button>'+
+      '</div>';
+  }
+  box.style.display='flex';
+}
+function pwCancelOldSelected(){
+  const cbs=[...document.querySelectorAll('.pw-old-cb:checked')];
+  if(!cbs.length){alert('Tick at least one item to cancel.');return;}
+  if(!confirm('Cancel '+cbs.length+' selected old order item(s)? This marks them cancelled so they leave the pending list. You can still see them in the Order List.'))return;
+  const byOrder={};
+  cbs.forEach(cb=>{
+    const oid=cb.getAttribute('data-oid');
+    const idx=parseInt(cb.getAttribute('data-idx'));
+    if(!byOrder[oid])byOrder[oid]=[];
+    byOrder[oid].push(idx);
+  });
+  Object.entries(byOrder).forEach(([oid,idxs])=>{
+    const o=orders.find(x=>String(x.id)===String(oid));
+    if(!o)return;
+    idxs.forEach(idx=>{ if(o.items[idx]) o.items[idx].cancelled=true; });
+    if(o.items.every(i=>i.cancelled)) o.status='Cancelled';
+  });
+  saveAll();
+  document.getElementById('pw-old-modal').style.display='none';
+  renderProduction();
+  renderOrders();
+  showSaveToast('Old orders cancelled');
+}
 function pwClearFilters(){
   ['pw-party-filter','pw-color-filter','pw-size-filter'].forEach(id=>{
     const el=document.getElementById(id); if(el)el.value='';
@@ -4135,109 +4218,62 @@ function printDispatch(){
   setTimeout(()=>{win.print();setTimeout(()=>win.close(),1000);},600);
 }
 
-function exportTallyXML(){
-  if(!invoices.length){alert('No invoices to export.');return;}
+function exportTallySalesXLS(){
+  if(typeof XLSX==='undefined'){alert('XLSX library not loaded.');return;}
+  // Respect current invoice-list filters (same as what user sees)
+  let list = getFilteredInvoicesForExport ? getFilteredInvoicesForExport() : invoices.slice();
+  if(!list.length){alert('No invoices to export.');return;}
+  // Sort by serial ascending so voucher numbers are in order
+  list = [...list].sort((a,b)=>(a.serial||0)-(b.serial||0));
 
-  // Build XML for each invoice as a Sales Voucher
-  const voucherXML = invoices.map(inv=>{
+  const header = ['Voucher Date','Voucher Type Name','Voucher Number','Ledger Name','Ledger Amount','Ledger Amount Dr/Cr','Item Name','Billed Quantity','Item Rate','Item Rate per','Item Amount'];
+  const rows = [header];
+
+  list.forEach(inv=>{
     const items = inv.items || [];
-    const grand = items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
-    const grandRounded = Math.round(grand);
-    const invDate = (inv.date||'').replace(/-/g,''); // YYYYMMDD
+    // total amount = sum(kg*rate) + extra charge; total kg = sum(kg)
+    let amt = items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFloat(i.price||0)),0);
+    const chargeAmt = parseFloat(inv.chargeAmt||0);
+    amt = Math.round(amt + chargeAmt);
+    const totalKg = items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
+    const avgRate = totalKg>0 ? (amt/totalKg) : 0;
+    // Tally date: shift year 2026 -> 2016 as requested
+    const d = tallyDate(inv.date);
 
-    // Each item becomes a stock inventory entry
-    const inventoryEntries = items.map(i=>{
-      const amt = Math.round(parseFloat(i.kg||0)*parseFloat(i.price||0));
-      return `
-        <INVENTORYENTRY>
-          <STOCKITEMNAME>${esc(i.color+' '+i.shape)}</STOCKITEMNAME>
-          <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-          <ISLASTDEEMEDPOSITIVE>Yes</ISLASTDEEMEDPOSITIVE>
-          <ISAUTONEGATE>No</ISAUTONEGATE>
-          <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
-          <RATE>${parseFloat(i.price||0).toFixed(2)}/Kg</RATE>
-          <AMOUNT>-${amt}</AMOUNT>
-          <ACTUALQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</ACTUALQTY>
-          <BILLEDQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</BILLEDQTY>
-          <BATCHALLOCATIONS.LIST>
-            <GODOWNNAME>Main Location</GODOWNNAME>
-            <BATCHNAME>Primary Batch</BATCHNAME>
-            <AMOUNT>-${amt}</AMOUNT>
-            <ACTUALQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</ACTUALQTY>
-            <BILLEDQTY>${parseFloat(i.kg||0).toFixed(3)} Kg</BILLEDQTY>
-          </BATCHALLOCATIONS.LIST>
-        </INVENTORYENTRY>`;
-    }).join('');
+    // Row 1: party Dr
+    rows.push([d,'Sitara Sales', inv.serial, inv.party, amt, 'Dr', '', '', '', '', '']);
+    // Row 2: Sales Cr with item Sitara
+    rows.push([d,'Sitara Sales', inv.serial, 'Sales', amt, 'Cr', 'Sitara', totalKg, avgRate, 'kgs', amt]);
+  });
 
-    // Ledger entries: party (Dr) and Sales (Cr)
-    const ledgerEntries = `
-        <ALLLEDGERENTRIES.LIST>
-          <LEDGERNAME>${esc(inv.party)}</LEDGERNAME>
-          <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-          <ISLASTDEEMEDPOSITIVE>Yes</ISLASTDEEMEDPOSITIVE>
-          <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
-          <AMOUNT>-${grandRounded}</AMOUNT>
-        </ALLLEDGERENTRIES.LIST>
-        <ALLLEDGERENTRIES.LIST>
-          <LEDGERNAME>Sales Account</LEDGERNAME>
-          <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-          <ISLASTDEEMEDPOSITIVE>No</ISLASTDEEMEDPOSITIVE>
-          <ISPARTYLEDGER>No</ISPARTYLEDGER>
-          <AMOUNT>${grandRounded}</AMOUNT>
-        </ALLLEDGERENTRIES.LIST>`;
-
-    return `
-      <VOUCHER REMOTEID="${inv.id}" VCHKEY="${inv.id}" VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View">
-        <DATE>${invDate}</DATE>
-        <GUID>SIT-${inv.serial}-${inv.id}</GUID>
-        <NARRATION>Invoice ${invNumLabel(inv.serial)} - ${esc(inv.party)}</NARRATION>
-        <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
-        <VOUCHERNUMBER>${invNumLabel(inv.serial)}</VOUCHERNUMBER>
-        <PARTYLEDGERNAME>${esc(inv.party)}</PARTYLEDGERNAME>
-        <ISINVOICE>Yes</ISINVOICE>
-        <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
-        ${ledgerEntries}
-        ${inventoryEntries}
-      </VOUCHER>`;
-  }).join('');
-
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Import Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <IMPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>Vouchers</REPORTNAME>
-        <STATICVARIABLES>
-          <SVCURRENTCOMPANY>##SVCURRENTCOMPANY</SVCURRENTCOMPANY>
-        </STATICVARIABLES>
-      </REQUESTDESC>
-      <REQUESTDATA>
-        <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          ${voucherXML}
-        </TALLYMESSAGE>
-      </REQUESTDATA>
-    </IMPORTDATA>
-  </BODY>
-</ENVELOPE>`;
-
-  const blob = new Blob([xml], {type:'application/xml'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'Sitara_Tally_Import_'+today()+'.xml';
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // format the date column as date
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Accounting Voucher');
+  XLSX.writeFile(wb, 'Sitara_Tally_Sales_'+today()+'.xlsx');
 }
-
-function esc(str){
-  return String(str||'')
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&apos;');
+// Convert app ISO date (YYYY-MM-DD) to a JS Date with year shifted 2026 -> 2016
+function tallyDate(iso){
+  if(!iso) return '';
+  const [y,m,dd] = iso.split('-').map(Number);
+  const shiftedY = (y===2026) ? 2016 : y;  // per request: change 2026 to 2016
+  return new Date(shiftedY, (m||1)-1, dd||1);
+}
+// Get invoices matching the current invoice-list filters
+function getFilteredInvoicesForExport(){
+  const from=(document.getElementById('inv-date-from')||{}).value||'';
+  const to=(document.getElementById('inv-date-to')||{}).value||'';
+  const party=((document.getElementById('inv-party-filter')||{}).value||'').trim().toLowerCase();
+  const shape=((document.getElementById('inv-shape-filter')||{}).value||'').trim().toLowerCase();
+  const color=((document.getElementById('inv-item-search')||{}).value||'').trim().toLowerCase();
+  return invoices.filter(inv=>{
+    if(from && inv.date<from) return false;
+    if(to && inv.date>to) return false;
+    if(party && !inv.party.toLowerCase().includes(party)) return false;
+    if(shape && !(inv.items||[]).some(i=>i.shape.toLowerCase().includes(shape))) return false;
+    if(color && !(inv.items||[]).some(i=>i.color.toLowerCase().includes(color))) return false;
+    return true;
+  });
 }
 
 
