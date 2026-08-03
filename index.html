@@ -540,6 +540,7 @@ tr:hover td{background:#f8faff}
 
   <!-- INVOICE LIST -->
   <div id="tab-invlist" class="view active">
+    <div id="inv-gap-warn" style="display:none;margin-bottom:10px;padding:8px 14px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:13px;font-weight:600"></div>
     <div>
         <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3077,7 +3078,6 @@ function renderInvoiceList(){
         <button class="btn btn-sm" onclick="loadInvIntoForm(${inv.id})">Edit</button>
         <button class="btn btn-sm" onclick="printPOSDirect(${inv.id})" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a">🧾 POS</button>
         <button class="btn btn-sm" onclick="shareInvWhatsApp(${inv.id})" style="background:#25D366;color:#fff;border-color:#25D366">💬</button>
-        <button class="btn btn-sm btn-danger" onclick="delInvoice(${inv.id})">Delete</button>
       </div></td>
     </tr>`;
   }).join('');
@@ -3085,6 +3085,24 @@ function renderInvoiceList(){
   document.getElementById('si-amount').textContent=fmt(grand);
   const partyInput=document.getElementById('if-party-input');
   if(partyInput&&!editInvId) partyInput.value='';
+  checkInvoiceGaps();
+}
+// Warn if any invoice serial numbers are missing (gap = likely lost invoice, since we never delete)
+function checkInvoiceGaps(){
+  const el=document.getElementById('inv-gap-warn');
+  if(!el)return;
+  const serials=invoices.map(i=>parseInt(i.serial)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  if(serials.length<2){el.style.display='none';return;}
+  const min=serials[0], max=serials[serials.length-1];
+  const present=new Set(serials);
+  const missing=[];
+  for(let n=min;n<=max;n++){ if(!present.has(n)) missing.push(n); }
+  if(!missing.length){ el.style.display='none'; return; }
+  const label=missing.slice(0,20).map(n=>invNumLabel(n)).join(', ');
+  el.innerHTML='⚠ Missing invoice number'+(missing.length>1?'s':'')+': '+label+
+    (missing.length>20?' …and '+(missing.length-20)+' more':'')+
+    '<div style="font-weight:400;font-size:11px;margin-top:3px;color:#7f1d1d">These numbers are skipped in your invoice list. Since invoices are never deleted, this usually means an invoice was lost. Please re-check and re-enter if needed.</div>';
+  el.style.display='block';
 }
 
 // ============================================================
