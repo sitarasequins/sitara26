@@ -417,6 +417,17 @@ tr:hover td{background:#f8faff}
             <span style="width:70px">KG</span>
             <span style="width:22px"></span>
           </div>
+          <div style="margin-bottom:8px">
+            <button type="button" onclick="togglePasteBox()" id="paste-toggle-btn" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:7px;font-size:12px;font-weight:600;padding:5px 12px;cursor:pointer">📋 Paste WhatsApp order</button>
+            <div id="paste-box" style="display:none;margin-top:8px;padding:10px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:8px">
+              <textarea id="paste-input" placeholder="Paste the order here, one item per line. e.g.&#10;BG5 3no 100 kg&#10;og100 3n 50&#10;100kg 4no CD8" style="width:100%;min-height:90px;padding:8px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:monospace;box-sizing:border-box;resize:vertical"></textarea>
+              <div style="display:flex;gap:8px;margin-top:6px">
+                <button type="button" onclick="parsePastedOrder()" style="background:#2563eb;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer">Read order →</button>
+                <button type="button" onclick="document.getElementById('paste-input').value=''" style="background:#fff;color:#888;border:1.5px solid #ddd;border-radius:7px;font-size:12px;padding:6px 12px;cursor:pointer">Clear</button>
+              </div>
+              <div id="paste-preview" style="margin-top:8px"></div>
+            </div>
+          </div>
           <div id="items-container"></div>
           <button class="add-item-btn" onclick="addItemRow()">+ Add item</button>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
@@ -2295,6 +2306,134 @@ function calcOrderRowAmt(input){
   const rate=parseFloat(row.querySelector('input[placeholder="rate"]').value)||0;
   const amtEl=row.querySelector('.order-amt');
   if(amtEl)amtEl.textContent=rate>0?Math.round(kg*rate):'';
+}
+function togglePasteBox(){
+  const box=document.getElementById('paste-box');
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+  if(box.style.display==='block') document.getElementById('paste-input').focus();
+}
+// Normalize a shape token: 3NO/3no/3 no/3n -> 3n ; 4k stays 4k ; 1013 stays 1013
+function normShape(tok){
+  let s=tok.toLowerCase().trim();
+  s=s.replace(/\s+/g,'');
+  s=s.replace(/^(\d+)no$/,'$1n');   // 3no -> 3n
+  s=s.replace(/^(\d+)n$/,'$1n');    // already 3n
+  return s;
+}
+// Match a color token (name or alias) against the catalog. Returns {name} or null.
+function matchColor(tok){
+  const t=tok.toLowerCase().replace(/\s+/g,'');
+  // exact name
+  let c=colors.find(x=>colorName(x).toLowerCase()===t);
+  if(c)return{name:colorName(c),via:'name'};
+  // exact alias
+  c=colors.find(x=>colorAlias(x).toLowerCase()===t);
+  if(c)return{name:colorName(c),via:'alias'};
+  return null;
+}
+function parsePastedOrder(){
+  const raw=document.getElementById('paste-input').value;
+  const lines=raw.split(/\n/).map(l=>l.trim()).filter(l=>l);
+  if(!lines.length){document.getElementById('paste-preview').innerHTML='<div style="color:#bbb;font-size:12px">Nothing to read.</div>';return;}
+  const knownShapes=new Set(shapes.map(s=>s.toLowerCase()));
+  const parsed=lines.map(line=>{
+    // Clean: replace commas/multiple spaces, drop trailing punctuation
+    let work=line.replace(/[,;]+/g,' ').replace(/\s+/g,' ').trim();
+    const tokensRaw=work.split(' ');
+    // 1) find quantity: a number immediately before 'kg', else a standalone number
+    let qty=null, usedIdx=new Set();
+    // look for '<num>kg' or '<num> kg'
+    for(let i=0;i<tokensRaw.length;i++){
+      const t=tokensRaw[i].toLowerCase();
+      let m=t.match(/^(\d+(?:\.\d+)?)kg$/);       // 100kg
+      if(m){qty=parseFloat(m[1]);usedIdx.add(i);break;}
+      if(/^\d+(?:\.\d+)?$/.test(t) && i+1<tokensRaw.length && tokensRaw[i+1].toLowerCase()==='kg'){
+        qty=parseFloat(t);usedIdx.add(i);usedIdx.add(i+1);break;
+      }
+    }
+    // remove standalone 'kg' tokens
+    tokensRaw.forEach((t,i)=>{ if(t.toLowerCase()==='kg') usedIdx.add(i); });
+    // if still no qty, take the last standalone number
+    if(qty===null){
+      for(let i=tokensRaw.length-1;i>=0;i--){
+        if(/^\d+(?:\.\d+)?$/.test(tokensRaw[i]) && !usedIdx.has(i)){qty=parseFloat(tokensRaw[i]);usedIdx.add(i);break;}
+      }
+    }
+    // 2) find shape among remaining tokens
+    let shape=null;
+    for(let i=0;i<tokensRaw.length;i++){
+      if(usedIdx.has(i))continue;
+      const ns=normShape(tokensRaw[i]);
+      if(knownShapes.has(ns)){shape=ns;usedIdx.add(i);break;}
+    }
+    // 3) remaining tokens => color. Try each remaining token; also try joining 'og'+number
+    const rest=tokensRaw.map((t,i)=>usedIdx.has(i)?null:t).filter(x=>x!==null);
+    let color=null;
+    // try each single token
+    for(const t of rest){ const m=matchColor(t); if(m){color=m.name;break;} }
+    // try joining consecutive tokens (handles "og 100" -> "og100")
+    if(!color){
+      const joined=rest.join('');
+      const m=matchColor(joined);
+      if(m)color=m.name;
+    }
+    // also try pairwise joins
+    if(!color){
+      for(let i=0;i<rest.length-1;i++){
+        const m=matchColor(rest[i]+rest[i+1]);
+        if(m){color=m.name;break;}
+      }
+    }
+    const problems=[];
+    if(!color)problems.push('color');
+    if(!shape)problems.push('shape');
+    if(qty===null||qty<=0)problems.push('qty');
+    return {line,color,shape,qty,problems};
+  });
+  renderPastePreview(parsed);
+}
+function renderPastePreview(parsed){
+  const okRows=parsed.filter(p=>!p.problems.length);
+  const badRows=parsed.filter(p=>p.problems.length);
+  let html='<div style="font-size:12px;color:#666;margin-bottom:6px">'+
+    '<b style="color:#16a34a">'+okRows.length+'</b> item(s) understood'+
+    (badRows.length?' · <b style="color:#dc2626">'+badRows.length+'</b> need attention':'')+'</div>';
+  html+='<div style="border:1px solid #eee;border-radius:7px;overflow:hidden">';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  parsed.forEach((p,i)=>{
+    const bad=p.problems.length>0;
+    html+=`<tr style="border-top:1px solid #f0f0f0;background:${bad?'#fef2f2':'#fff'}">
+      <td style="padding:4px 8px;color:#999;font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.line}</td>
+      <td style="padding:4px 8px">${p.color?`<b>${p.color}</b>`:'<span style="color:#dc2626">?color</span>'}</td>
+      <td style="padding:4px 8px">${p.shape||'<span style="color:#dc2626">?shape</span>'}</td>
+      <td style="padding:4px 8px;text-align:right">${(p.qty!=null&&p.qty>0)?p.qty:'<span style="color:#dc2626">?qty</span>'}</td>
+    </tr>`;
+  });
+  html+='</table></div>';
+  if(badRows.length){
+    html+='<div style="font-size:11px;color:#b45309;margin-top:6px">Rows in red couldn\'t be fully read. Only the understood rows will be added — fix the rest manually after.</div>';
+  }
+  html+=`<div style="margin-top:8px"><button type="button" onclick='applyPastedItems()' style="background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;padding:7px 16px;cursor:pointer">+ Add ${okRows.length} item(s) to order</button></div>`;
+  window._pastedOk=okRows;
+  document.getElementById('paste-preview').innerHTML=html;
+}
+function applyPastedItems(){
+  const ok=window._pastedOk||[];
+  if(!ok.length){alert('No fully-understood items to add.');return;}
+  // Remove any empty first row
+  const cont=document.getElementById('items-container');
+  [...cont.querySelectorAll('.item-row-o')].forEach(r=>{
+    if(!r.querySelector('.oi-color').value.trim() && !r.querySelector('.oi-kg').value.trim()) r.remove();
+  });
+  ok.forEach(p=>{
+    addItemRow({color:p.color,shape:p.shape,kg:p.qty});
+  });
+  updateOrderFormTotal();
+  // Clear + collapse paste box
+  document.getElementById('paste-input').value='';
+  document.getElementById('paste-preview').innerHTML='';
+  document.getElementById('paste-box').style.display='none';
+  showSaveToast(ok.length+' item(s) added');
 }
 function addItemRow(item=null){
   const c=document.getElementById('items-container');
