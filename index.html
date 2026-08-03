@@ -1693,6 +1693,38 @@ function settledPendingFor(party,color,shape){
   if(!ordList.length) return {due:0,totalOrd:0,totalSupplied:0};
   return settleDue(ordList,supList);
 }
+// Returns a map: orderId -> remaining unfulfilled kg for that specific order,
+// after FIFO settlement (oldest orders filled first). Used by the Old-Orders review
+// so we only flag orders whose OWN quantity is still unfulfilled.
+function perOrderRemaining(party,color,shape){
+  const ords=[];
+  orders.filter(o=>o.status==='Pending' && o.party===party).forEach(o=>{
+    o.items.forEach((it,idx)=>{
+      if(!it.cancelled && it.color===color && it.shape===shape){
+        ords.push({oid:o.id, idx, date:o.date, seq:o.invNum||o.id||0, need:parseFloat(it.kg)||0, filled:0});
+      }
+    });
+  });
+  const sups=[];
+  invoices.filter(inv=>inv.party===party).forEach(inv=>{
+    (inv.items||[]).forEach(i=>{
+      if(i.color===color && i.shape===shape) sups.push({date:inv.date, seq:inv.serial||inv.id||0, rem:parseFloat(i.kg)||0});
+    });
+  });
+  ords.sort((a,b)=>a.date.localeCompare(b.date)||(a.seq-b.seq));
+  sups.sort((a,b)=>a.date.localeCompare(b.date)||(a.seq-b.seq));
+  sups.forEach(s=>{
+    for(let i=0;i<ords.length && s.rem>0.0001;i++){
+      const o=ords[i];
+      if(o.date>s.date) continue;
+      const space=o.need-o.filled;
+      if(space<=0) continue;
+      const take=Math.min(space,s.rem);
+      o.filled+=take; s.rem-=take;
+    }
+  });
+  return ords.map(o=>({oid:o.oid, idx:o.idx, date:o.date, remaining:Math.max(0,o.need-o.filled), need:o.need}));
+}
 
 function buildDateAwareInvByPartyItem(){
   // First get earliest pending order date per party+item
@@ -3517,18 +3549,25 @@ function pwShareWA(){
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
 function pwReviewOld(){
-  // Find pending order-items 30+ days old that still have unfulfilled qty
+  // Find pending order-items 30+ days old whose OWN quantity is still unfulfilled
+  // (after FIFO settlement — so already-supplied old orders don't appear).
   const todayD=new Date(today());
   const cutoff=new Date(todayD); cutoff.setDate(cutoff.getDate()-30);
   const cutoffISO=cutoff.toISOString().slice(0,10);
   const oldItems=[];
+  // Compute per-order remaining once per party+item to avoid repeated work
+  const remCache={};
   orders.filter(o=>o.status==='Pending' && o.date<=cutoffISO).forEach(o=>{
     o.items.forEach((it,idx)=>{
       if(it.cancelled)return;
-      const stillPending=settledPendingFor(o.party,it.color,it.shape).due;
-      if(stillPending>=1.0){
+      const cacheKey=o.party+'||'+it.color+'||'+it.shape;
+      if(!remCache[cacheKey]) remCache[cacheKey]=perOrderRemaining(o.party,it.color,it.shape);
+      // find THIS order's remaining
+      const rec=remCache[cacheKey].find(r=>String(r.oid)===String(o.id) && r.idx===idx);
+      const remaining=rec?rec.remaining:0;
+      if(remaining>=1.0){
         const ageDays=Math.floor((todayD-new Date(o.date))/(1000*60*60*24));
-        oldItems.push({oid:o.id,idx,party:o.party,color:it.color,shape:it.shape,kg:it.kg,date:o.date,ageDays});
+        oldItems.push({oid:o.id,idx,party:o.party,color:it.color,shape:it.shape,kg:remaining,date:o.date,ageDays});
       }
     });
   });
