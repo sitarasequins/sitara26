@@ -324,9 +324,9 @@ tr:hover td{background:#f8faff}
 .pos-inv .pos-row2{display:flex;font-size:21px;font-weight:700;margin:3px 0}
 .pos-inv .pos-total{font-size:21px;font-weight:700;margin:3px 0;text-align:left}
 .pos-inv .pos-item{display:flex;font-size:20px;font-weight:700;margin:4px 0;white-space:nowrap}
+.pos-inv .pos-item .pc-calc{width:112px;flex-shrink:0}
 .pos-inv .pos-item .pc-shape{width:40px;flex-shrink:0}
-.pos-inv .pos-item .pc-color{width:104px;flex-shrink:0}
-.pos-inv .pos-item .pc-calc{flex-shrink:0}
+.pos-inv .pos-item .pc-color{flex-shrink:0}
 .pos-inv .pos-col-rate{width:58px;text-align:right;flex-shrink:0}
 .pos-inv .pos-col-amt{width:66px;text-align:right;flex-shrink:0}
 .pos-inv .pos-col-item{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3259,6 +3259,14 @@ function renderInvoiceList(){
   checkInvoiceGaps();
 }
 // Warn if any invoice serial numbers are missing (gap = likely lost invoice, since we never delete)
+function getDismissedGaps(){
+  try{ return JSON.parse(localStorage.getItem('sitara_dismissed_gaps')||'[]'); }catch(e){ return []; }
+}
+function dismissGap(n){
+  const d=getDismissedGaps();
+  if(!d.includes(n)){ d.push(n); localStorage.setItem('sitara_dismissed_gaps', JSON.stringify(d)); }
+  checkInvoiceGaps();
+}
 function checkInvoiceGaps(){
   const el=document.getElementById('inv-gap-warn');
   if(!el)return;
@@ -3266,13 +3274,17 @@ function checkInvoiceGaps(){
   if(serials.length<2){el.style.display='none';return;}
   const min=serials[0], max=serials[serials.length-1];
   const present=new Set(serials);
-  const missing=[];
+  const dismissed=getDismissedGaps();
+  let missing=[];
   for(let n=min;n<=max;n++){ if(!present.has(n)) missing.push(n); }
+  // Hide numbers the user has acknowledged as OK
+  missing=missing.filter(n=>!dismissed.includes(n));
   if(!missing.length){ el.style.display='none'; return; }
-  const label=missing.slice(0,20).map(n=>invNumLabel(n)).join(', ');
-  el.innerHTML='⚠ Missing invoice number'+(missing.length>1?'s':'')+': '+label+
+  const shown=missing.slice(0,20);
+  const chips=shown.map(n=>invNumLabel(n)+' <span onclick="dismissGap('+n+')" style="cursor:pointer;color:#dc2626;font-weight:700;padding:0 3px" title="Acknowledge — stop warning about this number">✕</span>').join(' &nbsp; ');
+  el.innerHTML='⚠ Missing invoice number'+(missing.length>1?'s':'')+': '+chips+
     (missing.length>20?' …and '+(missing.length-20)+' more':'')+
-    '<div style="font-weight:400;font-size:11px;margin-top:3px;color:#7f1d1d">These numbers are skipped in your invoice list. Since invoices are never deleted, this usually means an invoice was lost. Please re-check and re-enter if needed.</div>';
+    '<div style="font-weight:400;font-size:11px;margin-top:3px;color:#7f1d1d">These numbers are skipped in your invoice list. Since invoices are never deleted, this usually means an invoice was lost. Re-enter it if needed, or click ✕ to acknowledge a number and stop the warning for it.</div>';
   el.style.display='block';
 }
 
@@ -4105,7 +4117,7 @@ function printPOS(){
     const colorAlias=alias?i.color+'/'+alias:i.color;
     const calc=hasAmt?`${kg}x${rate}`:`${kg}`;
     // Fixed-width CSS columns so they align even in Kalam (proportional font)
-    return `<div class="pos-item"><span class="pc-shape">${i.shape}</span><span class="pc-color">${colorAlias}</span><span class="pc-calc">${calc}</span></div>`;
+    return `<div class="pos-item"><span class="pc-calc">${calc}</span><span class="pc-shape">${i.shape}</span><span class="pc-color">${colorAlias}</span></div>`;
   }).join('');
   const totalKg=items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
   // Format serial as plain number only e.g. 0001
@@ -4117,7 +4129,7 @@ function printPOS(){
     <hr class="pos-divider">
     ${itemRows}
     <hr class="pos-divider">
-    ${posChargeAmt>0?`<div class="pos-item"><span class="pc-shape"></span><span class="pc-color">${posChargeLabel}</span><span class="pc-calc">${Math.round(posChargeAmt)}</span></div>`:''}
+    ${posChargeAmt>0?`<div class="pos-item"><span class="pc-calc">${Math.round(posChargeAmt)}</span><span class="pc-shape"></span><span class="pc-color">${posChargeLabel}</span></div>`:''}
     <hr class="pos-divider">
     <div class="pos-total">${totalKg.toFixed(2)} / ${Math.round(grand)}${inv.bags?' / '+inv.bags+' BAG':''}${inv.remarks?' / '+inv.remarks:''}${inv.courier?' / '+inv.courier:''}</div>
     <hr class="pos-divider">
@@ -4126,7 +4138,7 @@ function printPOS(){
   const posContent=document.getElementById('pos-inv-content').innerHTML;
   const posWin=window.open('','_blank','width=420,height=700,toolbar=0,menubar=0');
   if(!posWin){alert('Please allow popups for this site to print.');return;}
-  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm 8mm 2mm 2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row2{display:flex;font-size:22px;font-weight:700;margin:3px 0}.pos-total{font-size:22px;font-weight:700;margin:3px 0;text-align:left}.pos-item{display:flex;font-size:20px;font-weight:700;margin:4px 0;white-space:nowrap}.pos-item .pc-shape{width:40px;flex-shrink:0}.pos-item .pc-color{width:104px;flex-shrink:0}.pos-item .pc-calc{flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
+  posWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&display=swap"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Kalam,"Segoe UI",Roboto,Arial,sans-serif;font-size:20px;font-weight:700;color:#000;width:76mm;padding:2mm 8mm 2mm 2mm}.pos-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:3px}.pos-divider{border:none;border-top:2px dashed #000;margin:5px 0}.pos-row2{display:flex;font-size:22px;font-weight:700;margin:3px 0}.pos-total{font-size:22px;font-weight:700;margin:3px 0;text-align:left}.pos-item{display:flex;font-size:20px;font-weight:700;margin:4px 0;white-space:nowrap}.pos-item .pc-calc{width:112px;flex-shrink:0}.pos-item .pc-shape{width:40px;flex-shrink:0}.pos-item .pc-color{flex-shrink:0}@page{margin:0;size:80mm auto}</style></head><body>'+posContent+'</body></html>');
   posWin.document.close();
   posWin.focus();
   // Wait for fonts to load before printing
