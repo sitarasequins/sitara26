@@ -1970,6 +1970,22 @@ function renderOrders(){
 // ============================================================
 function colorName(c){ return typeof c==='object'?c.name:c; }
 function colorAlias(c){ return typeof c==='object'?c.alias||'':''; }
+// Returns the conflicting entry {idx,type:'name'|'alias'} if `name` collides with
+// any existing color's NAME or ALIAS (case-insensitive). excludeIdx lets you skip
+// a color's own entry when editing it. Used to block creating a color/alias that
+// already exists as the other kind (e.g. can't create color "OG21" if "OG21" is
+// already someone else's alias, and can't alias to a name that's already a color).
+function colorConflict(name, excludeIdx){
+  const t=(name||'').trim().toLowerCase();
+  if(!t) return null;
+  for(let i=0;i<colors.length;i++){
+    if(excludeIdx!==undefined && i===excludeIdx) continue;
+    const c=colors[i];
+    if(colorName(c).toLowerCase()===t) return {idx:i,type:'name'};
+    if(colorAlias(c).toLowerCase()===t) return {idx:i,type:'alias'};
+  }
+  return null;
+}
 function colorSearchStr(c){ return colorName(c)+'|'+(colorAlias(c)||''); }
 
 
@@ -2049,7 +2065,15 @@ function editColorAlias(idx){
   const cur=colorAlias(c);
   const alias=window.prompt('Edit alias for "'+name+'":\n(Leave blank to remove alias)',cur||'');
   if(alias===null)return; // cancelled
-  colors[idx]=alias.trim()?{name:name,alias:alias.trim()}:name;
+  const aliasTrim=alias.trim();
+  if(aliasTrim){
+    const conflict=colorConflict(aliasTrim,idx);
+    if(conflict){
+      alert('Cannot set alias "'+aliasTrim+'" — it is already the '+(conflict.type==='name'?'name':'alias')+' of color "'+colorName(colors[conflict.idx])+'".');
+      return;
+    }
+  }
+  colors[idx]=aliasTrim?{name:name,alias:aliasTrim}:name;
   saveAll();
   renderCatalog();
 }
@@ -2058,8 +2082,19 @@ function addColor(){
   const aliasInp=document.getElementById('new-color-alias');
   const v=normalizeStr(inp.value).toUpperCase();
   if(!v)return;
-  if(colors.some(c=>colorName(c).toLowerCase()===v.toLowerCase())){alert('Color already exists.');return;}
+  const nameConflict=colorConflict(v);
+  if(nameConflict){
+    alert('Cannot create color "'+v+'" — it is already the '+(nameConflict.type==='name'?'name':'alias')+' of color "'+colorName(colors[nameConflict.idx])+'".');
+    return;
+  }
   const alias=(aliasInp?aliasInp.value.trim():'');
+  if(alias){
+    const aliasConflict=colorConflict(alias);
+    if(aliasConflict){
+      alert('Cannot use alias "'+alias+'" — it is already the '+(aliasConflict.type==='name'?'name':'alias')+' of color "'+colorName(colors[aliasConflict.idx])+'".');
+      return;
+    }
+  }
   colors.push(alias?{name:v,alias}:v);
   inp.value=''; if(aliasInp)aliasInp.value='';
   saveAll();renderCatalog();
@@ -2566,9 +2601,10 @@ function oColorList(inp){
     }).map(x=>x[0]);
   }
   const exact=colors.find(c=>colorName(c).toLowerCase()===q);
+  const exactAlias=!exact && colors.find(c=>colorAlias(c).toLowerCase()===q);
   let html='';
-  // Create option only when there's text and no EXACT name match
-  if(q && !exact){
+  // Create option only when there's text and no EXACT name match AND no existing alias claims it
+  if(q && !exact && !exactAlias){
     html+=`<div class="oi-opt oi-create" onmousedown="event.preventDefault();oCreateColor('${inp.value.trim().replace(/'/g,"\\'")}',this)"><b>+ Create</b> "${inp.value.trim()}"</div>`;
   }
   html+=matches.slice(0,60).map((c,i)=>{
@@ -2591,11 +2627,23 @@ function oPickColor(el,val){
 function oCreateColor(val,el){
   const name=val.trim().toUpperCase();
   if(!name)return;
-  if(!colors.some(c=>colorName(c).toLowerCase()===name.toLowerCase())){
-    colors.push(name); // plain string, NO alias
-    saveAll();
-    showSaveToast('Color "'+name+'" created');
+  const conflict=colorConflict(name);
+  if(conflict){
+    // Name already exists as a color name, or is already claimed as an alias
+    // (e.g. "OG21" is the alias of "BG7") — never silently create a duplicate.
+    // Just resolve to the real color it already refers to instead.
+    const realName=colorName(colors[conflict.idx]);
+    hideDrops();
+    const rowI=el.closest('.item-row-i');
+    if(rowI){ rowI.querySelector('.ii-color').value=realName; iAfterColor(rowI.querySelector('.ii-color')); return; }
+    const row=el.closest('.item-row-o');
+    row.querySelector('.oi-color').value=realName;
+    row.querySelector('.oi-kg').focus();
+    return;
   }
+  colors.push(name); // plain string, NO alias
+  saveAll();
+  showSaveToast('Color "'+name+'" created');
   const rowI=el.closest('.item-row-i');
   if(rowI){ rowI.querySelector('.ii-color').value=name; hideDrops(); iAfterColor(rowI.querySelector('.ii-color')); return; }
   const row=el.closest('.item-row-o');
