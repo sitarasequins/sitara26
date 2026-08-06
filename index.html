@@ -687,6 +687,16 @@ tr:hover td{background:#f8faff}
         <button onclick="pwReviewOld()" id="pw-old-btn" style="padding:4px 11px;background:#fff;color:#b45309;border:1.5px solid #fed7aa;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">⏰ Old 30+d</button>
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
+        <button id="pw-date-till" onclick="pwSetDateMode('till')" style="padding:5px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#1e40af;color:#fff">Till Date</button>
+        <button id="pw-date-today" onclick="pwSetDateMode('today')" style="padding:5px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Today</button>
+      </div>
+      <span style="width:1px;height:20px;background:#eee"></span>
+      <button onclick="pwCheckAll()" style="padding:5px 12px;border:1.5px solid #16a34a;border-radius:7px;font-size:11px;font-weight:600;color:#16a34a;background:#fff;cursor:pointer">✓ Check All</button>
+      <button onclick="pwUncheckAll()" style="padding:5px 12px;border:1.5px solid #b45309;border-radius:7px;font-size:11px;font-weight:600;color:#b45309;background:#fff;cursor:pointer">✗ Uncheck All</button>
+      <span id="pw-checkall-note" style="font-size:10.5px;color:#888"></span>
+    </div>
     <div id="prod-summary"></div>
     <div id="empty-prod" class="empty" style="display:none">No orders for this date.</div>
   </div>
@@ -3535,6 +3545,29 @@ function editOrderFromAnywhere(id){
 // PENDING WORK
 // ============================================================
 let prodView='color'; // 'color' | 'shape' | 'partygrid'
+// ── Party checkboxes (Party Grid only): uncheck a party to skip it when
+// printing/POS/WA. Not persisted — resets each session, view is unaffected. ──
+let pwExcludedParties=new Set();
+let pwAllPartyNames=[]; // refreshed each render from current (filtered) rawCards
+function pwTogglePartyPrint(key){
+  if(pwExcludedParties.has(key)) pwExcludedParties.delete(key); else pwExcludedParties.add(key);
+  renderProduction();
+}
+function pwClearExcluded(){ pwExcludedParties=new Set(); renderProduction(); }
+function pwCheckAll(){ pwExcludedParties=new Set(); renderProduction(); }
+function pwUncheckAll(){ pwExcludedParties=new Set(pwAllPartyNames); renderProduction(); }
+// ── Date filter for Pending Work: 'till' = all pending as of today (normal),
+// 'today' = only items that have at least one order placed today. ──
+let pwDateMode='till';
+function pwSetDateMode(v){
+  pwDateMode=v;
+  const tillBtn=document.getElementById('pw-date-till'), todayBtn=document.getElementById('pw-date-today');
+  if(tillBtn&&todayBtn){
+    tillBtn.style.background=v==='till'?'#1e40af':'#fff';   tillBtn.style.color=v==='till'?'#fff':'#888';
+    todayBtn.style.background=v==='today'?'#1e40af':'#fff'; todayBtn.style.color=v==='today'?'#fff':'#888';
+  }
+  renderProduction();
+}
 
 function setToday(){ renderProduction(); }
 
@@ -3701,23 +3734,29 @@ function pwClearFilters(){
 
 function printPendingGrid(){
   const d=window._gridPrintData;
-  if(!d||!d.rows.length){alert('Nothing to print');return;}
+  if(!d||!d.rows.length){alert('Nothing to print — check at least one party.');return;}
   const title='PENDING — '+d.mode;
-  const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
-    <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
-    ${r.items.map(i=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
-    <div style="font-size:10px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:2px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-  </div>`).join('');
+  const cardHtml=r=>`<div style="border:2px solid #555;padding:14px 18px;break-inside:avoid">
+    <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:8px">${r.key}${r.alias?'/'+r.alias:''}</div>
+    ${r.items.map(i=>`<div style="font-size:18px;display:flex;justify-content:space-between;gap:10px;padding:4px 0"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
+    <div style="font-size:18px;display:flex;justify-content:space-between;border-top:2px solid #999;margin-top:6px;padding-top:6px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
+  </div>`;
+  // Group into pages of 4 (2x2) so each printed page holds exactly 4 parties
+  const pages=[];
+  for(let i=0;i<d.rows.length;i+=4) pages.push(d.rows.slice(i,i+4));
+  const pagesHtml=pages.map((pageRows,pi)=>
+    `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px${pi<pages.length-1?';page-break-after:always':''}">${pageRows.map(cardHtml).join('')}</div>`
+  ).join('');
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
     body{font-family:Arial,sans-serif;margin:0;padding:8mm}
     @page{size:A4;margin:8mm}
   </style></head><body>
-    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px">
-      <span style="font-size:14px;font-weight:700">${title}</span>
-      <span style="font-size:11px">${fmtDate(today())} · Total: ${d.grandTotal.toFixed(2)} kg</span>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #000;padding-bottom:6px;margin-bottom:14px">
+      <span style="font-size:22px;font-weight:700">${title}</span>
+      <span style="font-size:16px">${fmtDate(today())} · Total: ${d.grandTotal.toFixed(2)} kg</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">${cards}</div>
-    <div style="border-top:2px solid #000;margin-top:8px;padding-top:4px;font-size:12px;font-weight:700;text-align:right">GRAND TOTAL: ${d.grandTotal.toFixed(2)} kg</div>
+    ${pagesHtml}
+    <div style="border-top:2px solid #000;margin-top:14px;padding-top:6px;font-size:16px;font-weight:700;text-align:right">GRAND TOTAL: ${d.grandTotal.toFixed(2)} kg</div>
   </body></html>`;
   const win=window.open('','_blank','width=800,height=900');
   win.document.write(html);
@@ -3732,7 +3771,8 @@ function renderProduction(){
   // ── Build net-pending across ALL pending orders (all dates) ──
   // ordered[color||shape] = {totalKg, parties:{name->{kg, earliestDate}}, dates:[]}
   const ordByItem={};
-  orders.filter(o=>o.status==='Pending').forEach(o=>{
+  const pwToday=today();
+  orders.filter(o=>o.status==='Pending' && (pwDateMode==='till' || o.date===pwToday)).forEach(o=>{
     o.items.filter(i=>!i.cancelled).forEach(i=>{
       const key=i.color+'||'+i.shape;
       if(!ordByItem[key])ordByItem[key]={totalKg:0,parties:{},dates:[]};
@@ -3814,6 +3854,10 @@ function renderProduction(){
   totalNetKg=rawCards.reduce((s,c)=>s+c.net,0);
   const dueEl=document.getElementById('pw-due');
   if(dueEl) dueEl.textContent=totalNetKg.toFixed(2);
+  // Full set of party names currently visible (post-filter) — used by Check/Uncheck All
+  pwAllPartyNames=[...new Set(rawCards.flatMap(c=>Object.keys(c.parties)))];
+  const checkNote=document.getElementById('pw-checkall-note');
+  if(checkNote) checkNote.textContent=pwExcludedParties.size?pwExcludedParties.size+' party(ies) skipped in Print/POS/WA':'';
   pwUpdateSortButtons();
   // Populate filter datalists
   const dlSh=document.getElementById('dl-pw-shapes');
@@ -3825,7 +3869,7 @@ function renderProduction(){
 
   if(!rawCards.length){
     if(!orders.filter(o=>o.status==='Pending').length) emptyEl.style.display='block';
-    summary.innerHTML='<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0">No pending items match.</div>';
+    summary.innerHTML=`<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0">${pwDateMode==='today'?"No pending items with today's orders.":'No pending items match.'}</div>`;
     window._gridPrintData=null;
     return;
   }
@@ -3890,25 +3934,29 @@ function renderProduction(){
       return c!==0?c:shapeSort(a.sortB||'',b.sortB||'');
     });
   });
-  // Save for A4 print
-  const printTitle = prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise';
-  window._gridPrintData={mode:printTitle,rows:rows.map(([key,g])=>({
+  // Save for A4 print (skip parties unchecked above, partygrid mode only)
+  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwDateMode==='today'?' (Today)':'');
+  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
+  window._gridPrintData={mode:printTitle,rows:printRows.map(([key,g])=>({
     key, alias:g.alias||'', total:g.total,
     items:g.items.map(i=>({label:i.plainLabel,net:i.net}))
-  })), grandTotal};
+  })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0)};
   // Render
   const cardHtml=rows.map(([key,g])=>{
     const lines=g.items.map(i=>
       `<div style="font-size:11px;display:flex;justify-content:space-between;padding:1px 0;gap:6px"><span>${i.label}</span><b style="color:#d97706">${i.net.toFixed(2)}</b></div>`
     ).join('');
-    return `<div style="border:1px solid #eee;border-radius:8px;padding:6px 9px;background:#fff">
-      <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${key}${g.alias?`<span style="color:#888;font-size:10px;font-weight:500">/${g.alias}</span>`:''}</div>
+    const titleInner = prodView==='partygrid'
+      ? `<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" ${pwExcludedParties.has(key)?'':'checked'} onchange="pwTogglePartyPrint('${key.replace(/'/g,"\\'")}')" style="width:13px;height:13px;cursor:pointer;flex:none"><span>${key}</span></label>`
+      : `${key}${g.alias?`<span style="color:#888;font-size:10px;font-weight:500">/${g.alias}</span>`:''}`;
+    return `<div style="border:1px solid #eee;border-radius:8px;padding:6px 9px;background:#fff${prodView==='partygrid'&&pwExcludedParties.has(key)?';opacity:0.45':''}">
+      <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${titleInner}</div>
       ${lines}
       <div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>
     </div>`;
   }).join('');
   summary.innerHTML=
-    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · Net due = Ordered − Invoiced</div>`+
+    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders · Net due = Ordered − Invoiced":'Net due = Ordered − Invoiced'}</div>`+
     `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${prodView==='partygrid'?'200px':'170px'},1fr));gap:6px">${cardHtml}</div>`;
 }
 
