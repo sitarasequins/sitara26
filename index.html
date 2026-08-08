@@ -668,13 +668,13 @@ tr:hover td{background:#f8faff}
           <button id="pw-btn-partygrid" onclick="setProdView('partygrid')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Party Grid</button>
         </div>
         <span style="width:1px;height:22px;background:#eee"></span>
-        <input id="pw-party-filter" type="text" list="dl-pw-parties" placeholder="Party" oninput="renderProduction()"
+        <input id="pw-party-filter" type="text" list="dl-pw-parties" placeholder="Party" oninput="pwProcInputs={};renderProduction()"
           style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:100px;outline:none">
         <datalist id="dl-pw-parties"></datalist>
-        <input id="pw-color-filter" type="text" list="dl-pw-colors" placeholder="Color" oninput="renderProduction()"
+        <input id="pw-color-filter" type="text" list="dl-pw-colors" placeholder="Color" oninput="pwProcInputs={};renderProduction()"
           style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:85px;outline:none">
         <datalist id="dl-pw-colors"></datalist>
-        <input id="pw-size-filter" type="text" list="dl-pw-shapes" placeholder="Size" oninput="renderProduction()"
+        <input id="pw-size-filter" type="text" list="dl-pw-shapes" placeholder="Size" oninput="pwProcInputs={};renderProduction()"
           style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:65px;outline:none">
         <datalist id="dl-pw-shapes"></datalist>
         <button onclick="pwClearFilters()" style="padding:4px 8px;border:1.5px solid #ddd;border-radius:6px;font-size:10px;color:#888;background:#fff;cursor:pointer">✕</button>
@@ -3771,16 +3771,23 @@ function pwUpdateSendNote(){
 function pwCommitProcess(){
   const entries=Object.entries(pwProcInputs).filter(([,v])=>parseFloat(v)>0);
   if(!entries.length){alert('Nothing entered. Tick a box or type kg on the To Give list first.');return;}
+  // Show exactly what will move, so a stale or mistaken tick can never slip through
+  const plan=entries.map(([id,v])=>{
+    const t=pwItemIndex[id];
+    return t?{id,color:t.color,shape:t.shape,want:parseFloat(v)}:null;
+  }).filter(Boolean);
+  if(!plan.length){alert('Nothing on this view is staged. Tick a box on the To Give list first.');return;}
+  const planTotal=plan.reduce((a,b)=>a+b.want,0);
+  const lines=plan.slice(0,15).map(x=>`  ${x.color} ${x.shape}  ${x.want.toFixed(2)} kg`).join('\n')
+    +(plan.length>15?`\n  ...and ${plan.length-15} more`:'');
+  if(!confirm(`Send to In Process:\n\n${lines}\n\nTOTAL: ${planTotal.toFixed(2)} kg across ${plan.length} item(s)`)) return;
   let moved=0, count=0;
   const failed=[], partial=[];
-  entries.forEach(([id,v])=>{
-    const t=pwItemIndex[id];           // recorded at render time — no name mangling
-    const want=parseFloat(v);
-    if(!t){ failed.push(id+' (not on current view)'); return; }
-    const got=allocateToProcessItem(t.color,t.shape,want);
-    if(got<=0.0001){ failed.push(`${t.color} ${t.shape}`); return; }
+  plan.forEach(x=>{
+    const got=allocateToProcessItem(x.color,x.shape,x.want);
+    if(got<=0.0001){ failed.push(`${x.color} ${x.shape}`); return; }
     moved+=got; count++;
-    if(got < want-0.01) partial.push(`${t.color} ${t.shape}: ${got.toFixed(2)} of ${want.toFixed(2)}`);
+    if(got < x.want-0.01) partial.push(`${x.color} ${x.shape}: ${got.toFixed(2)} of ${x.want.toFixed(2)}`);
   });
   if(!moved){
     alert('Could not allocate:\n\n'+failed.join('\n')+
@@ -3826,6 +3833,7 @@ function pwUndoProcess(color,shape,maxKg){
   renderProduction();
 }
 function pwSetMode(m){
+  pwProcInputs={};   // staged qty is per-view; never carry it across a context change
   pwMode=m;
   const pb=document.getElementById('pw-mode-pending'), xb=document.getElementById('pw-mode-process');
   if(pb&&xb){
@@ -3851,6 +3859,7 @@ function pwUncheckAll(){ pwExcludedParties=new Set(pwAllPartyNames); renderProdu
 // 'today' = only items that have at least one order placed today. ──
 let pwDateMode='till';
 function pwSetDateMode(v){
+  pwProcInputs={};   // staged qty is per-view; never carry it across a context change
   pwDateMode=v;
   const tillBtn=document.getElementById('pw-date-till'), todayBtn=document.getElementById('pw-date-today');
   if(tillBtn&&todayBtn){
@@ -3863,6 +3872,7 @@ function pwSetDateMode(v){
 function setToday(){ renderProduction(); }
 
 function setProdView(v){
+  pwProcInputs={};   // staged qty is per-view; never carry it across a context change
   prodView=v;
   [['pw-btn-color','color'],['pw-btn-shape','shape'],['pw-btn-partygrid','partygrid']].forEach(([id,mode])=>{
     const b=document.getElementById(id);
@@ -4017,6 +4027,7 @@ function pwCancelOldSelected(){
   showSaveToast('Old orders cancelled');
 }
 function pwClearFilters(){
+  pwProcInputs={};   // staged qty is per-view; never carry it across a context change
   ['pw-party-filter','pw-color-filter','pw-size-filter'].forEach(id=>{
     const el=document.getElementById(id); if(el)el.value='';
   });
@@ -4281,6 +4292,7 @@ function renderProduction(){
   })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0)};
   // Render
   const canEdit = prodView==='shape';
+  pwItemIndex={};   // only lines rendered below may be committed
   const cardHtml=rows.map(([key,g])=>{
     const lines=g.items.map(i=>{
       const amt=`<b style="color:${pwMode==='process'?'#92400e':'#d97706'};min-width:46px;text-align:right">${i.net.toFixed(2)}</b>`;
