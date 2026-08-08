@@ -1275,6 +1275,27 @@ let parties = [
 let orders = [];
 let invoices = [];
 let nextOid=1, nextPaId=83, nextInvNum=1, nextInvoiceNum=590;
+// Orders are looked up with orders.find(x=>x.id===id), so a duplicated id makes
+// every later order with that id unreachable — Edit/Cancel/Delete all silently
+// act on the first match instead. Duplicates can arise from multi-device merges.
+// Give each repeat a fresh id and push nextOid past the highest in use.
+function repairDuplicateOrderIds(){
+  const seen=new Set();
+  let maxId=0, fixed=0;
+  orders.forEach(o=>{ const n=parseInt(o.id); if(!isNaN(n)&&n>maxId) maxId=n; });
+  let next=Math.max(maxId, parseInt(nextOid)||1)+1;
+  orders.forEach(o=>{
+    const bad = o.id===undefined || o.id===null || o.id==='' || seen.has(o.id);
+    if(bad){ o.id=next++; fixed++; }
+    seen.add(o.id);
+  });
+  if(fixed){
+    nextOid=next;
+    console.warn('Repaired '+fixed+' duplicate/missing order id(s)');
+    try{ saveAll(); }catch(e){}
+  }
+  return fixed;
+}
 // ─────────────────────────────────────────────────────────────────────────
 
 let filt='all', editOid=null, editInvId=null, ovOid=null, pdPartyId=null;
@@ -1460,6 +1481,7 @@ function loadFromStorage(){
     nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
     deduplicateShapes();
     normalizeColors();
+    repairDuplicateOrderIds();
     // Fix boolean status bug + normalize case
     orders.forEach(o=>{
       if(o.status===true) o.status='Delivered';
@@ -1602,6 +1624,7 @@ window.onload = function(){
             window._firebaseOrderCount = (data.orders||[]).length;
             deduplicateShapes();
             normalizeColors();
+            repairDuplicateOrderIds();
             // Fix boolean status bug
             orders.forEach(o=>{
               if(o.status===true) o.status='Delivered';
@@ -3008,6 +3031,10 @@ function saveOrder(){
     showSaveToast('Order updated!');
     gotoTab('orderlist');
   } else {
+    // Guard against nextOid lagging behind after a device merge, which would
+    // otherwise mint an id that already exists and make the order unreachable.
+    const maxId=orders.reduce((m,o)=>{const n=parseInt(o.id);return !isNaN(n)&&n>m?n:m;},0);
+    if(nextOid<=maxId) nextOid=maxId+1;
     const newOrder={id:nextOid++,invNum:nextInvNum++,party,date:dateVal,status:'Pending',items};
     orders.push(newOrder);
     resetOrderForm();
@@ -6031,6 +6058,7 @@ async function showAutoBackups(){
     nextPaId=data.nextPaId||nextPaId;
     nextInvNum=data.nextInvNum||nextInvNum;
     nextInvoiceNum=data.nextInvoiceNum||nextInvoiceNum;
+    repairDuplicateOrderIds();
     saveToBin();
     renderAll();
     closeModal('modal-admin');
