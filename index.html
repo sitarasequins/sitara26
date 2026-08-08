@@ -1774,9 +1774,7 @@ function splitPendingFor(party,color,shape){
   const s=settledPendingFor(party,color,shape);
   const due=s.due;
   const invoiced=s.totalSupplied;
-  const proc=procKgFor(party,color,shape);
-  const inProc=Math.max(0, Math.min(proc-invoiced, due));
-  return {due, inProc, toGive:Math.max(0,due-inProc)};
+  return toGiveFor(party,color,shape);
 }
 // Add `kg` to procKg across this party+item's orders, oldest-first, capped by
 // each order's own unfulfilled remaining so we can never mark more than exists.
@@ -1833,10 +1831,34 @@ function partiesPendingForItem(color,shape){
   });
   return [...set];
 }
+// How much of this party+item is still to give to labour. This is THE number the
+// UI shows, and allocation must use exactly the same definition — procKg is
+// cumulative-ever-sent, so headroom is (due − inProc), NOT (remaining − procKg):
+// `remaining` is already net of invoiced, and procKg still includes invoiced qty,
+// so the old formula subtracted invoiced twice and wrongly reported zero headroom.
+// ── In-process, measured PER ORDER ROW against that row's own unfulfilled
+// remaining. This is the only self-consistent definition: capacity to send is
+// (remaining − procKg) per row, and inProc is min(procKg, remaining) per row,
+// so they sum to exactly `toGive`. It also drains automatically as invoices are
+// raised, because `remaining` shrinks. (Do NOT compute inProc as
+// procKg − invoiced: procKg still contains invoiced qty while `remaining` is
+// already net of it, so invoiced qty gets counted twice.)
+function toGiveFor(party,color,shape){
+  const rows=perOrderRemaining(party,color,shape);
+  let due=0, inProc=0;
+  rows.forEach(r=>{
+    const o=orders.find(x=>x.id===r.oid);
+    const it=o&&o.items[r.idx];
+    const proc=it?(parseFloat(it.procKg)||0):0;
+    due+=r.remaining;
+    inProc+=Math.min(proc, r.remaining);
+  });
+  return {due:+due.toFixed(3), inProc:+inProc.toFixed(3), toGive:+Math.max(0,due-inProc).toFixed(3)};
+}
 function allocateToProcessItem(color,shape,kg){
   let left=parseFloat(kg)||0;
   if(left<=0) return 0;
-  // Pool every party's unfulfilled rows for this item, then sort globally by date
+  // Oldest order first, across all parties waiting for this colour+size
   let pool=[];
   partiesPendingForItem(color,shape).forEach(party=>{
     perOrderRemaining(party,color,shape).forEach(r=>{ pool.push({...r,party}); });
@@ -1849,14 +1871,16 @@ function allocateToProcessItem(color,shape,kg){
     if(!o) continue;
     const it=o.items[r.idx];
     if(!it) continue;
-    const already=parseFloat(it.procKg)||0;
-    const space=Math.max(0, r.remaining-already);
-    if(space<=0.0001) continue;
-    const take=Math.min(space,left);
-    it.procKg=+(already+take).toFixed(3);
+    // Normalise any overhang above this row's remaining — it is never
+    // displayable and would otherwise linger and corrupt later maths.
+    const active=Math.min(parseFloat(it.procKg)||0, r.remaining);
+    const room=Math.max(0, r.remaining-active);    // matches toGive exactly
+    if(room<=0.0001){ if(active!==(parseFloat(it.procKg)||0)) it.procKg=+active.toFixed(3); continue; }
+    const take=Math.min(room,left);
+    it.procKg=+(active+take).toFixed(3);
     left-=take; done+=take;
   }
-  return done;
+  return +done.toFixed(3);
 }
 function deallocateFromProcessItem(color,shape,kg){
   let left=parseFloat(kg)||0;
@@ -1873,14 +1897,14 @@ function deallocateFromProcessItem(color,shape,kg){
     if(!o) continue;
     const it=o.items[r.idx];
     if(!it) continue;
-    const already=parseFloat(it.procKg)||0;
-    if(already<=0.0001) continue;
-    const take=Math.min(already,left);
-    it.procKg=+(already-take).toFixed(3);
+    const active=Math.min(parseFloat(it.procKg)||0, r.remaining); // what's really out
+    if(active<=0.0001){ if(it.procKg!==undefined) delete it.procKg; continue; }
+    const take=Math.min(active,left);
+    it.procKg=+(active-take).toFixed(3);            // drop overhang while we're here
     if(it.procKg<=0.0001) delete it.procKg;
     left-=take; done+=take;
   }
-  return done;
+  return +done.toFixed(3);
 }
 
 function buildDateAwareInvByPartyItem(){
@@ -1992,8 +2016,7 @@ function buildPendingMap(){
       if(netKg>=1.0){
         // In-process split (Pending Work / In Process tabs use these;
         // netKg stays full Due so Comparison & Reports are unaffected)
-        const proc=procKgFor(party,color,shape);
-        const inProc=Math.max(0, Math.min(proc-s.totalSupplied, netKg));
+        const inProc=toGiveFor(party,color,shape).inProc;
         partyItems.push({color,shape,ordKg:v.ordKg,invKg:s.totalSupplied,netKg,
           inProcKg:inProc, toGiveKg:Math.max(0,netKg-inProc),
           price:v.price,refs:v.orderRefs});
@@ -4148,8 +4171,7 @@ function renderProduction(){
       const due=s.due;
       itemInvKg+=s.totalSupplied;
       // Split Due into In-Process vs To-Give; pick whichever this tab shows
-      const proc=procKgFor(party,color,shape);
-      const inProc=Math.max(0, Math.min(proc-s.totalSupplied, due));
+      const inProc=toGiveFor(party,color,shape).inProc;
       const pNet = pwMode==='process' ? inProc : Math.max(0,due-inProc);
       if(pNet>=1.0){ pendingParties[party]=pNet; itemNet+=pNet; }
       itemDue+=due; itemProc+=inProc;
