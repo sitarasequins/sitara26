@@ -657,18 +657,16 @@ tr:hover td{background:#f8faff}
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-      <div style="font-size:16px;font-weight:700;color:#1a1a1a">Pending Work</div>
+      <div id="pw-title" style="font-size:16px;font-weight:700;color:#1a1a1a">Pending Work</div>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-        <span style="background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:3px 12px"><b id="pw-due" style="color:#d97706;font-size:14px">0.00</b></span>
+        <span style="background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:3px 10px" title="To give to labour"><b id="pw-due" style="color:#d97706;font-size:14px">0.00</b><span style="font-size:9px;color:#b45309;margin-left:4px">give</span></span>
+        <span style="background:#fefce8;border:1px solid #fde68a;border-radius:7px;padding:3px 10px" title="In process with labour"><b id="pw-proc" style="color:#92400e;font-size:14px">0.00</b><span style="font-size:9px;color:#92400e;margin-left:4px">proc</span></span>
         <span style="width:1px;height:22px;background:#eee"></span>
         <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
           <button id="pw-btn-color" onclick="setProdView('color')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#2563eb;color:#fff">Color Grid</button>
           <button id="pw-btn-shape" onclick="setProdView('shape')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Size Grid</button>
           <button id="pw-btn-partygrid" onclick="setProdView('partygrid')" style="padding:4px 12px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Party Grid</button>
         </div>
-        <span style="width:1px;height:22px;background:#eee"></span>
-        <button id="pw-sort-old" onclick="togglePwSort('old')" style="padding:4px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:11px;color:#888;background:#fff;cursor:pointer;font-weight:600">Old ⇅</button>
-        <button id="pw-sort-qty" onclick="togglePwSort('qty')" style="padding:4px 10px;border:1.5px solid #1e40af;border-radius:7px;font-size:11px;color:#fff;background:#1e40af;cursor:pointer;font-weight:600">Qty ↓</button>
         <span style="width:1px;height:22px;background:#eee"></span>
         <input id="pw-party-filter" type="text" list="dl-pw-parties" placeholder="Party" oninput="renderProduction()"
           style="padding:4px 8px;border-radius:6px;border:1.5px solid #ddd;font-size:11px;width:100px;outline:none">
@@ -689,9 +687,20 @@ tr:hover td{background:#f8faff}
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
+        <button id="pw-mode-pending" onclick="pwSetMode('pending')" style="padding:5px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#d97706;color:#fff">To Give</button>
+        <button id="pw-mode-process" onclick="pwSetMode('process')" style="padding:5px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#fff;color:#888">In Process</button>
+      </div>
+      <span style="width:1px;height:20px;background:#eee"></span>
+      <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
         <button id="pw-date-till" onclick="pwSetDateMode('till')" style="padding:5px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#1e40af;color:#fff">Till Date</button>
         <button id="pw-date-today" onclick="pwSetDateMode('today')" style="padding:5px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Today</button>
       </div>
+      <span id="pw-send-wrap" style="display:flex;align-items:center;gap:8px">
+        <span style="width:1px;height:20px;background:#eee"></span>
+        <button id="pw-send-btn" onclick="pwCommitProcess()" style="padding:5px 13px;border:1.5px solid #4338ca;border-radius:7px;font-size:11px;font-weight:700;color:#fff;background:#4338ca;cursor:pointer">➜ Send to Process</button>
+        <button onclick="pwClearProcInputs()" style="padding:5px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:10.5px;color:#888;background:#fff;cursor:pointer">Clear</button>
+        <span id="pw-send-note" style="font-size:10.5px;color:#4338ca"></span>
+      </span>
       <span id="pw-checkall-wrap" style="display:flex;align-items:center;gap:8px">
         <span style="width:1px;height:20px;background:#eee"></span>
         <button onclick="pwCheckAll()" style="padding:5px 12px;border:1.5px solid #16a34a;border-radius:7px;font-size:11px;font-weight:600;color:#16a34a;background:#fff;cursor:pointer">✓ Check All</button>
@@ -1738,6 +1747,138 @@ function perOrderRemaining(party,color,shape){
   return ords.map(o=>({oid:o.oid, idx:o.idx, date:o.date, remaining:Math.max(0,o.need-o.filled), need:o.need}));
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// IN-PROCESS ENGINE
+// Each order item may carry it.procKg = cumulative kg handed to labour.
+// Nothing else is stored; the three numbers are always derived:
+//   Due       = ordered − invoiced   (settleDue — unchanged, used by Comparison/Reports)
+//   InProcess = min(Σ procKg − invoiced, Due)   clamped ≥ 0
+//   ToGive    = Due − InProcess
+// So making an invoice automatically drains In Process. No sync to maintain.
+// ══════════════════════════════════════════════════════════════════════
+function procKgFor(party,color,shape){
+  let t=0;
+  orders.filter(o=>o.status==='Pending' && o.party===party).forEach(o=>{
+    o.items.forEach(it=>{
+      if(!it.cancelled && it.color===color && it.shape===shape) t+=parseFloat(it.procKg)||0;
+    });
+  });
+  return t;
+}
+// Returns {due, inProc, toGive} for one party+color+shape.
+function splitPendingFor(party,color,shape){
+  const s=settledPendingFor(party,color,shape);
+  const due=s.due;
+  const invoiced=s.totalSupplied;
+  const proc=procKgFor(party,color,shape);
+  const inProc=Math.max(0, Math.min(proc-invoiced, due));
+  return {due, inProc, toGive:Math.max(0,due-inProc)};
+}
+// Add `kg` to procKg across this party+item's orders, oldest-first, capped by
+// each order's own unfulfilled remaining so we can never mark more than exists.
+function allocateToProcess(party,color,shape,kg){
+  let left=parseFloat(kg)||0;
+  if(left<=0) return 0;
+  const rem=perOrderRemaining(party,color,shape); // already FIFO-sorted oldest first
+  let done=0;
+  for(const r of rem){
+    if(left<=0.0001) break;
+    const o=orders.find(x=>x.id===r.oid);
+    if(!o) continue;
+    const it=o.items[r.idx];
+    if(!it) continue;
+    const already=parseFloat(it.procKg)||0;
+    const space=Math.max(0, r.remaining-already);
+    if(space<=0.0001) continue;
+    const take=Math.min(space,left);
+    it.procKg=+(already+take).toFixed(3);
+    left-=take; done+=take;
+  }
+  return done;
+}
+// Remove `kg` of procKg for this party+item, newest-first (undo / labour returned).
+function deallocateFromProcess(party,color,shape,kg){
+  let left=parseFloat(kg)||0;
+  if(left<=0) return 0;
+  const rem=perOrderRemaining(party,color,shape).slice().reverse();
+  let done=0;
+  for(const r of rem){
+    if(left<=0.0001) break;
+    const o=orders.find(x=>x.id===r.oid);
+    if(!o) continue;
+    const it=o.items[r.idx];
+    if(!it) continue;
+    const already=parseFloat(it.procKg)||0;
+    if(already<=0.0001) continue;
+    const take=Math.min(already,left);
+    it.procKg=+(already-take).toFixed(3);
+    if(it.procKg<=0.0001) delete it.procKg;
+    left-=take; done+=take;
+  }
+  return done;
+}
+
+// ── Cross-party versions (used by Size Grid) ──────────────────────────
+// Labour manufactures by colour+size, not per party, so entry happens on the
+// Size Grid and the qty is spread across every party waiting for that item,
+// oldest order first. Returns kg actually moved.
+function partiesPendingForItem(color,shape){
+  const set=new Set();
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    o.items.forEach(it=>{ if(!it.cancelled && it.color===color && it.shape===shape) set.add(o.party); });
+  });
+  return [...set];
+}
+function allocateToProcessItem(color,shape,kg){
+  let left=parseFloat(kg)||0;
+  if(left<=0) return 0;
+  // Pool every party's unfulfilled rows for this item, then sort globally by date
+  let pool=[];
+  partiesPendingForItem(color,shape).forEach(party=>{
+    perOrderRemaining(party,color,shape).forEach(r=>{ pool.push({...r,party}); });
+  });
+  pool.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.oid-b.oid));
+  let done=0;
+  for(const r of pool){
+    if(left<=0.0001) break;
+    const o=orders.find(x=>x.id===r.oid);
+    if(!o) continue;
+    const it=o.items[r.idx];
+    if(!it) continue;
+    const already=parseFloat(it.procKg)||0;
+    const space=Math.max(0, r.remaining-already);
+    if(space<=0.0001) continue;
+    const take=Math.min(space,left);
+    it.procKg=+(already+take).toFixed(3);
+    left-=take; done+=take;
+  }
+  return done;
+}
+function deallocateFromProcessItem(color,shape,kg){
+  let left=parseFloat(kg)||0;
+  if(left<=0) return 0;
+  let pool=[];
+  partiesPendingForItem(color,shape).forEach(party=>{
+    perOrderRemaining(party,color,shape).forEach(r=>{ pool.push({...r,party}); });
+  });
+  pool.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.oid-a.oid)); // newest first
+  let done=0;
+  for(const r of pool){
+    if(left<=0.0001) break;
+    const o=orders.find(x=>x.id===r.oid);
+    if(!o) continue;
+    const it=o.items[r.idx];
+    if(!it) continue;
+    const already=parseFloat(it.procKg)||0;
+    if(already<=0.0001) continue;
+    const take=Math.min(already,left);
+    it.procKg=+(already-take).toFixed(3);
+    if(it.procKg<=0.0001) delete it.procKg;
+    left-=take; done+=take;
+  }
+  return done;
+}
+
 function buildDateAwareInvByPartyItem(){
   // First get earliest pending order date per party+item
   const earliestDate={};
@@ -1845,7 +1986,13 @@ function buildPendingMap(){
       const s=settledPendingFor(party,color,shape);
       const netKg=s.due;
       if(netKg>=1.0){
-        partyItems.push({color,shape,ordKg:v.ordKg,invKg:s.totalSupplied,netKg,price:v.price,refs:v.orderRefs});
+        // In-process split (Pending Work / In Process tabs use these;
+        // netKg stays full Due so Comparison & Reports are unaffected)
+        const proc=procKgFor(party,color,shape);
+        const inProc=Math.max(0, Math.min(proc-s.totalSupplied, netKg));
+        partyItems.push({color,shape,ordKg:v.ordKg,invKg:s.totalSupplied,netKg,
+          inProcKg:inProc, toGiveKg:Math.max(0,netKg-inProc),
+          price:v.price,refs:v.orderRefs});
       }
     });
     if(partyItems.length)result[party]=partyItems;
@@ -2813,6 +2960,21 @@ function saveOrder(){
   const dateVal=document.getElementById('f-date').value;
   if(editOid){
     const i=orders.findIndex(x=>x.id===editOid);
+    // Carry forward procKg (kg already handed to labour) for items that still
+    // exist by color+shape — the edit form doesn't know about this field, so
+    // without this the in-process qty would be silently wiped on every edit.
+    const prevProc={};
+    (orders[i].items||[]).forEach(it=>{
+      const p=parseFloat(it.procKg)||0;
+      if(p>0){ const k=it.color+'||'+it.shape; prevProc[k]=(prevProc[k]||0)+p; }
+    });
+    items.forEach(it=>{
+      const k=it.color+'||'+it.shape;
+      if(prevProc[k]>0){
+        const take=Math.min(prevProc[k], parseFloat(it.kg)||0);
+        if(take>0){ it.procKg=+take.toFixed(3); prevProc[k]-=take; }
+      }
+    });
     orders[i]={...orders[i],party,date:dateVal,items};
     resetOrderForm();
     saveAll();renderOrders();renderInvoiceList();
@@ -3547,6 +3709,67 @@ function editOrderFromAnywhere(id){
 // PENDING WORK
 // ============================================================
 let prodView='color'; // 'color' | 'shape' | 'partygrid'
+let pwMode='pending';  // 'pending' = To Give (labour list) | 'process' = In Process
+// Staged per-item kg typed into the To Give boxes, keyed by party||color||shape.
+// Not persisted — cleared once committed via Send to Process.
+let pwProcInputs={};
+function pwKeyId(color,shape){
+  return (color+'||'+shape).replace(/[^A-Za-z0-9]/g,'_');
+}
+function pwClearProcInputs(){ pwProcInputs={}; renderProduction(); }
+function pwUpdateSendNote(){
+  const n=Object.values(pwProcInputs).filter(v=>parseFloat(v)>0).length;
+  const t=Object.values(pwProcInputs).reduce((s,v)=>s+(parseFloat(v)||0),0);
+  const el=document.getElementById('pw-send-note');
+  if(el) el.textContent = n?`${n} item(s) · ${t.toFixed(2)} kg staged`:'';
+  const btn=document.getElementById('pw-send-btn');
+  if(btn) btn.textContent = n?`➜ Send to Process (${n})`:'➜ Send to Process';
+}
+function pwCommitProcess(){
+  const entries=Object.entries(pwProcInputs).filter(([,v])=>parseFloat(v)>0);
+  if(!entries.length){alert('Nothing entered. Type kg in the boxes on the To Give list first.');return;}
+  // Rebuild id -> {color,shape} from all pending items so we know what each box meant
+  const map={};
+  orders.filter(o=>o.status==='Pending').forEach(o=>{
+    o.items.forEach(it=>{
+      if(!it.cancelled) map[pwKeyId(it.color,it.shape)]={color:it.color,shape:it.shape};
+    });
+  });
+  let moved=0, count=0;
+  entries.forEach(([id,v])=>{
+    const t=map[id];
+    if(!t) return;
+    const got=allocateToProcessItem(t.color,t.shape,parseFloat(v));
+    if(got>0){ moved+=got; count++; }
+  });
+  if(!moved){alert('Could not allocate — quantities may already be in process or invoiced.');return;}
+  pwProcInputs={};
+  saveAll();
+  showSaveToast(`${moved.toFixed(2)} kg moved to In Process (${count} item(s))`);
+  renderProduction();
+}
+function pwUndoProcess(color,shape,maxKg){
+  const v=window.prompt(`Return how many kg to "To Give"?\n${color} ${shape}\nCurrently in process: ${maxKg.toFixed(2)} kg\n(Blank / 0 = cancel)`, maxKg.toFixed(2));
+  if(v===null) return;
+  const kg=parseFloat(v);
+  if(!kg||kg<=0) return;
+  const done=deallocateFromProcessItem(color,shape,Math.min(kg,maxKg));
+  if(!done){alert('Nothing to return.');return;}
+  saveAll();
+  showSaveToast(`${done.toFixed(2)} kg returned to To Give`);
+  renderProduction();
+}
+function pwSetMode(m){
+  pwMode=m;
+  const pb=document.getElementById('pw-mode-pending'), xb=document.getElementById('pw-mode-process');
+  if(pb&&xb){
+    pb.style.background=m==='pending'?'#d97706':'#fff'; pb.style.color=m==='pending'?'#fff':'#888';
+    xb.style.background=m==='process'?'#92400e':'#fff'; xb.style.color=m==='process'?'#fff':'#888';
+  }
+  const t=document.getElementById('pw-title');
+  if(t) t.textContent = m==='process' ? 'In Process' : 'Pending Work';
+  renderProduction();
+}
 // ── Party checkboxes (Party Grid only): uncheck a party to skip it when
 // printing/POS/WA. Not persisted — resets each session, view is unaffected. ──
 let pwExcludedParties=new Set();
@@ -3605,7 +3828,8 @@ function pwUpdateSortButtons(){
   }
 }
 function pwGridTitle(){
-  return prodView==='color'?'Color Pending':prodView==='shape'?'Size Pending':'Party Pending';
+  const base=prodView==='color'?'Color':prodView==='shape'?'Size':'Party';
+  return base+(pwMode==='process'?' In Process':' Pending');
 }
 // POS print of EXACTLY what the grid shows (respects filters, view, sort)
 function pwPrintPOS(){
@@ -3737,7 +3961,7 @@ function pwClearFilters(){
 function printPendingGrid(){
   const d=window._gridPrintData;
   if(!d||!d.rows.length){alert(prodView==='partygrid'?'Nothing to print — check at least one party.':'Nothing to print');return;}
-  const title='PENDING — '+d.mode;
+  const title=(pwMode==='process'?'IN PROCESS — ':'PENDING — ')+d.mode;
   const isParty = prodView==='partygrid';
   let bodyHtml, headTitleSize, headMetaSize, headBorder, headMargin, footSize, footMargin;
   if(isParty){
@@ -3753,8 +3977,18 @@ function printPendingGrid(){
       `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px${pi<pages.length-1?';page-break-after:always':''}">${pageRows.map(cardHtml).join('')}</div>`
     ).join('');
     headTitleSize='22px'; headMetaSize='16px'; headBorder='3px'; headMargin='14px'; footSize='16px'; footMargin='14px';
+  } else if(prodView==='shape'){
+    // Size Grid: worksheet for labour — each line gets an empty box to write
+    // the actual kg produced, mirroring the on-screen entry boxes.
+    const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
+      <div style="font-weight:700;font-size:12px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:3px">${r.key}${r.alias?'/'+r.alias:''}</div>
+      ${r.items.map(i=>`<div style="font-size:10.5px;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:1.5px 0"><span>${i.label}</span><span style="display:flex;align-items:center;gap:4px;flex:none"><b style="min-width:38px;text-align:right">${i.net.toFixed(2)}</b><span style="display:inline-block;width:34px;height:13px;border:1px solid #666"></span></span></div>`).join('')}
+      <div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:3px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
+    </div>`).join('');
+    bodyHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">${cards}</div>`;
+    headTitleSize='14px'; headMetaSize='11px'; headBorder='2px'; headMargin='8px'; footSize='12px'; footMargin='8px';
   } else {
-    // Color / Size Grid: original compact layout — 4 per row, flows freely (saves paper)
+    // Color Grid: original compact layout — 4 per row, flows freely (saves paper)
     const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
       <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
       ${r.items.map(i=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
@@ -3764,8 +3998,8 @@ function printPendingGrid(){
     headTitleSize='14px'; headMetaSize='11px'; headBorder='2px'; headMargin='8px'; footSize='12px'; footMargin='8px';
   }
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-    body{font-family:Arial,sans-serif;margin:0;padding:8mm}
-    @page{size:A4;margin:8mm}
+    body{font-family:Arial,sans-serif;margin:0;padding:0 8mm 8mm}
+    @page{size:A4;margin:5mm 8mm 8mm}
   </style></head><body>
     <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:${headBorder} solid #000;padding-bottom:${isParty?'6px':'4px'};margin-bottom:${headMargin}">
       <span style="font-size:${headTitleSize};font-weight:700">${title}</span>
@@ -3821,20 +4055,28 @@ function renderProduction(){
   // ── Build raw item cards ──────────────────────────────────────
   let rawCards=[];
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
+  let grandDueKg=0, grandProcKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
     const [color,shape]=key.split('||');
     const pendingParties={};
     let itemNet=0;
     let itemInvKg=0;
+    let itemDue=0, itemProc=0;
     Object.entries(v.parties).forEach(([party,pData])=>{
       // Cycle-based settlement: surplus from old cycles never reduces a fresh order
       const s=settledPendingFor(party,color,shape);
-      const pNet=s.due;
+      const due=s.due;
       itemInvKg+=s.totalSupplied;
+      // Split Due into In-Process vs To-Give; pick whichever this tab shows
+      const proc=procKgFor(party,color,shape);
+      const inProc=Math.max(0, Math.min(proc-s.totalSupplied, due));
+      const pNet = pwMode==='process' ? inProc : Math.max(0,due-inProc);
       if(pNet>=1.0){ pendingParties[party]=pNet; itemNet+=pNet; }
+      itemDue+=due; itemProc+=inProc;
     });
     totalOrderKg+=v.totalKg;
     totalInvKg+=itemInvKg;
+    grandDueKg+=itemDue; grandProcKg+=itemProc;
     if(itemNet>=1.0){
       totalNetKg+=itemNet;
       const sortedDates=[...v.dates].sort();
@@ -3869,7 +4111,13 @@ function renderProduction(){
   }
   totalNetKg=rawCards.reduce((s,c)=>s+c.net,0);
   const dueEl=document.getElementById('pw-due');
-  if(dueEl) dueEl.textContent=totalNetKg.toFixed(2);
+  if(dueEl) dueEl.textContent=Math.max(0,grandDueKg-grandProcKg).toFixed(2);
+  const procEl=document.getElementById('pw-proc');
+  if(procEl) procEl.textContent=grandProcKg.toFixed(2);
+  // Send-to-Process controls only make sense on the To Give list in Party Grid
+  const sendWrap=document.getElementById('pw-send-wrap');
+  if(sendWrap) sendWrap.style.display=(pwMode==='pending'&&prodView==='shape')?'flex':'none';
+  pwUpdateSendNote();
   // Full set of party names currently visible (post-filter) — used by Check/Uncheck All
   pwAllPartyNames=[...new Set(rawCards.flatMap(c=>Object.keys(c.parties)))];
   const checkWrap=document.getElementById('pw-checkall-wrap');
@@ -3915,6 +4163,7 @@ function renderProduction(){
         if(!groups[party])groups[party]={total:0,items:[],minDate:c.minDate};
         groups[party].total+=kg;
         groups[party].items.push({sortA:c.color,sortB:c.shape,
+          party, color:c.color, shape:c.shape,
           label:`${c.color}${pwAlias(c.color)?`<span style="color:#999;font-size:9px">/${pwAlias(c.color)}</span>`:''} ${c.shape}`,
           plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''} ${c.shape}`, net:kg});
         if(c.minDate<groups[party].minDate)groups[party].minDate=c.minDate;
@@ -3925,6 +4174,7 @@ function renderProduction(){
       if(!groups[c.shape])groups[c.shape]={total:0,items:[],minDate:c.minDate};
       groups[c.shape].total+=c.net;
       groups[c.shape].items.push({sortA:c.color,sortB:'',
+        color:c.color, shape:c.shape,
         label:`${c.color}${pwAlias(c.color)?`<span style="color:#999;font-size:9px">/${pwAlias(c.color)}</span>`:''}`,
         plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''}`, net:c.net});
       if(c.minDate<groups[c.shape].minDate)groups[c.shape].minDate=c.minDate;
@@ -3953,29 +4203,47 @@ function renderProduction(){
     });
   });
   // Save for A4 print (skip parties unchecked above, partygrid mode only)
-  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwDateMode==='today'?' (Today)':'');
-  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
+  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwDateMode==='today'?' (Today)':'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
   window._gridPrintData={mode:printTitle,rows:printRows.map(([key,g])=>({
     key, alias:g.alias||'', total:g.total,
     items:g.items.map(i=>({label:i.plainLabel,net:i.net}))
   })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0)};
   // Render
+  const canEdit = prodView==='shape';
   const cardHtml=rows.map(([key,g])=>{
-    const lines=g.items.map(i=>
-      `<div style="font-size:11px;display:flex;justify-content:space-between;padding:1px 0;gap:6px"><span>${i.label}</span><b style="color:#d97706">${i.net.toFixed(2)}</b></div>`
-    ).join('');
+    const lines=g.items.map(i=>{
+      const amt=`<b style="color:${pwMode==='process'?'#92400e':'#d97706'};min-width:46px;text-align:right">${i.net.toFixed(2)}</b>`;
+      let ctrl='';
+      if(canEdit && i.color && i.shape){
+        const id=pwKeyId(i.color,i.shape);
+        if(pwMode==='pending'){
+          ctrl=`<input id="pin-${id}" type="number" step="0.01" min="0" max="${i.net}" placeholder="0" value="${pwProcInputs[id]||''}"
+            oninput="pwProcInputs['${id}']=this.value;pwUpdateSendNote()"
+            style="width:54px;padding:2px 5px;border:1.5px solid ${pwProcInputs[id]?'#4338ca':'#e5e7eb'};border-radius:5px;font-size:11px;text-align:right;outline:none;${pwProcInputs[id]?'background:#f5f7ff;color:#3730a3;font-weight:700':''}">`;
+        } else {
+          ctrl=`<button onclick="pwUndoProcess('${i.color.replace(/'/g,"\\'")}','${i.shape.replace(/'/g,"\\'")}',${i.net})"
+            style="font-size:9.5px;color:#b45309;border:1px solid #fde68a;border-radius:4px;padding:1px 5px;background:#fff;cursor:pointer">undo</button>`;
+        }
+      }
+      return `<div style="font-size:11px;display:flex;justify-content:space-between;align-items:center;padding:1px 0;gap:6px"><span>${i.label}</span><span style="display:flex;align-items:center;gap:5px;flex:none">${amt}${ctrl}</span></div>`;
+    }).join('');
     const titleInner = prodView==='partygrid'
       ? `<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" ${pwExcludedParties.has(key)?'':'checked'} onchange="pwTogglePartyPrint('${key.replace(/'/g,"\\'")}')" style="width:13px;height:13px;cursor:pointer;flex:none"><span>${key}</span></label>`
       : `${key}${g.alias?`<span style="color:#888;font-size:10px;font-weight:500">/${g.alias}</span>`:''}`;
-    return `<div style="border:1px solid #eee;border-radius:8px;padding:6px 9px;background:#fff${prodView==='partygrid'&&pwExcludedParties.has(key)?';opacity:0.45':''}">
+    const cardBg = pwMode==='process' ? '#fffdf5' : '#fff';
+    const cardBorder = pwMode==='process' ? '#fde68a' : '#eee';
+    return `<div style="border:1px solid ${cardBorder};border-radius:8px;padding:6px 9px;background:${cardBg}${prodView==='partygrid'&&pwExcludedParties.has(key)?';opacity:0.45':''}">
       <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${titleInner}</div>
       ${lines}
       <div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>
     </div>`;
   }).join('');
+  const hint = pwMode==='process'
+    ? (canEdit?'With labour now · <b>undo</b> pushes qty back to To Give':'With labour now · switch to Size Grid to undo')
+    : (canEdit?'Type kg → <b>Send to Process</b> · spread across parties, oldest order first':'Switch to Size Grid to send qty to process');
   summary.innerHTML=
-    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders · Net due = Ordered − Invoiced":'Net due = Ordered − Invoiced'}</div>`+
-    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${prodView==='partygrid'?'200px':'170px'},1fr));gap:6px">${cardHtml}</div>`;
+    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders":'Till date'} · ${hint}</div>`+
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${prodView==='partygrid'?'200px':prodView==='shape'?'215px':'170px'},1fr));gap:6px">${cardHtml}</div>`;
 }
 
 // ============================================================
