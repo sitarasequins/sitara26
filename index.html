@@ -698,7 +698,6 @@ tr:hover td{background:#f8faff}
       <span id="pw-send-wrap" style="display:flex;align-items:center;gap:8px">
         <span style="width:1px;height:20px;background:#eee"></span>
         <button id="pw-send-btn" onclick="pwCommitProcess()" style="padding:5px 13px;border:1.5px solid #4338ca;border-radius:7px;font-size:11px;font-weight:700;color:#fff;background:#4338ca;cursor:pointer">➜ Send to Process</button>
-        <button onclick="pwTickAll()" style="padding:5px 10px;border:1.5px solid #4338ca;border-radius:7px;font-size:10.5px;color:#4338ca;background:#fff;cursor:pointer;font-weight:600">☑ Tick All</button>
         <button onclick="pwClearProcInputs()" style="padding:5px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:10.5px;color:#888;background:#fff;cursor:pointer">Clear</button>
         <span id="pw-send-note" style="font-size:10.5px;color:#4338ca"></span>
       </span>
@@ -3714,19 +3713,18 @@ let pwMode='pending';  // 'pending' = To Give (labour list) | 'process' = In Pro
 // Staged per-item kg typed into the To Give boxes, keyed by party||color||shape.
 // Not persisted — cleared once committed via Send to Process.
 let pwProcInputs={};
-let pwVisibleItems=[]; // [{id, kg}] for every editable line currently rendered — used by Tick All
-function pwTickAll(){
-  if(!pwVisibleItems.length){alert('Nothing to tick.');return;}
-  const allOn=pwVisibleItems.every(v=>{
-    const s=parseFloat(pwProcInputs[v.id]);
-    return !isNaN(s) && Math.abs(s-v.kg)<0.005;
-  });
-  if(allOn) pwProcInputs={};                                    // toggle off
-  else pwVisibleItems.forEach(v=>{ pwProcInputs[v.id]=v.kg.toFixed(2); });
-  renderProduction();
-}
+// Authoritative id -> {color,shape} recorded at render time. Never re-derive this
+// from `orders` by sanitizing names: pwKeyId strips non-alphanumerics, so pairs
+// like ("PP","10/1") and ("PP","10 1") collapse to the same id and overwrite
+// each other, making the lookup resolve to the wrong item.
+let pwItemIndex={};
 function pwKeyId(color,shape){
-  return (color+'||'+shape).replace(/[^A-Za-z0-9]/g,'_');
+  // Unique, DOM-safe id. Hash the raw string so that pairs which differ only in
+  // punctuation/spacing (e.g. "10/1" vs "10 1") never collide.
+  const raw=color+'||'+shape;
+  let h=0;
+  for(let i=0;i<raw.length;i++){ h=((h<<5)-h)+raw.charCodeAt(i); h|=0; }
+  return raw.replace(/[^A-Za-z0-9]/g,'_')+'_'+(h>>>0).toString(36);
 }
 function pwClearProcInputs(){ pwProcInputs={}; renderProduction(); }
 // Tick = stage the FULL pending qty for this item. Untick = clear it.
@@ -3768,25 +3766,32 @@ function pwUpdateSendNote(){
 }
 function pwCommitProcess(){
   const entries=Object.entries(pwProcInputs).filter(([,v])=>parseFloat(v)>0);
-  if(!entries.length){alert('Nothing entered. Type kg in the boxes on the To Give list first.');return;}
-  // Rebuild id -> {color,shape} from all pending items so we know what each box meant
-  const map={};
-  orders.filter(o=>o.status==='Pending').forEach(o=>{
-    o.items.forEach(it=>{
-      if(!it.cancelled) map[pwKeyId(it.color,it.shape)]={color:it.color,shape:it.shape};
-    });
-  });
+  if(!entries.length){alert('Nothing entered. Tick a box or type kg on the To Give list first.');return;}
   let moved=0, count=0;
+  const failed=[], partial=[];
   entries.forEach(([id,v])=>{
-    const t=map[id];
-    if(!t) return;
-    const got=allocateToProcessItem(t.color,t.shape,parseFloat(v));
-    if(got>0){ moved+=got; count++; }
+    const t=pwItemIndex[id];           // recorded at render time — no name mangling
+    const want=parseFloat(v);
+    if(!t){ failed.push(id+' (not on current view)'); return; }
+    const got=allocateToProcessItem(t.color,t.shape,want);
+    if(got<=0.0001){ failed.push(`${t.color} ${t.shape}`); return; }
+    moved+=got; count++;
+    if(got < want-0.01) partial.push(`${t.color} ${t.shape}: ${got.toFixed(2)} of ${want.toFixed(2)}`);
   });
-  if(!moved){alert('Could not allocate — quantities may already be in process or invoiced.');return;}
+  if(!moved){
+    alert('Could not allocate:\n\n'+failed.join('\n')+
+      '\n\nThis qty may already be in process, or already invoiced.');
+    return;
+  }
   pwProcInputs={};
   saveAll();
-  showSaveToast(`${moved.toFixed(2)} kg moved to In Process (${count} item(s))`);
+  let msg=`${moved.toFixed(2)} kg moved to In Process (${count} item(s))`;
+  showSaveToast(msg);
+  if(partial.length||failed.length){
+    alert('Moved '+moved.toFixed(2)+' kg.\n\n'+
+      (partial.length?'Only part could be allocated:\n'+partial.join('\n')+'\n\n':'')+
+      (failed.length?'Could not allocate at all:\n'+failed.join('\n'):''));
+  }
   renderProduction();
 }
 function pwUndoProcess(color,shape,maxKg){
@@ -4254,7 +4259,6 @@ function renderProduction(){
   })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0)};
   // Render
   const canEdit = prodView==='shape';
-  pwVisibleItems=[];
   const cardHtml=rows.map(([key,g])=>{
     const lines=g.items.map(i=>{
       const amt=`<b style="color:${pwMode==='process'?'#92400e':'#d97706'};min-width:46px;text-align:right">${i.net.toFixed(2)}</b>`;
@@ -4266,7 +4270,7 @@ function renderProduction(){
           const full=i.net.toFixed(2);
           const staged=pwProcInputs[id];
           const isFull=staged!==undefined && staged!=='' && Math.abs(parseFloat(staged)-i.net)<0.005;
-          pwVisibleItems.push({id,kg:i.net});
+          pwItemIndex[id]={color:i.color,shape:i.shape,kg:i.net};
           ctrl=`<input type="checkbox" id="ptk-${id}" ${isFull?'checked':''} title="Tick = send full ${full} kg"
               onchange="pwTickFull('${id}',${i.net},this.checked)"
               style="width:14px;height:14px;cursor:pointer;flex:none;accent-color:#4338ca">`
