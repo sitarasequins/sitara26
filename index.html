@@ -698,6 +698,7 @@ tr:hover td{background:#f8faff}
       <span id="pw-send-wrap" style="display:flex;align-items:center;gap:8px">
         <span style="width:1px;height:20px;background:#eee"></span>
         <button id="pw-send-btn" onclick="pwCommitProcess()" style="padding:5px 13px;border:1.5px solid #4338ca;border-radius:7px;font-size:11px;font-weight:700;color:#fff;background:#4338ca;cursor:pointer">➜ Send to Process</button>
+        <button onclick="pwTickAll()" style="padding:5px 10px;border:1.5px solid #4338ca;border-radius:7px;font-size:10.5px;color:#4338ca;background:#fff;cursor:pointer;font-weight:600">☑ Tick All</button>
         <button onclick="pwClearProcInputs()" style="padding:5px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:10.5px;color:#888;background:#fff;cursor:pointer">Clear</button>
         <span id="pw-send-note" style="font-size:10.5px;color:#4338ca"></span>
       </span>
@@ -3713,10 +3714,50 @@ let pwMode='pending';  // 'pending' = To Give (labour list) | 'process' = In Pro
 // Staged per-item kg typed into the To Give boxes, keyed by party||color||shape.
 // Not persisted — cleared once committed via Send to Process.
 let pwProcInputs={};
+let pwVisibleItems=[]; // [{id, kg}] for every editable line currently rendered — used by Tick All
+function pwTickAll(){
+  if(!pwVisibleItems.length){alert('Nothing to tick.');return;}
+  const allOn=pwVisibleItems.every(v=>{
+    const s=parseFloat(pwProcInputs[v.id]);
+    return !isNaN(s) && Math.abs(s-v.kg)<0.005;
+  });
+  if(allOn) pwProcInputs={};                                    // toggle off
+  else pwVisibleItems.forEach(v=>{ pwProcInputs[v.id]=v.kg.toFixed(2); });
+  renderProduction();
+}
 function pwKeyId(color,shape){
   return (color+'||'+shape).replace(/[^A-Za-z0-9]/g,'_');
 }
 function pwClearProcInputs(){ pwProcInputs={}; renderProduction(); }
+// Tick = stage the FULL pending qty for this item. Untick = clear it.
+function pwTickFull(id,fullKg,checked){
+  if(checked) pwProcInputs[id]=fullKg.toFixed(2);
+  else delete pwProcInputs[id];
+  const box=document.getElementById('pin-'+id);
+  if(box){
+    box.value=checked?fullKg.toFixed(2):'';
+    box.style.borderColor=checked?'#4338ca':'#e5e7eb';
+    box.style.background=checked?'#f5f7ff':'';
+    box.style.color=checked?'#3730a3':'';
+    box.style.fontWeight=checked?'700':'';
+  }
+  pwUpdateSendNote();
+}
+// Keep the tick in sync when the qty is typed by hand (no re-render, so focus is kept).
+function pwSyncTick(id,fullKg){
+  const cb=document.getElementById('ptk-'+id);
+  if(!cb) return;
+  const v=parseFloat(pwProcInputs[id]);
+  cb.checked = !isNaN(v) && Math.abs(v-fullKg)<0.005;
+  const box=document.getElementById('pin-'+id);
+  if(box){
+    const on=!!pwProcInputs[id];
+    box.style.borderColor=on?'#4338ca':'#e5e7eb';
+    box.style.background=on?'#f5f7ff':'';
+    box.style.color=on?'#3730a3':'';
+    box.style.fontWeight=on?'700':'';
+  }
+}
 function pwUpdateSendNote(){
   const n=Object.values(pwProcInputs).filter(v=>parseFloat(v)>0).length;
   const t=Object.values(pwProcInputs).reduce((s,v)=>s+(parseFloat(v)||0),0);
@@ -3961,52 +4002,55 @@ function pwClearFilters(){
 function printPendingGrid(){
   const d=window._gridPrintData;
   if(!d||!d.rows.length){alert(prodView==='partygrid'?'Nothing to print — check at least one party.':'Nothing to print');return;}
-  const title=(pwMode==='process'?'IN PROCESS — ':'PENDING — ')+d.mode;
   const isParty = prodView==='partygrid';
-  let bodyHtml, headTitleSize, headMetaSize, headBorder, headMargin, footSize, footMargin;
+  const isSize  = prodView==='shape';
+  // NOTE: print layout uses TABLES, not CSS grid. Chrome cannot paginate a CSS
+  // grid reliably and pushes the whole grid to page 2, leaving page 1 blank.
+  // Tables break predictably between rows, so chunk cards into table rows.
+  const chunk=(arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
+
+  let cardHtml, perRow, cellPad;
   if(isParty){
-    // Party Grid: big text, 2 per row, exactly 4 parties per A4 page
-    const cardHtml=r=>`<div style="border:2px solid #555;padding:14px 18px;break-inside:avoid">
+    perRow=2; cellPad='0 7px 14px 0';
+    cardHtml=r=>`<div style="border:2px solid #555;padding:14px 18px">
       <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:8px">${r.key}${r.alias?'/'+r.alias:''}</div>
       ${r.items.map(i=>`<div style="font-size:18px;display:flex;justify-content:space-between;gap:10px;padding:4px 0"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
       <div style="font-size:18px;display:flex;justify-content:space-between;border-top:2px solid #999;margin-top:6px;padding-top:6px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
     </div>`;
-    const pages=[];
-    for(let i=0;i<d.rows.length;i+=4) pages.push(d.rows.slice(i,i+4));
-    bodyHtml=pages.map((pageRows,pi)=>
-      `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px${pi<pages.length-1?';page-break-after:always':''}">${pageRows.map(cardHtml).join('')}</div>`
-    ).join('');
-    headTitleSize='22px'; headMetaSize='16px'; headBorder='3px'; headMargin='14px'; footSize='16px'; footMargin='14px';
-  } else if(prodView==='shape'){
-    // Size Grid: worksheet for labour — each line gets an empty box to write
-    // the actual kg produced, mirroring the on-screen entry boxes.
-    const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
+  } else if(isSize){
+    // Size Grid = labour worksheet: write box for actual kg produced
+    perRow=4; cellPad='0 5px 5px 0';
+    cardHtml=r=>`<div style="border:1px solid #999;padding:4px 7px">
       <div style="font-weight:700;font-size:12px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:3px">${r.key}${r.alias?'/'+r.alias:''}</div>
-      ${r.items.map(i=>`<div style="font-size:10.5px;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:1.5px 0"><span>${i.label}</span><span style="display:flex;align-items:center;gap:4px;flex:none"><b style="min-width:38px;text-align:right">${i.net.toFixed(2)}</b><span style="display:inline-block;width:34px;height:13px;border:1px solid #666"></span></span></div>`).join('')}
+      ${r.items.map(i=>`<div style="font-size:10.5px;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:1.5px 0"><span>${i.label}</span><span style="display:flex;align-items:center;gap:4px;flex:none"><b style="min-width:38px;text-align:right">${i.net.toFixed(2)}</b><span style="display:inline-block;width:34px;height:12px;border:1px solid #666"></span></span></div>`).join('')}
       <div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:3px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-    </div>`).join('');
-    bodyHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">${cards}</div>`;
-    headTitleSize='14px'; headMetaSize='11px'; headBorder='2px'; headMargin='8px'; footSize='12px'; footMargin='8px';
+    </div>`;
   } else {
-    // Color Grid: original compact layout — 4 per row, flows freely (saves paper)
-    const cards=d.rows.map(r=>`<div style="border:1px solid #999;padding:4px 7px;break-inside:avoid">
+    perRow=4; cellPad='0 5px 5px 0';
+    cardHtml=r=>`<div style="border:1px solid #999;padding:4px 7px">
       <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
       ${r.items.map(i=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
       <div style="font-size:10px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:2px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-    </div>`).join('');
-    bodyHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">${cards}</div>`;
-    headTitleSize='14px'; headMetaSize='11px'; headBorder='2px'; headMargin='8px'; footSize='12px'; footMargin='8px';
+    </div>`;
   }
+
+  const colW=(100/perRow).toFixed(4)+'%';
+  const rowsOfCards=chunk(d.rows,perRow);
+  const trs=rowsOfCards.map((group,ri)=>{
+    // Party Grid: exactly 4 per page = 2 table rows, so break after every 2nd row
+    const brk=(isParty && ri%2===1 && ri<rowsOfCards.length-1) ? ';page-break-after:always' : '';
+    const tds=group.map(r=>`<td style="width:${colW};vertical-align:top;padding:${cellPad}">${cardHtml(r)}</td>`).join('');
+    const filler=group.length<perRow ? `<td style="width:${colW}"></td>`.repeat(perRow-group.length) : '';
+    return `<tr style="page-break-inside:avoid${brk}">${tds}${filler}</tr>`;
+  }).join('');
+
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-    body{font-family:Arial,sans-serif;margin:0;padding:0 8mm 8mm}
+    body{font-family:Arial,sans-serif;margin:0;padding:0}
     @page{size:A4;margin:5mm 8mm 8mm}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}
+    tr{page-break-inside:avoid}
   </style></head><body>
-    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:${headBorder} solid #000;padding-bottom:${isParty?'6px':'4px'};margin-bottom:${headMargin}">
-      <span style="font-size:${headTitleSize};font-weight:700">${title}</span>
-      <span style="font-size:${headMetaSize}">${fmtDate(today())} · Total: ${d.grandTotal.toFixed(2)} kg</span>
-    </div>
-    ${bodyHtml}
-    <div style="border-top:2px solid #000;margin-top:${footMargin};padding-top:${isParty?'6px':'4px'};font-size:${footSize};font-weight:700;text-align:right">GRAND TOTAL: ${d.grandTotal.toFixed(2)} kg</div>
+    <table><tbody>${trs}</tbody></table>
   </body></html>`;
   const win=window.open('','_blank','width=800,height=900');
   win.document.write(html);
@@ -4210,6 +4254,7 @@ function renderProduction(){
   })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0)};
   // Render
   const canEdit = prodView==='shape';
+  pwVisibleItems=[];
   const cardHtml=rows.map(([key,g])=>{
     const lines=g.items.map(i=>{
       const amt=`<b style="color:${pwMode==='process'?'#92400e':'#d97706'};min-width:46px;text-align:right">${i.net.toFixed(2)}</b>`;
@@ -4217,9 +4262,17 @@ function renderProduction(){
       if(canEdit && i.color && i.shape){
         const id=pwKeyId(i.color,i.shape);
         if(pwMode==='pending'){
-          ctrl=`<input id="pin-${id}" type="number" step="0.01" min="0" max="${i.net}" placeholder="0" value="${pwProcInputs[id]||''}"
-            oninput="pwProcInputs['${id}']=this.value;pwUpdateSendNote()"
-            style="width:54px;padding:2px 5px;border:1.5px solid ${pwProcInputs[id]?'#4338ca':'#e5e7eb'};border-radius:5px;font-size:11px;text-align:right;outline:none;${pwProcInputs[id]?'background:#f5f7ff;color:#3730a3;font-weight:700':''}">`;
+          // Tick = send the FULL pending qty. Or type a number for a partial qty.
+          const full=i.net.toFixed(2);
+          const staged=pwProcInputs[id];
+          const isFull=staged!==undefined && staged!=='' && Math.abs(parseFloat(staged)-i.net)<0.005;
+          pwVisibleItems.push({id,kg:i.net});
+          ctrl=`<input type="checkbox" id="ptk-${id}" ${isFull?'checked':''} title="Tick = send full ${full} kg"
+              onchange="pwTickFull('${id}',${i.net},this.checked)"
+              style="width:14px;height:14px;cursor:pointer;flex:none;accent-color:#4338ca">`
+            +`<input id="pin-${id}" type="number" step="0.01" min="0" max="${i.net}" placeholder="0" value="${staged||''}"
+            oninput="pwProcInputs['${id}']=this.value;pwSyncTick('${id}',${i.net});pwUpdateSendNote()"
+            style="width:54px;padding:2px 5px;border:1.5px solid ${staged?'#4338ca':'#e5e7eb'};border-radius:5px;font-size:11px;text-align:right;outline:none;${staged?'background:#f5f7ff;color:#3730a3;font-weight:700':''}">`;
         } else {
           ctrl=`<button onclick="pwUndoProcess('${i.color.replace(/'/g,"\\'")}','${i.shape.replace(/'/g,"\\'")}',${i.net})"
             style="font-size:9.5px;color:#b45309;border:1px solid #fde68a;border-radius:4px;padding:1px 5px;background:#fff;cursor:pointer">undo</button>`;
