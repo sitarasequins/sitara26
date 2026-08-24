@@ -4114,45 +4114,66 @@ function printPendingGrid(){
   if(!d||!d.rows.length){alert(isPartyLike?'Nothing to print — check at least one party.':'Nothing to print');return;}
   const isParty = isPartyLike;
   const isSize  = prodView==='shape';
+
+  // Party Grid cards vary hugely in height (a 2-line party next to a
+  // 30-line party), so a fixed cards-per-page table wastes paper: short
+  // cards leave blank space, tall cards overflow onto extra pages. Use a
+  // flowing CSS multi-column layout instead — Chrome paginates multi-column
+  // content across sheets correctly (unlike CSS grid), and break-inside:avoid
+  // keeps each card intact wherever it lands.
+  if(isParty){
+    const cardHtml=r=>{
+      if(!d.showBoth){
+        return `<div style="border:1.5px solid #555;padding:7px 9px;break-inside:avoid;margin-bottom:8px">
+          <div style="font-weight:700;font-size:13px;border-bottom:1px solid #999;padding-bottom:3px;margin-bottom:3px">${r.key}${r.alias?'/'+r.alias:''}</div>
+          ${(r.items||[]).map(i=>`<div style="font-size:10.5px;display:flex;justify-content:space-between;gap:6px;padding:1.5px 0"><span>${i.label}</span><b style="min-width:42px;text-align:right">${i.net.toFixed(2)}</b></div>`).join('')}
+          <div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px solid #999;margin-top:3px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
+        </div>`;
+      }
+      const procItems=(r.items||[]).filter(i=>(i.proc||0)>=0.01);
+      const giveItems=(r.items||[]).filter(i=>(i.net||0)>=0.01);
+      const line=(label,val)=>`<div style="font-size:10.5px;display:flex;justify-content:space-between;gap:6px;padding:1px 0"><span>${label}</span><b style="min-width:42px;text-align:right">${val.toFixed(2)}</b></div>`;
+      const hdr=t=>`<div style="font-size:9px;font-weight:800;letter-spacing:.04em;margin-top:4px;margin-bottom:1px;border-bottom:1px solid #ccc;padding-bottom:1px">${t}</div>`;
+      let body='';
+      if(procItems.length){
+        body+=hdr('IN PROCESS');
+        body+=procItems.map(i=>line(i.label,i.proc)).join('');
+        body+=`<div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:2px"><b>Sub</b><b>${(r.procTotal||0).toFixed(2)}</b></div>`;
+      }
+      if(giveItems.length){
+        body+=hdr('TO GIVE');
+        body+=giveItems.map(i=>line(i.label,i.net)).join('');
+        body+=`<div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:2px"><b>Sub</b><b>${r.total.toFixed(2)}</b></div>`;
+      }
+      if(!body) body='<div style="font-size:10px;color:#999">—</div>';
+      return `<div style="border:1.5px solid #555;padding:7px 9px;break-inside:avoid;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px;border-bottom:1px solid #999;padding-bottom:3px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
+        ${body}
+      </div>`;
+    };
+    const cardsHtml=d.rows.map(cardHtml).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+      body{font-family:Arial,sans-serif;margin:0;padding:0}
+      @page{size:A4;margin:5mm 8mm 8mm}
+      .partycols{column-count:3;column-gap:10px}
+    </style></head><body>
+      <div class="partycols">${cardsHtml}</div>
+    </body></html>`;
+    const win=window.open('','_blank','width=800,height=900');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(()=>{win.print();setTimeout(()=>win.close(),1000);},400);
+    return;
+  }
+
   // NOTE: print layout uses TABLES, not CSS grid. Chrome cannot paginate a CSS
   // grid reliably and pushes the whole grid to page 2, leaving page 1 blank.
   // Tables break predictably between rows, so chunk cards into table rows.
   const chunk=(arr,n)=>{const o=[];for(let i=0;i<arr.length;i+=n)o.push(arr.slice(i,i+n));return o;};
 
   let cardHtml, perRow, cellPad;
-  if(isParty){
-    perRow=2; cellPad='0 7px 14px 0';
-    cardHtml=r=>{
-      if(!d.showBoth){
-        // Classic Party Grid print: single column, as before
-        return `<div style="border:2px solid #555;padding:14px 18px">
-          <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:8px">${r.key}${r.alias?'/'+r.alias:''}</div>
-          ${(r.items||[]).map(i=>`<div style="font-size:18px;display:flex;justify-content:space-between;gap:10px;padding:4px 0"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
-          <div style="font-size:18px;display:flex;justify-content:space-between;border-top:2px solid #999;margin-top:6px;padding-top:6px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-        </div>`;
-      }
-      const procItems=(r.items||[]).filter(i=>(i.proc||0)>=0.01);
-      const giveItems=(r.items||[]).filter(i=>(i.net||0)>=0.01);
-      const line=(label,val)=>`<div style="font-size:17px;display:flex;justify-content:space-between;gap:10px;padding:3px 0"><span>${label}</span><b style="min-width:70px;text-align:right">${val.toFixed(2)}</b></div>`;
-      const hdr=t=>`<div style="font-size:13px;font-weight:800;letter-spacing:.05em;margin-top:8px;margin-bottom:2px;border-bottom:1px solid #bbb;padding-bottom:2px">${t}</div>`;
-      let body='';
-      if(procItems.length){
-        body+=hdr('IN PROCESS');
-        body+=procItems.map(i=>line(i.label,i.proc)).join('');
-        body+=`<div style="font-size:17px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:3px"><b>Sub</b><b style="min-width:70px;text-align:right">${(r.procTotal||0).toFixed(2)}</b></div>`;
-      }
-      if(giveItems.length){
-        body+=hdr('TO GIVE');
-        body+=giveItems.map(i=>line(i.label,i.net)).join('');
-        body+=`<div style="font-size:17px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:3px"><b>Sub</b><b style="min-width:70px;text-align:right">${r.total.toFixed(2)}</b></div>`;
-      }
-      if(!body) body='<div style="font-size:16px;color:#999">—</div>';
-      return `<div style="border:2px solid #555;padding:14px 18px">
-        <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:4px">${r.key}${r.alias?'/'+r.alias:''}</div>
-        ${body}
-      </div>`;
-    };
-  } else if(isSize){
+  if(isSize){
     // Size Grid = labour worksheet: write box for actual kg produced
     perRow=4; cellPad='0 5px 5px 0';
     cardHtml=r=>{
@@ -4175,12 +4196,10 @@ function printPendingGrid(){
 
   const colW=(100/perRow).toFixed(4)+'%';
   const rowsOfCards=chunk(d.rows,perRow);
-  const trs=rowsOfCards.map((group,ri)=>{
-    // Party Grid: exactly 4 per page = 2 table rows, so break after every 2nd row
-    const brk=(isParty && ri%2===1 && ri<rowsOfCards.length-1) ? ';page-break-after:always' : '';
+  const trs=rowsOfCards.map((group)=>{
     const tds=group.map(r=>`<td style="width:${colW};vertical-align:top;padding:${cellPad}">${cardHtml(r)}</td>`).join('');
     const filler=group.length<perRow ? `<td style="width:${colW}"></td>`.repeat(perRow-group.length) : '';
-    return `<tr style="page-break-inside:avoid${brk}">${tds}${filler}</tr>`;
+    return `<tr style="page-break-inside:avoid">${tds}${filler}</tr>`;
   }).join('');
 
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
