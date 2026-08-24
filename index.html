@@ -689,6 +689,7 @@ tr:hover td{background:#f8faff}
       <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
         <button id="pw-mode-pending" onclick="pwSetMode('pending')" style="padding:5px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#d97706;color:#fff">To Give</button>
         <button id="pw-mode-process" onclick="pwSetMode('process')" style="padding:5px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#fff;color:#888">In Process</button>
+        <button id="pw-mode-compiled" onclick="pwSetMode('compiled')" style="padding:5px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#fff;color:#888">Compiled</button>
       </div>
       <span style="width:1px;height:20px;background:#eee"></span>
       <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
@@ -3885,13 +3886,14 @@ function pwUndoProcess(color,shape,maxKg){
 function pwSetMode(m){
   pwProcInputs={};   // staged qty is per-view; never carry it across a context change
   pwMode=m;
-  const pb=document.getElementById('pw-mode-pending'), xb=document.getElementById('pw-mode-process');
+  const pb=document.getElementById('pw-mode-pending'), xb=document.getElementById('pw-mode-process'), cb=document.getElementById('pw-mode-compiled');
   if(pb&&xb){
     pb.style.background=m==='pending'?'#d97706':'#fff'; pb.style.color=m==='pending'?'#fff':'#888';
     xb.style.background=m==='process'?'#92400e':'#fff'; xb.style.color=m==='process'?'#fff':'#888';
   }
+  if(cb){ cb.style.background=m==='compiled'?'#4338ca':'#fff'; cb.style.color=m==='compiled'?'#fff':'#888'; }
   const t=document.getElementById('pw-title');
-  if(t) t.textContent = m==='process' ? 'In Process' : 'Pending Work';
+  if(t) t.textContent = m==='process' ? 'In Process' : m==='compiled' ? 'Compiled' : 'Pending Work';
   renderProduction();
 }
 // ── Party checkboxes (Party Grid only): uncheck a party to skip it when
@@ -4085,10 +4087,32 @@ function pwClearFilters(){
 }
 
 
+// Compact two-section card (IN PROCESS then TO GIVE) used by Color/Size print in Compiled mode
+function compiledSmallCard(r){
+  const procItems=(r.items||[]).filter(i=>(i.proc||0)>=0.01);
+  const giveItems=(r.items||[]).filter(i=>(i.net||0)>=0.01);
+  const line=(label,val)=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${label}</span><b>${val.toFixed(2)}</b></div>`;
+  const hdr=t=>`<div style="font-size:8.5px;font-weight:800;letter-spacing:.04em;margin-top:3px;border-bottom:1px solid #ddd">${t}</div>`;
+  let body='';
+  if(procItems.length){
+    body+=hdr('IN PROCESS')+procItems.map(i=>line(i.label,i.proc)).join('');
+    body+=`<div style="font-size:10px;display:flex;justify-content:space-between;border-top:1px dashed #bbb"><b>Sub</b><b>${(r.procTotal||0).toFixed(2)}</b></div>`;
+  }
+  if(giveItems.length){
+    body+=hdr('TO GIVE')+giveItems.map(i=>line(i.label,i.net)).join('');
+    body+=`<div style="font-size:10px;display:flex;justify-content:space-between;border-top:1px dashed #bbb"><b>Sub</b><b>${r.total.toFixed(2)}</b></div>`;
+  }
+  if(!body) body='<div style="font-size:10px;color:#999">—</div>';
+  return `<div style="border:1px solid #999;padding:4px 7px">
+    <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:1px">${r.key}${r.alias?'/'+r.alias:''}</div>
+    ${body}
+  </div>`;
+}
 function printPendingGrid(){
   const d=window._gridPrintData;
-  if(!d||!d.rows.length){alert(prodView==='partygrid'?'Nothing to print — check at least one party.':'Nothing to print');return;}
-  const isParty = prodView==='partygrid';
+  const isPartyLike = (prodView==='partygrid');
+  if(!d||!d.rows.length){alert(isPartyLike?'Nothing to print — check at least one party.':'Nothing to print');return;}
+  const isParty = isPartyLike;
   const isSize  = prodView==='shape';
   // NOTE: print layout uses TABLES, not CSS grid. Chrome cannot paginate a CSS
   // grid reliably and pushes the whole grid to page 2, leaving page 1 blank.
@@ -4098,26 +4122,55 @@ function printPendingGrid(){
   let cardHtml, perRow, cellPad;
   if(isParty){
     perRow=2; cellPad='0 7px 14px 0';
-    cardHtml=r=>`<div style="border:2px solid #555;padding:14px 18px">
-      <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:8px">${r.key}${r.alias?'/'+r.alias:''}</div>
-      ${r.items.map(i=>`<div style="font-size:18px;display:flex;justify-content:space-between;gap:10px;padding:4px 0"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
-      <div style="font-size:18px;display:flex;justify-content:space-between;border-top:2px solid #999;margin-top:6px;padding-top:6px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-    </div>`;
+    cardHtml=r=>{
+      if(!d.showBoth){
+        // Classic Party Grid print: single column, as before
+        return `<div style="border:2px solid #555;padding:14px 18px">
+          <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:8px">${r.key}${r.alias?'/'+r.alias:''}</div>
+          ${(r.items||[]).map(i=>`<div style="font-size:18px;display:flex;justify-content:space-between;gap:10px;padding:4px 0"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
+          <div style="font-size:18px;display:flex;justify-content:space-between;border-top:2px solid #999;margin-top:6px;padding-top:6px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
+        </div>`;
+      }
+      const procItems=(r.items||[]).filter(i=>(i.proc||0)>=0.01);
+      const giveItems=(r.items||[]).filter(i=>(i.net||0)>=0.01);
+      const line=(label,val)=>`<div style="font-size:17px;display:flex;justify-content:space-between;gap:10px;padding:3px 0"><span>${label}</span><b style="min-width:70px;text-align:right">${val.toFixed(2)}</b></div>`;
+      const hdr=t=>`<div style="font-size:13px;font-weight:800;letter-spacing:.05em;margin-top:8px;margin-bottom:2px;border-bottom:1px solid #bbb;padding-bottom:2px">${t}</div>`;
+      let body='';
+      if(procItems.length){
+        body+=hdr('IN PROCESS');
+        body+=procItems.map(i=>line(i.label,i.proc)).join('');
+        body+=`<div style="font-size:17px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:3px"><b>Sub</b><b style="min-width:70px;text-align:right">${(r.procTotal||0).toFixed(2)}</b></div>`;
+      }
+      if(giveItems.length){
+        body+=hdr('TO GIVE');
+        body+=giveItems.map(i=>line(i.label,i.net)).join('');
+        body+=`<div style="font-size:17px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:3px"><b>Sub</b><b style="min-width:70px;text-align:right">${r.total.toFixed(2)}</b></div>`;
+      }
+      if(!body) body='<div style="font-size:16px;color:#999">—</div>';
+      return `<div style="border:2px solid #555;padding:14px 18px">
+        <div style="font-weight:700;font-size:22px;border-bottom:2px solid #999;padding-bottom:6px;margin-bottom:4px">${r.key}${r.alias?'/'+r.alias:''}</div>
+        ${body}
+      </div>`;
+    };
   } else if(isSize){
     // Size Grid = labour worksheet: write box for actual kg produced
     perRow=4; cellPad='0 5px 5px 0';
-    cardHtml=r=>`<div style="border:1px solid #999;padding:4px 7px">
+    cardHtml=r=>{
+      if(d.showBoth) return compiledSmallCard(r);
+      return `<div style="border:1px solid #999;padding:4px 7px">
       <div style="font-weight:700;font-size:12px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:3px">${r.key}${r.alias?'/'+r.alias:''}</div>
       ${r.items.map(i=>`<div style="font-size:10.5px;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:1.5px 0"><span>${i.label}</span><span style="display:flex;align-items:center;gap:4px;flex:none"><b style="min-width:38px;text-align:right">${i.net.toFixed(2)}</b><span style="display:inline-block;width:34px;height:12px;border:1px solid #666"></span></span></div>`).join('')}
       <div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:3px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-    </div>`;
+    </div>`;};
   } else {
     perRow=4; cellPad='0 5px 5px 0';
-    cardHtml=r=>`<div style="border:1px solid #999;padding:4px 7px">
+    cardHtml=r=>{
+      if(d.showBoth) return compiledSmallCard(r);
+      return `<div style="border:1px solid #999;padding:4px 7px">
       <div style="font-weight:700;font-size:11px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
       ${r.items.map(i=>`<div style="font-size:10px;display:flex;justify-content:space-between;gap:6px"><span>${i.label}</span><b>${i.net.toFixed(2)}</b></div>`).join('')}
       <div style="font-size:10px;display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:2px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
-    </div>`;
+    </div>`;};
   }
 
   const colW=(100/perRow).toFixed(4)+'%';
@@ -4184,12 +4237,14 @@ function renderProduction(){
 
   // ── Build raw item cards ──────────────────────────────────────
   let rawCards=[];
+  window._pwBoth={};
   let totalOrderKg=0, totalInvKg=0, totalNetKg=0;
   let grandDueKg=0, grandProcKg=0;
   Object.entries(ordByItem).forEach(([key,v])=>{
     const [color,shape]=key.split('||');
     const pendingParties={};
     let itemNet=0;
+    let itemProcNet=0;
     let itemInvKg=0;
     let itemDue=0, itemProc=0;
     Object.entries(v.parties).forEach(([party,pData])=>{
@@ -4199,17 +4254,32 @@ function renderProduction(){
       itemInvKg+=s.totalSupplied;
       // Split Due into In-Process vs To-Give; pick whichever this tab shows
       const inProc=toGiveFor(party,color,shape).inProc;
-      const pNet = pwMode==='process' ? inProc : Math.max(0,due-inProc);
-      if(pNet>=1.0){ pendingParties[party]=pNet; itemNet+=pNet; }
+      const toGive=Math.max(0,due-inProc);
+      // Party Grid shows BOTH columns, so include the row if EITHER bucket has qty
+      const isCompiled = pwMode==='compiled';
+      const pNet = isCompiled ? Math.max(toGive,inProc)
+                 : (pwMode==='process' ? inProc : toGive);
+      if(pNet>=1.0){
+        // Compiled keeps the row even if one bucket is 0.
+        pendingParties[party]= isCompiled ? toGive : pNet;
+        itemNet += isCompiled ? toGive : pNet;
+        itemProcNet += inProc;
+      }
+      // keep BOTH figures so Party Grid can show To Give + In Process together
+      if(toGive>=1.0 || inProc>=1.0){
+        if(!window._pwBoth) window._pwBoth={};
+        window._pwBoth[party+'||'+color+'||'+shape]={toGive,inProc,due};
+      }
       itemDue+=due; itemProc+=inProc;
     });
     totalOrderKg+=v.totalKg;
     totalInvKg+=itemInvKg;
     grandDueKg+=itemDue; grandProcKg+=itemProc;
-    if(itemNet>=1.0){
+    const cardHasQty = (pwMode==='compiled') ? (itemNet>=1.0 || itemProcNet>=1.0) : (itemNet>=1.0);
+    if(cardHasQty){
       totalNetKg+=itemNet;
       const sortedDates=[...v.dates].sort();
-      rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,parties:pendingParties,dates:v.dates,
+      rawCards.push({color,shape,ordKg:v.totalKg,invKg:itemInvKg,net:itemNet,proc:itemProcNet,parties:pendingParties,dates:v.dates,
         minDate:sortedDates[0]||'',maxDate:sortedDates[sortedDates.length-1]||'',orderCount:v.dates.length});
     }
   });
@@ -4291,30 +4361,35 @@ function renderProduction(){
   if(prodView==='partygrid'){
     rawCards.forEach(c=>{
       Object.entries(c.parties).forEach(([party,kg])=>{
-        if(!groups[party])groups[party]={total:0,items:[],minDate:c.minDate};
-        groups[party].total+=kg;
+        const both=(window._pwBoth||{})[party+'||'+c.color+'||'+c.shape]||{toGive:kg,inProc:0};
+        if(!groups[party])groups[party]={total:0,procTotal:0,items:[],minDate:c.minDate};
+        groups[party].total += kg;
+        groups[party].procTotal += both.inProc;
         groups[party].items.push({sortA:c.color,sortB:c.shape,
           party, color:c.color, shape:c.shape,
           label:`${c.color}${pwAlias(c.color)?`<span style="color:#999;font-size:9px">/${pwAlias(c.color)}</span>`:''} ${c.shape}`,
-          plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''} ${c.shape}`, net:kg});
+          plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''} ${c.shape}`,
+          net:kg, proc:both.inProc});
         if(c.minDate<groups[party].minDate)groups[party].minDate=c.minDate;
       });
     });
   } else if(prodView==='shape'){
     rawCards.forEach(c=>{
-      if(!groups[c.shape])groups[c.shape]={total:0,items:[],minDate:c.minDate};
+      if(!groups[c.shape])groups[c.shape]={total:0,procTotal:0,items:[],minDate:c.minDate};
       groups[c.shape].total+=c.net;
+      groups[c.shape].procTotal+=(c.proc||0);
       groups[c.shape].items.push({sortA:c.color,sortB:'',
         color:c.color, shape:c.shape,
         label:`${c.color}${pwAlias(c.color)?`<span style="color:#999;font-size:9px">/${pwAlias(c.color)}</span>`:''}`,
-        plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''}`, net:c.net});
+        plainLabel:`${c.color}${pwAlias(c.color)?'/'+pwAlias(c.color):''}`, net:c.net, proc:(c.proc||0)});
       if(c.minDate<groups[c.shape].minDate)groups[c.shape].minDate=c.minDate;
     });
   } else { // color
     rawCards.forEach(c=>{
-      if(!groups[c.color])groups[c.color]={total:0,items:[],minDate:c.minDate,alias:pwAlias(c.color)};
+      if(!groups[c.color])groups[c.color]={total:0,procTotal:0,items:[],minDate:c.minDate,alias:pwAlias(c.color)};
       groups[c.color].total+=c.net;
-      groups[c.color].items.push({sortA:c.shape,sortB:'',label:c.shape,plainLabel:c.shape,net:c.net,isShape:true});
+      groups[c.color].procTotal+=(c.proc||0);
+      groups[c.color].items.push({sortA:c.shape,sortB:'',label:c.shape,plainLabel:c.shape,net:c.net,proc:(c.proc||0),color:c.color,shape:c.shape,isShape:true});
       if(c.minDate<groups[c.color].minDate)groups[c.color].minDate=c.minDate;
     });
   }
@@ -4334,11 +4409,14 @@ function renderProduction(){
     });
   });
   // Save for A4 print (skip parties unchecked above, partygrid mode only)
-  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwDateMode==='today'?' (Today)':'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
+  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwMode==='compiled'?' (Compiled)':'') + (pwDateMode==='today'?' (Today)':'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
   window._gridPrintData={mode:printTitle,rows:printRows.map(([key,g])=>({
     key, alias:g.alias||'', total:g.total,
-    items:g.items.map(i=>({label:i.plainLabel,net:i.net}))
-  })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0)};
+    items:g.items.map(i=>({label:i.plainLabel,net:i.net,proc:i.proc||0})),
+    procTotal:g.procTotal||0
+  })), grandTotal:printRows.reduce((s,[,g])=>s+g.total,0),
+      grandProc:printRows.reduce((s,[,g])=>s+(g.procTotal||0),0),
+      showBoth: pwMode==='compiled'};
   // Render
   const canEdit = prodView==='shape';
   pwItemIndex={};   // only lines rendered below may be committed
@@ -4372,10 +4450,31 @@ function renderProduction(){
       : `${key}${g.alias?`<span style="color:#888;font-size:10px;font-weight:500">/${g.alias}</span>`:''}`;
     const cardBg = pwMode==='process' ? '#fffdf5' : '#fff';
     const cardBorder = pwMode==='process' ? '#fde68a' : '#eee';
+    let body;
+    if(pwMode==='compiled'){
+      // Two sections: IN PROCESS first, then TO GIVE
+      const procItems=g.items.filter(i=>(i.proc||0)>=0.01);
+      const giveItems=g.items.filter(i=>(i.net||0)>=0.01);
+      const secLine=(label,val,color)=>`<div style="font-size:11px;display:flex;justify-content:space-between;align-items:center;padding:1px 0;gap:6px"><span>${label}</span><b style="color:${color};min-width:46px;text-align:right;flex:none">${val.toFixed(2)}</b></div>`;
+      const secHdr=(txt,color)=>`<div style="font-size:9px;font-weight:800;letter-spacing:.04em;color:${color};margin-top:4px;margin-bottom:1px">${txt}</div>`;
+      body='';
+      if(procItems.length){
+        body+=secHdr('IN PROCESS','#92400e');
+        body+=procItems.map(i=>secLine(i.label,i.proc,'#92400e')).join('');
+        body+=`<div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;padding-top:2px"><b style="color:#92400e">Sub</b><b style="color:#92400e;min-width:46px;text-align:right">${(g.procTotal||0).toFixed(2)}</b></div>`;
+      }
+      if(giveItems.length){
+        body+=secHdr('TO GIVE','#d97706');
+        body+=giveItems.map(i=>secLine(i.label,i.net,'#d97706')).join('');
+        body+=`<div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;padding-top:2px"><b style="color:#d97706">Sub</b><b style="color:#d97706;min-width:46px;text-align:right">${g.total.toFixed(2)}</b></div>`;
+      }
+      if(!body) body='<div style="font-size:11px;color:#bbb">—</div>';
+    } else {
+      body=lines+`<div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>`;
+    }
     return `<div style="border:1px solid ${cardBorder};border-radius:8px;padding:6px 9px;background:${cardBg}${prodView==='partygrid'&&pwExcludedParties.has(key)?';opacity:0.45':''}">
       <div style="font-weight:700;font-size:12px;border-bottom:1.5px solid #f0f0f0;padding-bottom:3px;margin-bottom:3px">${titleInner}</div>
-      ${lines}
-      <div style="font-size:11px;display:flex;justify-content:space-between;border-top:1.5px solid #f0f0f0;margin-top:3px;padding:3px 9px 0;background:#fffbeb;margin-left:-9px;margin-right:-9px"><b>Total</b><b>${g.total.toFixed(2)}</b></div>
+      ${body}
     </div>`;
   }).join('');
   const hint = pwMode==='process'
