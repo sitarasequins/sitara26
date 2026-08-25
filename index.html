@@ -695,6 +695,9 @@ tr:hover td{background:#f8faff}
       <div style="display:flex;border:1.5px solid #ddd;border-radius:7px;overflow:hidden">
         <button id="pw-date-till" onclick="pwSetDateMode('till')" style="padding:5px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#1e40af;color:#fff">Till Date</button>
         <button id="pw-date-today" onclick="pwSetDateMode('today')" style="padding:5px 14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#888">Today</button>
+        <label id="pw-date-pick-wrap" style="display:flex;align-items:center;gap:5px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;background:#fff;color:#888;border-left:1.5px solid #ddd">
+          📅 <input id="pw-date-pick" type="date" onchange="pwSetCustomDate(this.value)" style="border:none;background:transparent;font-size:11px;font-weight:600;color:inherit;outline:none;padding:0;width:108px">
+        </label>
       </div>
       <span id="pw-send-wrap" style="display:flex;align-items:center;gap:8px">
         <span style="width:1px;height:20px;background:#eee"></span>
@@ -3908,17 +3911,32 @@ function pwClearExcluded(){ pwExcludedParties=new Set(); renderProduction(); }
 function pwCheckAll(){ pwExcludedParties=new Set(); renderProduction(); }
 function pwUncheckAll(){ pwExcludedParties=new Set(pwAllPartyNames); renderProduction(); }
 // ── Date filter for Pending Work: 'till' = all pending as of today (normal),
-// 'today' = only items that have at least one order placed today. ──
+// 'today' = only items that have at least one order placed today,
+// 'date'  = only items that have at least one order placed on pwCustomDate. ──
 let pwDateMode='till';
+let pwCustomDate=null;
+function pwDateButtonRefs(){
+  return {
+    till:document.getElementById('pw-date-till'),
+    today:document.getElementById('pw-date-today'),
+    pickWrap:document.getElementById('pw-date-pick-wrap')
+  };
+}
 function pwSetDateMode(v){
   pwProcInputs={};   // staged qty is per-view; never carry it across a context change
   pwDateMode=v;
-  const tillBtn=document.getElementById('pw-date-till'), todayBtn=document.getElementById('pw-date-today');
-  if(tillBtn&&todayBtn){
-    tillBtn.style.background=v==='till'?'#1e40af':'#fff';   tillBtn.style.color=v==='till'?'#fff':'#888';
-    todayBtn.style.background=v==='today'?'#1e40af':'#fff'; todayBtn.style.color=v==='today'?'#fff':'#888';
+  const {till,today:todayBtn,pickWrap}=pwDateButtonRefs();
+  if(till&&todayBtn&&pickWrap){
+    till.style.background=v==='till'?'#1e40af':'#fff';       till.style.color=v==='till'?'#fff':'#888';
+    todayBtn.style.background=v==='today'?'#1e40af':'#fff';  todayBtn.style.color=v==='today'?'#fff':'#888';
+    pickWrap.style.background=v==='date'?'#1e40af':'#fff';   pickWrap.style.color=v==='date'?'#fff':'#888';
   }
   renderProduction();
+}
+function pwSetCustomDate(v){
+  if(!v) return;
+  pwCustomDate=v;
+  pwSetDateMode('date');   // pwSetDateMode already re-renders + restyles the till/today/date buttons
 }
 
 function setToday(){ renderProduction(); }
@@ -4224,7 +4242,7 @@ function renderProduction(){
   // ordered[color||shape] = {totalKg, parties:{name->{kg, earliestDate}}, dates:[]}
   const ordByItem={};
   const pwToday=today();
-  orders.filter(o=>o.status==='Pending' && (pwDateMode==='till' || o.date===pwToday)).forEach(o=>{
+  orders.filter(o=>o.status==='Pending' && (pwDateMode==='till' || (pwDateMode==='today' && o.date===pwToday) || (pwDateMode==='date' && o.date===pwCustomDate))).forEach(o=>{
     o.items.filter(i=>!i.cancelled).forEach(i=>{
       const key=i.color+'||'+i.shape;
       if(!ordByItem[key])ordByItem[key]={totalKg:0,parties:{},dates:[]};
@@ -4355,7 +4373,7 @@ function renderProduction(){
 
   if(!rawCards.length){
     if(!orders.filter(o=>o.status==='Pending').length) emptyEl.style.display='block';
-    summary.innerHTML=`<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0">${pwDateMode==='today'?"No pending items with today's orders.":'No pending items match.'}</div>`;
+    summary.innerHTML=`<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0">${pwDateMode==='today'?"No pending items with today's orders.":pwDateMode==='date'?`No pending items with orders on ${pwCustomDate}.`:'No pending items match.'}</div>`;
     window._gridPrintData=null;
     return;
   }
@@ -4428,7 +4446,7 @@ function renderProduction(){
     });
   });
   // Save for A4 print (skip parties unchecked above, partygrid mode only)
-  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwMode==='compiled'?' (Compiled)':'') + (pwDateMode==='today'?' (Today)':'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
+  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwMode==='compiled'?' (Compiled)':'') + (pwDateMode==='today'?' (Today)':pwDateMode==='date'?` (${pwCustomDate})`:'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
   window._gridPrintData={mode:printTitle,rows:printRows.map(([key,g])=>({
     key, alias:g.alias||'', total:g.total,
     items:g.items.map(i=>({label:i.plainLabel,net:i.net,proc:i.proc||0})),
@@ -4500,7 +4518,7 @@ function renderProduction(){
     ? (canEdit?'With labour now · <b>undo</b> pushes qty back to To Give':'With labour now · switch to Size Grid to undo')
     : (canEdit?'Type kg → <b>Send to Process</b> · spread across parties, oldest order first':'Switch to Size Grid to send qty to process');
   summary.innerHTML=
-    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders":'Till date'} · ${hint}</div>`+
+    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders":pwDateMode==='date'?`Only items with orders on ${pwCustomDate}`:'Till date'} · ${hint}</div>`+
     `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${prodView==='partygrid'?'200px':prodView==='shape'?'215px':'170px'},1fr));gap:6px">${cardHtml}</div>`;
 }
 
