@@ -4140,41 +4140,55 @@ function printPendingGrid(){
   // content across sheets correctly (unlike CSS grid), and break-inside:avoid
   // keeps each card intact wherever it lands.
   if(isParty){
+    // Row layout: the quantity used to be pushed to the far right edge of the
+    // card (space-between), leaving a big gap after short labels. Instead give
+    // the label a fixed column width so quantities still line up with each
+    // other but sit right next to the label.
+    const LBL='display:inline-block;min-width:88px';
+    const VAL='min-width:34px;text-align:right;margin-left:6px';
+    const row=(label,val,fs)=>`<div style="font-size:${fs}px;display:flex;padding:1px 0;white-space:nowrap"><span style="${LBL}">${label}</span><b style="${VAL}">${val.toFixed(2)}</b></div>`;
+    const totRow=(label,val,extra)=>`<div style="font-size:9.5px;display:flex;${extra};margin-top:2px;padding-top:2px;white-space:nowrap"><b style="${LBL}">${label}</b><b style="${VAL}">${val.toFixed(2)}</b></div>`;
     const cardHtml=r=>{
       if(!d.showBoth){
-        return `<div style="border:1.5px solid #555;padding:7px 9px;break-inside:avoid;margin-bottom:8px">
-          <div style="font-weight:700;font-size:13px;border-bottom:1px solid #999;padding-bottom:3px;margin-bottom:3px">${r.key}${r.alias?'/'+r.alias:''}</div>
-          ${(r.items||[]).map(i=>`<div style="font-size:10.5px;display:flex;justify-content:space-between;gap:6px;padding:1.5px 0"><span>${i.label}</span><b style="min-width:42px;text-align:right">${i.net.toFixed(2)}</b></div>`).join('')}
-          <div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px solid #999;margin-top:3px;padding-top:2px"><b>TOT</b><b>${r.total.toFixed(2)}</b></div>
+        return `<div style="border:1.5px solid #555;padding:5px 6px;break-inside:avoid;margin-bottom:7px">
+          <div style="font-weight:700;font-size:11.5px;border-bottom:1px solid #999;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
+          ${(r.items||[]).map(i=>row(i.label,i.net,9.5)).join('')}
+          ${totRow('TOT',r.total,'border-top:1px solid #999')}
         </div>`;
       }
       const procItems=(r.items||[]).filter(i=>(i.proc||0)>=0.01);
       const giveItems=(r.items||[]).filter(i=>(i.net||0)>=0.01);
-      const line=(label,val)=>`<div style="font-size:10.5px;display:flex;justify-content:space-between;gap:6px;padding:1px 0"><span>${label}</span><b style="min-width:42px;text-align:right">${val.toFixed(2)}</b></div>`;
-      const hdr=t=>`<div style="font-size:9px;font-weight:800;letter-spacing:.04em;margin-top:4px;margin-bottom:1px;border-bottom:1px solid #ccc;padding-bottom:1px">${t}</div>`;
+      const hdr=t=>`<div style="font-size:8.5px;font-weight:800;letter-spacing:.04em;margin-top:3px;margin-bottom:1px;border-bottom:1px solid #ccc;padding-bottom:1px">${t}</div>`;
       let body='';
       if(procItems.length){
         body+=hdr('IN PROCESS');
-        body+=procItems.map(i=>line(i.label,i.proc)).join('');
-        body+=`<div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:2px"><b>Sub</b><b>${(r.procTotal||0).toFixed(2)}</b></div>`;
+        body+=procItems.map(i=>row(i.label,i.proc,9.5)).join('');
+        body+=totRow('Sub',(r.procTotal||0),'border-top:1px dashed #999');
       }
       if(giveItems.length){
         body+=hdr('TO GIVE');
-        body+=giveItems.map(i=>line(i.label,i.net)).join('');
-        body+=`<div style="font-size:10.5px;display:flex;justify-content:space-between;border-top:1px dashed #999;padding-top:2px"><b>Sub</b><b>${r.total.toFixed(2)}</b></div>`;
+        body+=giveItems.map(i=>row(i.label,i.net,9.5)).join('');
+        body+=totRow('Sub',r.total,'border-top:1px dashed #999');
       }
-      if(!body) body='<div style="font-size:10px;color:#999">—</div>';
-      return `<div style="border:1.5px solid #555;padding:7px 9px;break-inside:avoid;margin-bottom:8px">
-        <div style="font-weight:700;font-size:13px;border-bottom:1px solid #999;padding-bottom:3px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
+      if(!body) body='<div style="font-size:9px;color:#999">—</div>';
+      return `<div style="border:1.5px solid #555;padding:5px 6px;break-inside:avoid;margin-bottom:7px">
+        <div style="font-weight:700;font-size:11.5px;border-bottom:1px solid #999;padding-bottom:2px;margin-bottom:2px">${r.key}${r.alias?'/'+r.alias:''}</div>
         ${body}
       </div>`;
     };
     const cardsHtml=d.rows.map(cardHtml).join('');
+    const printDateStr = fmtDate(today())+' '+today().split('-')[0];
+    // ALL edge spacing lives in body padding, NOT @page margin: Chrome's print
+    // dialog Margins setting overrides @page, which was clipping both side
+    // edges and slicing the date off the top. Padding is page content, so the
+    // printer can never override it. @page keeps a small top/bottom margin as
+    // a fallback for continuation pages only.
     const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-      body{font-family:Arial,sans-serif;margin:0;padding:0}
-      @page{size:A4;margin:5mm 8mm 8mm}
-      .partycols{column-count:3;column-gap:10px}
+      body{font-family:Arial,sans-serif;margin:0;padding:7mm 10mm 0}
+      @page{size:A4;margin:6mm 0}
+      .partycols{column-count:4;column-gap:8px}
     </style></head><body>
+      <div style="text-align:center;font-size:13px;font-weight:700;padding-bottom:3px;margin-bottom:7px;border-bottom:1.5px solid #333">${printDateStr}</div>
       <div class="partycols">${cardsHtml}</div>
     </body></html>`;
     const win=window.open('','_blank','width=800,height=900');
