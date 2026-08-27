@@ -150,7 +150,8 @@ tr:hover td{background:#f8faff}
 .item-hdr{display:grid;grid-template-columns:1fr 1fr 58px 58px 60px 24px;gap:5px;margin-bottom:4px}
 .item-hdr span{font-size:11px;color:#999;font-weight:500}
 .item-row{display:grid;grid-template-columns:1fr 1fr 62px 62px 24px;gap:5px;margin-bottom:6px;align-items:center}
-.item-row-o{display:flex;gap:5px;margin-bottom:5px;align-items:center;position:relative}
+.item-row-o{display:flex;gap:5px;margin-bottom:5px;align-items:center;position:relative;flex-wrap:wrap}
+.oi-dupwarn{flex:0 0 100%;font-size:11px;font-weight:600;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:3px 8px;margin-top:3px;line-height:1.35}
 .item-row-o .oi-shape{width:82px;flex-shrink:0;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;background:#f0f7ff;font-weight:600}
 .item-row-o .oi-color-wrap{flex:1;position:relative}
 .item-row-o .oi-color{width:100%;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;box-sizing:border-box}
@@ -2731,10 +2732,81 @@ function addItemRow(item=null){
     </div>
     <input class="oi-kg" type="number" min="0" step="0.01" value="${kg}" placeholder="kg"
       oninput="updateOrderFormTotal()" onkeydown="oKgKey(event,this)">
-    <button class="item-del" onclick="this.closest('.item-row-o').remove();updateOrderFormTotal()">✕</button>`;
+    <button class="item-del" onclick="this.closest('.item-row-o').remove();updateOrderFormTotal()">✕</button>
+    <div class="oi-dupwarn" style="display:none"></div>`;
   c.appendChild(d);
+  checkDupRow(d);
   updateOrderFormTotal();
   return d;
+}
+
+// ── Duplicate-order warning ──────────────────────────────────────────────
+// A party often re-states an order that is still pending, and it gets supplied
+// twice. Software can't tell "10 kg more" from "the same 10 kg" — so surface
+// what is already outstanding at entry time and let the user decide.
+// Mirrors renderProduction's net logic exactly (ordered − invoiced-on-or-after
+// the earliest pending order date) so the number matches Pending Work.
+function pendingForPartyItem(party,color,shape,excludeOid){
+  const p=(party||'').trim().toLowerCase();
+  const c=(color||'').trim().toUpperCase();
+  const s=(shape||'').trim().toLowerCase();
+  if(!p||!c||!s) return null;
+  const key=c+'||'+s;
+  let orderedKg=0, earliestDate=null;
+  const refs=[];
+  orders.forEach(o=>{
+    if(o.status!=='Pending') return;
+    if((o.party||'').trim().toLowerCase()!==p) return;
+    if(excludeOid!=null && o.id===excludeOid) return;
+    (o.items||[]).forEach(i=>{
+      if(i.cancelled) return;
+      if(((i.color||'').trim().toUpperCase()+'||'+(i.shape||'').trim().toLowerCase())!==key) return;
+      const kg=parseFloat(i.kg)||0;
+      if(kg<=0) return;
+      orderedKg+=kg;
+      if(earliestDate===null||o.date<earliestDate) earliestDate=o.date;
+      refs.push({invNum:o.invNum,date:o.date,kg});
+    });
+  });
+  if(orderedKg<=0) return null;
+  // Subtract only invoices on/after the earliest pending order date, so an old
+  // completed cycle doesn't mask a genuinely outstanding new order.
+  let invKg=0;
+  invoices.forEach(inv=>{
+    if((inv.party||'').trim().toLowerCase()!==p) return;
+    if(earliestDate && inv.date < earliestDate) return;
+    (inv.items||[]).forEach(i=>{
+      if(((i.color||'').trim().toUpperCase()+'||'+(i.shape||'').trim().toLowerCase())!==key) return;
+      invKg+=parseFloat(i.kg)||0;
+    });
+  });
+  const net=orderedKg-invKg;
+  if(net<0.005) return null;
+  return {net,refs};
+}
+function checkDupRow(row){
+  if(!row) return;
+  const warn=row.querySelector('.oi-dupwarn');
+  if(!warn) return;
+  const partyEl=document.getElementById('f-party');
+  const res=pendingForPartyItem(
+    partyEl?partyEl.value:'',
+    (row.querySelector('.oi-color')||{}).value,
+    (row.querySelector('.oi-shape')||{}).value,
+    (typeof editOid!=='undefined'?editOid:null)
+  );
+  if(!res){ warn.style.display='none'; warn.innerHTML=''; return; }
+  const detail=res.refs
+    .sort((a,b)=>(a.date<b.date?-1:1))
+    .slice(0,3)
+    .map(r=>`${invLabel(r.invNum)} ${fmtDate(r.date)} · ${r.kg.toFixed(2)}`)
+    .join('  |  ');
+  const more=res.refs.length>3?`  +${res.refs.length-3} more`:'';
+  warn.innerHTML=`⚠ ${res.net.toFixed(2)} kg already pending — ${detail}${more}`;
+  warn.style.display='block';
+}
+function refreshDupWarnings(){
+  document.querySelectorAll('#items-container .item-row-o').forEach(checkDupRow);
 }
 // Remember the shape from the last filled row so new rows inherit it
 function getLastShape(){
@@ -2765,6 +2837,7 @@ function oPickShape(el,val){
   const row=el.closest('.item-row-o');
   row.querySelector('.oi-shape').value=val;
   hideDrops();
+  checkDupRow(row);
   row.querySelector('.oi-color').focus();
 }
 function oShapeKey(e,inp){
@@ -2835,6 +2908,7 @@ function oPickColor(el,val){
   const row=el.closest('.item-row-o');
   row.querySelector('.oi-color').value=val;
   hideDrops();
+  checkDupRow(row);
   row.querySelector('.oi-kg').focus();
 }
 function oCreateColor(val,el){
@@ -2873,13 +2947,13 @@ function oColorKey(e,inp){
     // exact NAME match wins first, then exact alias
     let exact=colors.find(c=>colorName(c).toLowerCase()===q);
     if(!exact) exact=colors.find(c=>colorAlias(c).toLowerCase()===q);
-    if(exact){e.preventDefault();inp.value=colorName(exact);hideDrops();inp.closest('.item-row-o').querySelector('.oi-kg').focus();return;}
+    if(exact){e.preventDefault();inp.value=colorName(exact);hideDrops();checkDupRow(inp.closest('.item-row-o'));inp.closest('.item-row-o').querySelector('.oi-kg').focus();return;}
     // highlighted option?
     const sel=drop&&drop.style.display==='block'?drop.querySelector('.oi-opt.sel'):null;
     if(sel){e.preventDefault();sel.dispatchEvent(new Event('mousedown'));return;}
     // single partial match -> accept it
     const partial=colors.filter(c=>colorName(c).toLowerCase().includes(q)||colorAlias(c).toLowerCase().includes(q));
-    if(partial.length===1){e.preventDefault();inp.value=colorName(partial[0]);hideDrops();inp.closest('.item-row-o').querySelector('.oi-kg').focus();return;}
+    if(partial.length===1){e.preventDefault();inp.value=colorName(partial[0]);hideDrops();checkDupRow(inp.closest('.item-row-o'));inp.closest('.item-row-o').querySelector('.oi-kg').focus();return;}
     // multiple or none -> do NOT auto-create; keep list open
     e.preventDefault();
     oColorList(inp);
@@ -2972,6 +3046,14 @@ function updateOrderFormTotal(){
   if(oc) oc.addEventListener('keydown', geKeyNav);
   if(ic) ic.addEventListener('keydown', geKeyNav);
   if(oc) oc.addEventListener('input', updateOrderFormTotal);
+  // Duplicate warning: re-check the edited row as the user types, and every row
+  // when the party changes (the whole comparison basis moves with the party).
+  if(oc) oc.addEventListener('input', e=>{
+    const row=e.target.closest && e.target.closest('.item-row-o');
+    if(row) checkDupRow(row);
+  });
+  const pf=document.getElementById('f-party');
+  if(pf){ pf.addEventListener('input', refreshDupWarnings); pf.addEventListener('change', refreshDupWarnings); }
   if(oc) oc.addEventListener('click', e=>{ if(e.target.matches('.item-del')) setTimeout(updateOrderFormTotal,0); });
 })();
 function resetOrderForm(){
@@ -4234,12 +4316,16 @@ function printPendingGrid(){
     return `<tr style="page-break-inside:avoid">${tds}${filler}</tr>`;
   }).join('');
 
+  // Same approach as the Party Grid above: edge spacing goes in body padding,
+  // which the print dialog's Margins setting cannot override.
+  const gridDateStr = fmtDate(today())+' '+today().split('-')[0];
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-    body{font-family:Arial,sans-serif;margin:0;padding:0}
-    @page{size:A4;margin:5mm 8mm 8mm}
+    body{font-family:Arial,sans-serif;margin:0;padding:7mm 10mm 0}
+    @page{size:A4;margin:6mm 0}
     table{width:100%;border-collapse:collapse;table-layout:fixed}
     tr{page-break-inside:avoid}
   </style></head><body>
+    <div style="text-align:center;font-size:13px;font-weight:700;padding-bottom:3px;margin-bottom:7px;border-bottom:1.5px solid #333">${gridDateStr}</div>
     <table><tbody>${trs}</tbody></table>
   </body></html>`;
   const win=window.open('','_blank','width=800,height=900');
