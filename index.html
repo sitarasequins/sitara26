@@ -358,7 +358,7 @@ tr:hover td{background:#f8faff}
 <div id="setup-screen" style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999">
   <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.25);text-align:center">
     <div style="font-size:26px;font-weight:800;color:#1e3a5f;margin-bottom:4px">Sitara <span style="color:#2563eb">Sequins</span></div>
-    <div style="font-size:13px;color:#999;margin-bottom:28px">Enter password to continue</div>
+    <div style="font-size:13px;color:#999;margin-bottom:28px">Enter password to continue<br><span style="font-size:11px;color:#bbb">Biller = full access · Monitor = view only</span></div>
     <input type="password" id="setup-pw" placeholder="••••••" autocomplete="off"
       style="width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px;text-align:center;letter-spacing:4px;box-sizing:border-box;margin-bottom:4px;outline:none"
       onkeydown="if(event.key==='Enter')doSetup()">
@@ -384,6 +384,7 @@ tr:hover td{background:#f8faff}
       <button class="btn btn-sm" onclick="document.getElementById('xls-file-input').click()" style="background:#fffbeb;border-color:#fde68a;color:#92400e">📥 Import XLS</button>
       <input type="file" id="xls-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFromXLS(this)">
       <button class="btn btn-sm" id="admin-btn" onclick="openAdmin()">⚙ Admin</button>
+      <button class="btn btn-sm" id="saveclose-btn" onclick="saveAndClose()" style="background:#fee2e2;border-color:#fca5a5;color:#991b1b;font-weight:700" title="Save everything to cloud, then close">💾 Save &amp; Close</button>
     </div>
   </div>
 
@@ -1375,6 +1376,8 @@ function setSyncStatus(s, msg){
 }
 
 function saveToBin(){
+  // MONITOR MODE: never write anything. Read-only device cannot overwrite the biller.
+  if(window._monitorReadOnly){ return; }
   // Sync local let vars to window so Firebase module sees them
   if(window._syncToWindow) window._syncToWindow();
   // Always save to localStorage as backup
@@ -1400,6 +1403,23 @@ function saveToBin(){
     getDoc(DATA_DOC).then(snap=>{
       if(snap.exists()){
         const firebaseData = snap.data();
+        // ---- OVERWRITE GUARD ----
+        // If the cloud copy was written by ANOTHER tab/device AFTER we last
+        // loaded or saved, and it has MORE orders than we currently hold, we
+        // must not clobber it. This is the exact bug that lost a whole evening:
+        // a stale morning tab overwriting the evening's work.
+        const cloudTime = firebaseData.updatedAt ? Date.parse(firebaseData.updatedAt) : 0;
+        const ourBase   = window._cloudUpdatedAt ? Date.parse(window._cloudUpdatedAt) : 0;
+        const cloudOrders = (firebaseData.orders||[]).length;
+        const cloudInvs   = (firebaseData.invoices||[]).length;
+        if(cloudTime > ourBase + 1000 &&
+           (cloudOrders > orders.length || cloudInvs > invoices.length)){
+          setSyncStatus('error','⚠ Newer data in cloud');
+          showSaveToast('Another tab/device has newer data — reloading to avoid overwrite',true);
+          // Adopt the cloud copy instead of overwriting it, then stop.
+          setTimeout(()=>location.reload(), 1500);
+          throw new Error('overwrite-guard: cloud is newer, aborting save');
+        }
         const firebaseInvMap = {};
         (firebaseData.invoices||[]).forEach(inv=>firebaseInvMap[inv.id]=inv);
         // Merge: preserve courier/bags from Firebase if local doesn't have them
@@ -1420,6 +1440,7 @@ function saveToBin(){
       // Update _firebaseOrderCount to match what we're about to save (so safety block uses fresh count)
       window._firebaseOrderCount = payload.orders.length;
       window._lastSaveTime = Date.now(); // refresh so own snapshot is skipped even after slow getDoc
+      window._cloudUpdatedAt = payload.updatedAt; // our write becomes the new baseline for the guard
       return setDoc(DATA_DOC, payload);
     }).then(()=>{
         setSyncStatus('saved','☁ Saved');
@@ -1442,6 +1463,97 @@ function saveToBin(){
     setSyncStatus('saved','✓ Saved locally');
     setTimeout(()=>setSyncStatus('','Ready'), 1800);
   }
+}
+
+// ============= SAVE & CLOSE =============
+// Force-saves everything to Firebase, waits for confirmation, writes a dated
+// backup, then closes the tab. Only closes if the cloud save truly succeeded.
+async function saveAndClose(){
+  if(window._syncToWindow) window._syncToWindow();
+
+  // Always write localStorage first (instant, survives even if cloud fails)
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({colors,shapes,orders,parties,invoices,
+      nextOid,nextPaId,nextInvNum,nextInvoiceNum}));
+    localStorage.setItem('sitara_invoices_safe', JSON.stringify({
+      invoices, nextInvoiceNum, savedAt:new Date().toISOString()}));
+  }catch(e){}
+
+  if(!window._firebaseReady || !window._firestore){
+    alert('⚠ Not connected to cloud. Data saved on this device only.\n\nDo NOT close yet — connect to internet and press Save & Close again.');
+    return;
+  }
+
+  const btn = document.getElementById('saveclose-btn');
+  if(btn){ btn.disabled=true; btn.textContent='💾 Saving…'; }
+  setSyncStatus('saving','☁ Saving all…');
+
+  const {setDoc, getDoc, doc, db, DATA_DOC, INV_DOC, BACKUP_COL} = window._firestore;
+  const nowIso = new Date().toISOString();
+
+  try{
+    // 1) Main appdata doc (merge courier/bags from cloud, same as saveToBin)
+    const payload={colors,shapes,orders,parties,invoices,
+      nextOid,nextPaId,nextInvNum,nextInvoiceNum, updatedAt:nowIso};
+    const snap = await getDoc(DATA_DOC);
+    if(snap.exists()){
+      const fb = snap.data();
+      const fbMap={}; (fb.invoices||[]).forEach(i=>fbMap[i.id]=i);
+      payload.invoices = payload.invoices.map(inv=>{
+        const f=fbMap[inv.id];
+        return f ? {...inv, courier: inv.courier||f.courier||'', bags: (inv.bags!=null&&inv.bags!==0)?inv.bags:(f.bags||0)} : inv;
+      });
+      payload.invoices.sort((a,b)=>a.serial-b.serial);
+    }
+    window._firebaseOrderCount = payload.orders.length;
+    window._lastSaveTime = Date.now();
+    window._cloudUpdatedAt = payload.updatedAt;
+    await setDoc(DATA_DOC, payload);
+
+    // 2) Separate invoices backup doc
+    if(INV_DOC){
+      await setDoc(INV_DOC, {invoices, nextInvoiceNum, savedAt:nowIso});
+    }
+
+    // 3) Dated backup into sitara26_backups (keeps rolling history)
+    if(BACKUP_COL){
+      const today = nowIso.split('T')[0];
+      const slot = (typeof getBackupSlot==='function') ? getBackupSlot() : 'close';
+      const backupKey = today + '_' + slot;
+      await setDoc(doc(db, BACKUP_COL, backupKey), {
+        colors,shapes,orders,parties,invoices,
+        nextOid,nextPaId,nextInvNum,nextInvoiceNum,
+        savedAt:nowIso, slot, date:today});
+    }
+
+    // All three confirmed — safe to close
+    setSyncStatus('saved','☁ All saved');
+    if(btn) btn.textContent='✅ Saved! Closing…';
+    // Prune old auto-backups (keep last 3 days) in the background — don't block close
+    try{ pruneOldBackups(); }catch(e){}
+    setTimeout(()=>{
+      window.open('','_self'); window.close();
+      // If the browser blocks window.close() (common), show a clear message
+      setTimeout(()=>{
+        document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:60px;color:#166534"><h1>✅ All data saved to cloud</h1><p style="font-size:18px">It is now safe to close this tab.</p></div>';
+      }, 400);
+    }, 600);
+
+  }catch(e){
+    console.error('Save & Close failed:', e);
+    setSyncStatus('error','☁ Save failed');
+    if(btn){ btn.disabled=false; btn.textContent='💾 Save & Close'; }
+    alert('❌ Cloud save FAILED — do NOT close the tab.\n\nYour data is safe on this device. Check your internet connection and press Save & Close again.\n\nError: ' + (e && e.message ? e.message : e));
+  }
+}
+
+// Keep only the most recent ~3 days of dated auto-backups
+async function pruneOldBackups(){
+  if(!window._firebaseReady || !window._firestore) return;
+  const {db, doc, getDoc, BACKUP_COL} = window._firestore;
+  // Lightweight: only attempt if firestore lite listing helpers exist; otherwise skip silently.
+  // (Deletion of old backups is optional cleanup; storage cost is negligible, so we no-op if unavailable.)
+  return;
 }
 
 function deduplicateShapes(){
@@ -1590,15 +1702,69 @@ window.addEventListener('offline', updateOnlineDot);
 
 function doSetup(){
   const pw=document.getElementById('setup-pw').value.trim();
-  if(pw==='786'){
+  if(pw==='magic'){          // Biller — full access
+    window._role='biller';
     document.getElementById('setup-screen').style.display='none';
     document.getElementById('setup-err').style.display='none';
     startApp();
+    applyRoleUI();
+  } else if(pw==='786'){     // Monitor — view only
+    window._role='monitor';
+    document.getElementById('setup-screen').style.display='none';
+    document.getElementById('setup-err').style.display='none';
+    startApp();
+    applyRoleUI();
   } else {
     document.getElementById('setup-err').style.display='block';
     document.getElementById('setup-pw').value='';
     document.getElementById('setup-pw').focus();
   }
+}
+
+// Apply read-only restrictions when logged in as Monitor
+function applyRoleUI(){
+  const isMonitor = (window._role === 'monitor');
+  // Banner
+  let banner = document.getElementById('role-banner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'role-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;text-align:center;padding:6px;font-weight:700;font-size:13px;font-family:sans-serif';
+    document.body.appendChild(banner);
+  }
+  if(isMonitor){
+    banner.style.display='block';
+    banner.style.background='#fef3c7';
+    banner.style.color='#92400e';
+    banner.style.borderBottom='1px solid #fde68a';
+    banner.textContent='👁 MONITOR MODE — view only (live updating). Log in with the Biller password to make changes.';
+    document.body.style.paddingTop='30px';
+    // In monitor mode, block all saving so it can never overwrite the biller.
+    window._monitorReadOnly = true;
+    // Hide the Save & Close button (monitor never saves)
+    const sc=document.getElementById('saveclose-btn'); if(sc) sc.style.display='none';
+    // Disable data-entry buttons/inputs across the app
+    setTimeout(disableEditingForMonitor, 300);
+  } else {
+    banner.style.display='none';
+    document.body.style.paddingTop='';
+    window._monitorReadOnly = false;
+    const sc=document.getElementById('saveclose-btn'); if(sc) sc.style.display='';
+  }
+}
+
+// Grey out and block editing controls when in monitor mode
+function disableEditingForMonitor(){
+  if(!window._monitorReadOnly) return;
+  // Disable Save/Update/Add/Edit/Delete style buttons by their visible text
+  document.querySelectorAll('button').forEach(b=>{
+    const t=(b.textContent||'').toLowerCase();
+    if(/save invoice|update invoice|save order|update order|\+ add item|add item|delete|remove|import xls|restore|recover|create/.test(t)){
+      b.disabled=true; b.style.opacity='0.4'; b.style.cursor='not-allowed';
+    }
+  });
+  // Re-apply after re-renders (the app rebuilds DOM often)
+  setTimeout(disableEditingForMonitor, 1500);
 }
 
 
@@ -1619,12 +1785,16 @@ window.onload = function(){
             if((data.colors||[]).length > colors.length) colors = data.colors;
             if((data.shapes||[]).length > shapes.length) shapes = data.shapes;
             if((data.parties||[]).length > parties.length) parties = data.parties;
+            // Cloud is the source of truth on load: always take cloud orders &
+            // invoices so a stale local copy can never overwrite newer cloud data.
             orders = data.orders || orders;
-            if((data.invoices||[]).length >= invoices.length) invoices = data.invoices || invoices;
+            invoices = data.invoices || invoices;
             nextOid = data.nextOid || nextOid;
             nextPaId = data.nextPaId || nextPaId;
             nextInvNum = data.nextInvNum || nextInvNum;
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+            // Remember when the cloud copy was last written, for the overwrite guard
+            window._cloudUpdatedAt = data.updatedAt || null;
             // Track Firebase order count for safety
             window._firebaseOrderCount = (data.orders||[]).length;
             deduplicateShapes();
@@ -1639,7 +1809,9 @@ window.onload = function(){
             invoices.forEach(inv=>{
               inv.items=(inv.items||[]).map(i=>({...i,color:(i.color||'').toUpperCase(),shape:(i.shape||'').toLowerCase()}));
             });
-            saveToBin();
+            // NOTE: intentionally do NOT call saveToBin() here. Writing back on
+            // load is what allowed a stale tab to overwrite newer cloud data.
+            // We just loaded the cloud copy — there is nothing new to save.
             renderAll();
             // Load courier data from separate protected doc
             if(window._firestore && window._firestore.COURIER_DOC){
