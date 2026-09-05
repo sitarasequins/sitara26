@@ -1492,59 +1492,65 @@ async function saveAndClose(){
   const nowIso = new Date().toISOString();
 
   try{
-    // 1) Main appdata doc (merge courier/bags from cloud, same as saveToBin)
-    const payload={colors,shapes,orders,parties,invoices,
-      nextOid,nextPaId,nextInvNum,nextInvoiceNum, updatedAt:nowIso};
+    // Build the merged invoice payload once (preserve courier/bags from cloud)
+    let mergedInvoices = invoices.slice();
     const snap = await getDoc(DATA_DOC);
     if(snap.exists()){
       const fb = snap.data();
       const fbMap={}; (fb.invoices||[]).forEach(i=>fbMap[i.id]=i);
-      payload.invoices = payload.invoices.map(inv=>{
+      mergedInvoices = mergedInvoices.map(inv=>{
         const f=fbMap[inv.id];
         return f ? {...inv, courier: inv.courier||f.courier||'', bags: (inv.bags!=null&&inv.bags!==0)?inv.bags:(f.bags||0)} : inv;
       });
-      payload.invoices.sort((a,b)=>a.serial-b.serial);
+      mergedInvoices.sort((a,b)=>a.serial-b.serial);
     }
+
+    // ===== STEP 1: DATED BACKUP FIRST (most important, written & verified before anything can close) =====
+    let backupKey = '(dated backup)';
+    if(BACKUP_COL){
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const today = nowIso.split('T')[0];
+      const hms = pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());
+      const slot = (typeof getBackupSlot==='function') ? getBackupSlot() : 'close';
+      backupKey = today + '_' + slot + '_' + hms;
+      const backupRef = doc(db, BACKUP_COL, backupKey);
+      await setDoc(backupRef, {
+        colors,shapes,orders,parties, invoices:mergedInvoices,
+        nextOid,nextPaId,nextInvNum,nextInvoiceNum,
+        savedAt:nowIso, slot, date:today, source:'save-and-close'});
+      // VERIFY: read it back. If it isn't really there, abort — do NOT close.
+      const check = await getDoc(backupRef);
+      if(!check.exists()){
+        throw new Error('Backup verification failed — '+backupKey+' did not persist. Not closing.');
+      }
+      window._lastBackupKey = backupKey;
+    }
+
+    // ===== STEP 2: main appdata doc =====
+    const payload={colors,shapes,orders,parties, invoices:mergedInvoices,
+      nextOid,nextPaId,nextInvNum,nextInvoiceNum, updatedAt:nowIso};
     window._firebaseOrderCount = payload.orders.length;
     window._lastSaveTime = Date.now();
     window._cloudUpdatedAt = payload.updatedAt;
     await setDoc(DATA_DOC, payload);
 
-    // 2) Separate invoices backup doc
+    // ===== STEP 3: separate invoices backup doc =====
     if(INV_DOC){
-      await setDoc(INV_DOC, {invoices, nextInvoiceNum, savedAt:nowIso});
+      await setDoc(INV_DOC, {invoices:mergedInvoices, nextInvoiceNum, savedAt:nowIso});
     }
 
-    // 3) Dated backup into sitara26_backups (keeps rolling history)
-    // Use a full timestamp key so EVERY Save & Close creates a distinct,
-    // visible backup entry (never overwrites a previous one).
-    if(BACKUP_COL){
-      const d = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      const today = nowIso.split('T')[0];                       // 2026-09-05
-      const hms = pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds()); // 143022
-      const slot = (typeof getBackupSlot==='function') ? getBackupSlot() : 'close';
-      const backupKey = today + '_' + slot + '_' + hms;         // 2026-09-05_afternoon_143022
-      await setDoc(doc(db, BACKUP_COL, backupKey), {
-        colors,shapes,orders,parties,invoices,
-        nextOid,nextPaId,nextInvNum,nextInvoiceNum,
-        savedAt:nowIso, slot, date:today, source:'save-and-close'});
-      window._lastBackupKey = backupKey;
-    }
-
-    // All three confirmed — safe to close
+    // All confirmed (backup verified by read-back) — safe to close.
     setSyncStatus('saved','☁ All saved');
     if(btn) btn.textContent='✅ Saved! Closing…';
-    // Prune old auto-backups (keep last 3 days) in the background — don't block close
-    try{ pruneOldBackups(); }catch(e){}
     const bkName = window._lastBackupKey || '(dated backup)';
+    // Wait a full 1.5s so any pending network flush completes before teardown.
     setTimeout(()=>{
       window.open('','_self'); window.close();
-      // If the browser blocks window.close() (common), show a clear message
       setTimeout(()=>{
-        document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:60px;color:#166534"><h1>✅ All data saved to cloud</h1><p style="font-size:18px">It is now safe to close this tab.</p><p style="font-size:14px;color:#666;margin-top:16px">Backup created:<br><b>'+bkName+'</b><br>in sitara26_backups</p></div>';
+        document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:60px;color:#166534"><h1>✅ All data saved to cloud</h1><p style="font-size:18px">It is now safe to close this tab.</p><p style="font-size:14px;color:#666;margin-top:16px">Backup created &amp; verified:<br><b>'+bkName+'</b><br>in sitara26_backups</p></div>';
       }, 400);
-    }, 600);
+    }, 1500);
 
   }catch(e){
     console.error('Save & Close failed:', e);
