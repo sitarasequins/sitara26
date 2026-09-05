@@ -5,7 +5,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCCowfX1uhxB4UMGmeV5fUhnw-KBGrrUxA",
@@ -24,7 +24,7 @@
   const BACKUP_COL  = 'sitara26_backups';
 
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL };
   window._firebaseReady = true;
 
   // Listen for real-time updates from other devices
@@ -1525,6 +1525,8 @@ async function saveAndClose(){
         throw new Error('Backup verification failed — '+backupKey+' did not persist. Not closing.');
       }
       window._lastBackupKey = backupKey;
+      // Clean up old backups (keep last 3 days) — fire in background, don't block close.
+      try{ pruneOldBackups(); }catch(e){}
     }
 
     // ===== STEP 2: main appdata doc =====
@@ -1560,13 +1562,40 @@ async function saveAndClose(){
   }
 }
 
-// Keep only the most recent ~3 days of dated auto-backups
+// Keep only the most recent 3 days of dated backups; delete everything older.
 async function pruneOldBackups(){
   if(!window._firebaseReady || !window._firestore) return;
-  const {db, doc, getDoc, BACKUP_COL} = window._firestore;
-  // Lightweight: only attempt if firestore lite listing helpers exist; otherwise skip silently.
-  // (Deletion of old backups is optional cleanup; storage cost is negligible, so we no-op if unavailable.)
-  return;
+  const { db, collection, getDocs, doc, deleteDoc, BACKUP_COL } = window._firestore;
+  if(!collection || !getDocs || !deleteDoc || !BACKUP_COL) return;
+  try{
+    // Build the set of dates to KEEP: today and the previous 2 days (3 days total).
+    const keep = new Set();
+    for(let i=0; i<3; i++){
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const pad = n => String(n).padStart(2,'0');
+      keep.add(d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())); // YYYY-MM-DD
+    }
+    const snap = await getDocs(collection(db, BACKUP_COL));
+    const toDelete = [];
+    snap.forEach(docSnap=>{
+      const id = docSnap.id;                 // e.g. 2026-09-05_afternoon_142930
+      const datePart = (id||'').slice(0,10); // YYYY-MM-DD
+      // Only delete things that clearly look like dated backups and are older than 3 days.
+      if(/^\d{4}-\d{2}-\d{2}/.test(datePart) && !keep.has(datePart)){
+        toDelete.push(id);
+      }
+    });
+    // Delete sequentially (small volume; keeps it gentle on the connection).
+    let deleted = 0;
+    for(const id of toDelete){
+      try{ await deleteDoc(doc(db, BACKUP_COL, id)); deleted++; }catch(e){ console.error('prune delete failed', id, e); }
+    }
+    if(deleted>0) console.log('Pruned old backups:', deleted, 'deleted;', 'kept dates:', [...keep].join(', '));
+    return deleted;
+  }catch(e){
+    console.error('pruneOldBackups failed:', e);
+  }
 }
 
 function deduplicateShapes(){
@@ -1691,6 +1720,8 @@ function startApp(){
   setTimeout(()=>{ if(window.renderAll) window.renderAll(); }, 4000);
   // Auto backup
   setTimeout(autoBackup, 6000);
+  // Clean up backups older than 3 days once per session (biller only, after data loads)
+  setTimeout(()=>{ if(window._role!=='monitor'){ try{ pruneOldBackups(); }catch(e){} } }, 12000);
 }
 
 function updateOnlineDot(){
