@@ -1516,14 +1516,20 @@ async function saveAndClose(){
     }
 
     // 3) Dated backup into sitara26_backups (keeps rolling history)
+    // Use a full timestamp key so EVERY Save & Close creates a distinct,
+    // visible backup entry (never overwrites a previous one).
     if(BACKUP_COL){
-      const today = nowIso.split('T')[0];
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const today = nowIso.split('T')[0];                       // 2026-09-05
+      const hms = pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds()); // 143022
       const slot = (typeof getBackupSlot==='function') ? getBackupSlot() : 'close';
-      const backupKey = today + '_' + slot;
+      const backupKey = today + '_' + slot + '_' + hms;         // 2026-09-05_afternoon_143022
       await setDoc(doc(db, BACKUP_COL, backupKey), {
         colors,shapes,orders,parties,invoices,
         nextOid,nextPaId,nextInvNum,nextInvoiceNum,
-        savedAt:nowIso, slot, date:today});
+        savedAt:nowIso, slot, date:today, source:'save-and-close'});
+      window._lastBackupKey = backupKey;
     }
 
     // All three confirmed — safe to close
@@ -1531,11 +1537,12 @@ async function saveAndClose(){
     if(btn) btn.textContent='✅ Saved! Closing…';
     // Prune old auto-backups (keep last 3 days) in the background — don't block close
     try{ pruneOldBackups(); }catch(e){}
+    const bkName = window._lastBackupKey || '(dated backup)';
     setTimeout(()=>{
       window.open('','_self'); window.close();
       // If the browser blocks window.close() (common), show a clear message
       setTimeout(()=>{
-        document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:60px;color:#166534"><h1>✅ All data saved to cloud</h1><p style="font-size:18px">It is now safe to close this tab.</p></div>';
+        document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:60px;color:#166534"><h1>✅ All data saved to cloud</h1><p style="font-size:18px">It is now safe to close this tab.</p><p style="font-size:14px;color:#666;margin-top:16px">Backup created:<br><b>'+bkName+'</b><br>in sitara26_backups</p></div>';
       }, 400);
     }, 600);
 
