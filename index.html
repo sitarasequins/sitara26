@@ -5,7 +5,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCCowfX1uhxB4UMGmeV5fUhnw-KBGrrUxA",
@@ -23,15 +23,150 @@
   const COURIER_DOC = doc(db, 'sitara26', 'courier_data');
   const BACKUP_COL  = 'sitara26_backups';
 
+  // ================= SPLIT (CHUNKED) STORAGE =================
+  // Firestore refuses any single document over 1,048,576 bytes. The big lists
+  // (orders, invoices, parties) are therefore split across "chunk" documents
+  // stored next to the main document, e.g.
+  //   sitara26/appdata                <- small: colors, shapes, counters, manifest
+  //   sitara26/appdata__orders_0      <- {items:[...], rev}
+  //   sitara26/appdata__invoices_0 ...
+  // All chunks + the main doc are written in ONE atomic batch, and every chunk
+  // carries the same `rev` as the main doc, so a reader can never stitch
+  // together half of one save and half of another.
+  // Old single-document data (no _chunks field) is still read as before.
+  const SPLIT_FIELDS    = ['orders','invoices','parties'];
+  const CHUNK_MAX_BYTES = 600000;   // target per chunk doc (hard limit 1,048,576)
+  const BATCH_MAX_BYTES = 8000000;  // per commit (Firestore request limit ~10 MiB)
+  const _enc = new TextEncoder();
+
+  // Firestore storage size of a value (per firebase.google.com/docs/firestore/storage-size)
+  function fsSize(v){
+    if(v===null || v===undefined) return 1;
+    switch(typeof v){
+      case 'string':  return _enc.encode(v).length + 1;
+      case 'number':  return 8;
+      case 'boolean': return 1;
+      case 'object': {
+        let s = 0;
+        if(Array.isArray(v)){ for(const x of v) s += fsSize(x); return s; }
+        for(const k in v){ if(v[k]!==undefined) s += _enc.encode(k).length + 1 + fsSize(v[k]); }
+        return s;
+      }
+      default: return 8;
+    }
+  }
+  function splitArray(arr){
+    const parts=[]; let cur=[], size=0;
+    for(const item of arr){
+      const s = fsSize(item);
+      if(cur.length && size + s > CHUNK_MAX_BYTES){ parts.push(cur); cur=[]; size=0; }
+      cur.push(item); size += s;
+    }
+    if(cur.length) parts.push(cur);
+    return parts;
+  }
+  function chunkRef(mainRef, field, i){
+    return doc(db, mainRef.parent.path, mainRef.id + '__' + field + '_' + i);
+  }
+  const wait = ms => new Promise(r=>setTimeout(r, ms));
+
+  // Write `payload` to mainRef, splitting big arrays into chunk docs.
+  // prevData (optional) = what the cloud held before, used to delete leftover chunks.
+  async function writeChunked(mainRef, payload, prevData){
+    const rev = Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+    const main = {}, manifest = {}, counts = {}, writes = [], deletes = [];
+    for(const k of Object.keys(payload)){
+      if(k==='_chunks' || k==='_rev' || k==='_counts') continue;
+      if(SPLIT_FIELDS.includes(k) && Array.isArray(payload[k])) continue;
+      if(payload[k]!==undefined) main[k] = payload[k];
+    }
+    for(const f of SPLIT_FIELDS){
+      if(!Array.isArray(payload[f])) continue;
+      const parts = splitArray(payload[f]);
+      manifest[f] = parts.length;
+      counts[f]   = payload[f].length;
+      parts.forEach((items,i)=>writes.push({ ref: chunkRef(mainRef,f,i), data: {items, rev, field:f, idx:i}, size: fsSize(items)+512 }));
+    }
+    const prevChunks = (prevData && prevData._chunks) || {};
+    for(const f of Object.keys(prevChunks)){
+      for(let i=(manifest[f]||0); i<(prevChunks[f]||0); i++) deletes.push(chunkRef(mainRef,f,i));
+    }
+    main._chunks = manifest; main._rev = rev; main._counts = counts;
+    const mainSize = fsSize(main);
+    if(mainSize > 1000000) throw new Error('Main document still too large after splitting ('+mainSize+' bytes)');
+
+    // Normally everything fits in one atomic batch. If data ever grows past
+    // ~8 MB it is committed in several batches; the main doc goes LAST and
+    // readers simply retry (rev check) until it lands.
+    const groups = []; let cur = [], size = 0;
+    for(const w of writes){
+      if(cur.length && (size + w.size > BATCH_MAX_BYTES || cur.length >= 400)){ groups.push(cur); cur=[]; size=0; }
+      cur.push(w); size += w.size;
+    }
+    groups.push(cur);
+    for(let g=0; g<groups.length; g++){
+      const batch = writeBatch(db);
+      groups[g].forEach(w=>batch.set(w.ref, w.data));
+      if(g === groups.length-1){
+        batch.set(mainRef, main);
+        deletes.forEach(r=>batch.delete(r));
+      }
+      await batch.commit();
+    }
+    return { rev, chunks: manifest, counts };
+  }
+
+  // Read mainRef and reassemble chunked arrays. Returns null if the doc doesn't exist.
+  // Pass an existing snapshot of mainRef to skip the first read.
+  async function loadChunked(mainRef, snap){
+    for(let attempt=0; attempt<6; attempt++){
+      if(!snap || attempt>0) snap = await getDoc(mainRef);
+      if(!snap.exists()) return null;
+      const data = snap.data();
+      if(!data || !data._chunks) return data;          // legacy single-document format
+      const fields = Object.keys(data._chunks);
+      const jobs = [];
+      fields.forEach(f=>{
+        for(let i=0; i<(data._chunks[f]||0); i++) jobs.push(getDoc(chunkRef(mainRef,f,i)).then(s=>({f,i,s})));
+      });
+      const results = await Promise.all(jobs);
+      const parts = {}; let ok = true;
+      for(const {f,i,s} of results){
+        const c = s.exists() ? s.data() : null;
+        if(!c || c.rev !== data._rev){ ok = false; break; }   // a save is mid-flight — retry
+        (parts[f] = parts[f] || [])[i] = c.items || [];
+      }
+      if(ok){
+        const out = {...data};
+        fields.forEach(f=>{ out[f] = [].concat(...(parts[f] || [])); });
+        return out;
+      }
+      await wait(400 * (attempt+1));
+    }
+    throw new Error('Could not read a consistent copy of '+mainRef.path+' (it kept changing). Please try again.');
+  }
+  // ===========================================================
+
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
   window._firebaseReady = true;
 
   // Listen for real-time updates from other devices
-  onSnapshot(DATA_DOC, (snap) => {
+  let _snapSeq = 0;
+  onSnapshot(DATA_DOC, async (snap) => {
     if(!snap.exists()) return;
-    const data = snap.data();
+    // Wait until the initial load has decided between this device's copy and
+    // the cloud copy — otherwise the first snapshot could overwrite unsaved local work.
+    if(!window._initialLoadDone) return;
+    // Our own not-yet-confirmed write — nothing new to merge
+    if(snap.metadata && snap.metadata.hasPendingWrites) return;
     // Skip if this snapshot is from our own recent save (within last 3 seconds)
+    if(window._lastSaveTime && (Date.now() - window._lastSaveTime) < 3000) return;
+    const seq = ++_snapSeq;
+    let data;
+    try{ data = await loadChunked(DATA_DOC, snap); }
+    catch(e){ console.error('Live update: could not load cloud data', e); return; }
+    if(seq !== _snapSeq) return;   // a newer snapshot arrived while we were loading
     if(window._lastSaveTime && (Date.now() - window._lastSaveTime) < 3000) return;
     if(data){
       window.colors       = data.colors       || window.colors;
@@ -1375,6 +1510,23 @@ function setSyncStatus(s, msg){
   el.textContent = msg;
 }
 
+// ---- "unsynced changes" marker ----
+// Set whenever this device tries a cloud save; removed once a save succeeds.
+// `base` = the cloud version (updatedAt) this device's data was built on.
+// On the next load, if the marker is still there and the cloud is still at
+// `base`, this device's copy is the newest and is kept (then uploaded)
+// instead of being replaced by the older cloud copy.
+function markUnsynced(){
+  try{
+    if(!localStorage.getItem('sitara_unsynced')){
+      localStorage.setItem('sitara_unsynced', JSON.stringify({since:new Date().toISOString(), base: window._cloudUpdatedAt || null}));
+    }
+  }catch(e){}
+}
+function markCloudSynced(){
+  try{ localStorage.removeItem('sitara_unsynced'); }catch(e){}
+}
+
 function saveToBin(){
   // MONITOR MODE: never write anything. Read-only device cannot overwrite the biller.
   if(window._monitorReadOnly){ return; }
@@ -1393,16 +1545,24 @@ function saveToBin(){
 
   // Save to Firebase if ready
   if(window._firebaseReady && window._firestore){
+    if(window._reloadingForGuard) return;
+    // Remember that this device holds changes the cloud hasn't confirmed yet.
+    // Cleared only after a successful cloud save (see markCloudSynced).
+    markUnsynced();
+    // One cloud save at a time; if another is requested meanwhile, run it right after.
+    if(window._saveInFlight){ window._saveQueued = true; return; }
+    window._saveInFlight = true;
     setSyncStatus('saving','☁ Saving...');
-    const {setDoc, getDoc, DATA_DOC, INV_DOC} = window._firestore;
+    const {writeChunked, loadChunked, DATA_DOC, INV_DOC} = window._firestore;
     const payload={colors,shapes,orders,parties,invoices,
       nextOid,nextPaId,nextInvNum,nextInvoiceNum,
       updatedAt: new Date().toISOString()};
     window._lastSaveTime = Date.now();
+    let firebaseData = null;
     // Before saving, fetch current Firebase data and preserve courier/bags
-    getDoc(DATA_DOC).then(snap=>{
-      if(snap.exists()){
-        const firebaseData = snap.data();
+    loadChunked(DATA_DOC).then(fbData=>{
+      firebaseData = fbData;
+      if(firebaseData){
         // ---- OVERWRITE GUARD ----
         // If the cloud copy was written by ANOTHER tab/device AFTER we last
         // loaded or saved, and it has MORE orders than we currently hold, we
@@ -1417,6 +1577,10 @@ function saveToBin(){
           setSyncStatus('error','⚠ Newer data in cloud');
           showSaveToast('Another tab/device has newer data — reloading to avoid overwrite',true);
           // Adopt the cloud copy instead of overwriting it, then stop.
+          // Keep this device's copy aside (just in case) and drop the unsynced marker.
+          try{ localStorage.setItem('sitara_conflict_backup', JSON.stringify({savedAt:new Date().toISOString(), colors,shapes,orders,parties,invoices,nextOid,nextPaId,nextInvNum,nextInvoiceNum})); }catch(e){}
+          try{ localStorage.removeItem('sitara_unsynced'); }catch(e){}
+          window._reloadingForGuard = true;
           setTimeout(()=>location.reload(), 1500);
           throw new Error('overwrite-guard: cloud is newer, aborting save');
         }
@@ -1440,25 +1604,34 @@ function saveToBin(){
       // Update _firebaseOrderCount to match what we're about to save (so safety block uses fresh count)
       window._firebaseOrderCount = payload.orders.length;
       window._lastSaveTime = Date.now(); // refresh so own snapshot is skipped even after slow getDoc
-      window._cloudUpdatedAt = payload.updatedAt; // our write becomes the new baseline for the guard
-      return setDoc(DATA_DOC, payload);
+      return writeChunked(DATA_DOC, payload, firebaseData).then(()=>{
+        // our write becomes the new baseline for the guard (only once it really landed)
+        window._cloudUpdatedAt = payload.updatedAt;
+        window._lastSaveTime = Date.now();
+      });
     }).then(()=>{
+        if(!window._saveQueued) markCloudSynced();
         setSyncStatus('saved','☁ Saved');
         setTimeout(()=>setSyncStatus('','☁ Cloud'), 2000);
         showSaveToast('Saved to cloud');
+        // Save invoices separately for extra protection
+        if(payload.invoices.length>0 && INV_DOC){
+          writeChunked(INV_DOC, {
+            invoices: payload.invoices, nextInvoiceNum,
+            savedAt: new Date().toISOString()
+          }).catch(e=>console.error('Invoice backup failed:',e));
+        }
       })
       .catch(e=>{
+        if(window._reloadingForGuard) return;
         setSyncStatus('error','☁ Save failed');
         showSaveToast('Save failed! Check connection',true);
         console.error(e);
+      })
+      .finally(()=>{
+        window._saveInFlight = false;
+        if(window._saveQueued && !window._reloadingForGuard){ window._saveQueued = false; saveToBin(); }
       });
-    // Save invoices separately for extra protection
-    if(invoices.length>0 && INV_DOC){
-      setDoc(INV_DOC, {
-        invoices, nextInvoiceNum,
-        savedAt: new Date().toISOString()
-      }).catch(e=>console.error('Invoice backup failed:',e));
-    }
   } else {
     setSyncStatus('saved','✓ Saved locally');
     setTimeout(()=>setSyncStatus('','Ready'), 1800);
@@ -1488,15 +1661,15 @@ async function saveAndClose(){
   if(btn){ btn.disabled=true; btn.textContent='💾 Saving…'; }
   setSyncStatus('saving','☁ Saving all…');
 
-  const {setDoc, getDoc, doc, db, DATA_DOC, INV_DOC, BACKUP_COL} = window._firestore;
+  const {doc, db, DATA_DOC, INV_DOC, BACKUP_COL, writeChunked, loadChunked} = window._firestore;
   const nowIso = new Date().toISOString();
+  markUnsynced();
 
   try{
     // Build the merged invoice payload once (preserve courier/bags from cloud)
     let mergedInvoices = invoices.slice();
-    const snap = await getDoc(DATA_DOC);
-    if(snap.exists()){
-      const fb = snap.data();
+    const fb = await loadChunked(DATA_DOC);
+    if(fb){
       const fbMap={}; (fb.invoices||[]).forEach(i=>fbMap[i.id]=i);
       mergedInvoices = mergedInvoices.map(inv=>{
         const f=fbMap[inv.id];
@@ -1515,13 +1688,13 @@ async function saveAndClose(){
       const slot = (typeof getBackupSlot==='function') ? getBackupSlot() : 'close';
       backupKey = today + '_' + slot + '_' + hms;
       const backupRef = doc(db, BACKUP_COL, backupKey);
-      await setDoc(backupRef, {
+      await writeChunked(backupRef, {
         colors,shapes,orders,parties, invoices:mergedInvoices,
         nextOid,nextPaId,nextInvNum,nextInvoiceNum,
         savedAt:nowIso, slot, date:today, source:'save-and-close'});
-      // VERIFY: read it back. If it isn't really there, abort — do NOT close.
-      const check = await getDoc(backupRef);
-      if(!check.exists()){
+      // VERIFY: read it back (all chunks). If it isn't really there, abort — do NOT close.
+      const check = await loadChunked(backupRef);
+      if(!check || (check.orders||[]).length !== orders.length || (check.invoices||[]).length !== mergedInvoices.length){
         throw new Error('Backup verification failed — '+backupKey+' did not persist. Not closing.');
       }
       window._lastBackupKey = backupKey;
@@ -1534,13 +1707,15 @@ async function saveAndClose(){
       nextOid,nextPaId,nextInvNum,nextInvoiceNum, updatedAt:nowIso};
     window._firebaseOrderCount = payload.orders.length;
     window._lastSaveTime = Date.now();
+    await writeChunked(DATA_DOC, payload, fb);
     window._cloudUpdatedAt = payload.updatedAt;
-    await setDoc(DATA_DOC, payload);
+    window._lastSaveTime = Date.now();
 
     // ===== STEP 3: separate invoices backup doc =====
     if(INV_DOC){
-      await setDoc(INV_DOC, {invoices:mergedInvoices, nextInvoiceNum, savedAt:nowIso});
+      await writeChunked(INV_DOC, {invoices:mergedInvoices, nextInvoiceNum, savedAt:nowIso});
     }
+    markCloudSynced();
 
     // All confirmed (backup verified by read-back) — safe to close.
     setSyncStatus('saved','☁ All saved');
@@ -1679,7 +1854,7 @@ function getBackupSlot(){
 
 function autoBackup(){
   if(!window._firebaseReady || !window._firestore) return;
-  const {db, doc, setDoc, getDoc, BACKUP_COL} = window._firestore;
+  const {db, doc, writeChunked, BACKUP_COL} = window._firestore;
   if(!BACKUP_COL) return;
 
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -1701,7 +1876,7 @@ function autoBackup(){
       slot: slot,
       date: today
     };
-    setDoc(backupDoc, payload)
+    writeChunked(backupDoc, payload)
       .then(()=>{
         localStorage.setItem(lsKey, '1');
         console.log('Auto backup saved:', backupKey);
@@ -1752,6 +1927,8 @@ function doSetup(){
     document.getElementById('setup-err').style.display='none';
     startApp();
     applyRoleUI();
+    // This device kept newer local data at load time — push it to the cloud now.
+    if(window._pendingUpload){ window._pendingUpload=false; saveAll(); }
   } else if(pw==='786'){     // Monitor — view only
     window._role='monitor';
     document.getElementById('setup-screen').style.display='none';
@@ -1813,22 +1990,73 @@ function disableEditingForMonitor(){
 
 
 
+// Decide on load whether this device's local copy is newer than the cloud.
+// Returns true = keep local orders/invoices, false = take the cloud copy.
+function shouldKeepLocalCopy(cloud){
+  let flag=null, safe=null;
+  try{ flag = JSON.parse(localStorage.getItem('sitara_unsynced')||'null'); }catch(e){}
+  try{ safe = JSON.parse(localStorage.getItem('sitara_invoices_safe')||'null'); }catch(e){}
+  const cloudAt = cloud.updatedAt || null;
+  const cO = (cloud.orders||[]).length, cI = (cloud.invoices||[]).length;
+  const lO = orders.length, lI = invoices.length;
+  const fmtT = t => t ? new Date(t).toLocaleString() : 'unknown';
+  const ask = (why, localAt) => {
+    const ok = confirm(
+      '⚠ '+why+'\n\n'+
+      'THIS DEVICE (saved '+fmtT(localAt)+'):\n   '+lO+' orders, '+lI+' invoices\n'+
+      'CLOUD (saved '+fmtT(cloudAt)+'):\n   '+cO+' orders, '+cI+' invoices\n\n'+
+      'OK = keep THIS DEVICE\'s data and upload it\n'+
+      'Cancel = use the CLOUD copy');
+    if(!ok){
+      try{ localStorage.setItem('sitara_conflict_backup', JSON.stringify({savedAt:new Date().toISOString(), colors,shapes,orders,parties,invoices,nextOid,nextPaId,nextInvNum,nextInvoiceNum})); }catch(e){}
+      try{ localStorage.removeItem('sitara_unsynced'); }catch(e){}
+    }
+    return ok;
+  };
+  if(!lO && !lI) { try{ localStorage.removeItem('sitara_unsynced'); }catch(e){} return false; }
+
+  if(flag){
+    // Cloud hasn't changed since our unsaved edits started → ours is newer.
+    if((flag.base||null) === cloudAt) return true;
+    return ask('This device has changes that were NOT saved to the cloud, and the cloud was also changed from another device since then.', flag.since);
+  }
+  // One-time check when moving off the old single-document format: saves were
+  // failing ("exceeds the maximum allowed size"), so this device may hold work
+  // the cloud never received.
+  if(!cloud._chunks && safe && safe.savedAt && cloudAt && Date.parse(safe.savedAt) > Date.parse(cloudAt) + 5000){
+    return ask('This device has data saved AFTER the last successful cloud save (cloud saves were failing because the data got too big).', safe.savedAt);
+  }
+  return false;
+}
+
 window.onload = function(){
   ADMIN_PW = '786';
   updateOnlineDot();
   loadFromStorage();
   setTimeout(()=>{ const el=document.getElementById('setup-pw'); if(el)el.focus(); },300);
-  setTimeout(async function(){
-    if(window._firebaseReady && window._firestore){
+  setTimeout(async function initialCloudLoad(){
+    // Firebase module still loading (slow connection) — try again shortly.
+    if(!(window._firebaseReady && window._firestore)){ setTimeout(initialCloudLoad, 500); return; }
+    {
       try{
-        const {getDoc, DATA_DOC} = window._firestore;
-        const snap = await getDoc(DATA_DOC);
-        if(snap.exists()){
-          const data = snap.data();
-          if(data){
+        const {loadChunked, DATA_DOC} = window._firestore;
+        const data = await loadChunked(DATA_DOC);   // reassembles split chunks
+        if(data){
+          {
+            const keepLocal = shouldKeepLocalCopy(data);
             if((data.colors||[]).length > colors.length) colors = data.colors;
             if((data.shapes||[]).length > shapes.length) shapes = data.shapes;
             if((data.parties||[]).length > parties.length) parties = data.parties;
+            if(keepLocal){
+              // This device has changes that never reached the cloud (e.g. saves
+              // were failing). Keep them; they are uploaded when the Biller logs in.
+              nextOid = Math.max(nextOid||0, data.nextOid||0);
+              nextPaId = Math.max(nextPaId||0, data.nextPaId||0);
+              nextInvNum = Math.max(nextInvNum||0, data.nextInvNum||0);
+              nextInvoiceNum = Math.max(nextInvoiceNum||0, data.nextInvoiceNum||0);
+              window._pendingUpload = true;
+              setTimeout(()=>showSaveToast('Kept this device\'s unsaved changes — they will be uploaded'), 500);
+            } else {
             // Cloud is the source of truth on load: always take cloud orders &
             // invoices so a stale local copy can never overwrite newer cloud data.
             orders = data.orders || orders;
@@ -1837,6 +2065,7 @@ window.onload = function(){
             nextPaId = data.nextPaId || nextPaId;
             nextInvNum = data.nextInvNum || nextInvNum;
             nextInvoiceNum = data.nextInvoiceNum || nextInvoiceNum;
+            }
             // Remember when the cloud copy was last written, for the overwrite guard
             window._cloudUpdatedAt = data.updatedAt || null;
             // Track Firebase order count for safety
@@ -1856,6 +2085,9 @@ window.onload = function(){
             // NOTE: intentionally do NOT call saveToBin() here. Writing back on
             // load is what allowed a stale tab to overwrite newer cloud data.
             // We just loaded the cloud copy — there is nothing new to save.
+            // (Exception: this device kept newer unsynced data and the Biller
+            // is already logged in — upload it.)
+            if(window._pendingUpload && window._role==='biller'){ window._pendingUpload=false; saveAll(); }
             renderAll();
             // Load courier data from separate protected doc
             if(window._firestore && window._firestore.COURIER_DOC){
@@ -1876,6 +2108,10 @@ window.onload = function(){
           }
         } else { saveToBin(); }
       } catch(e){ console.error(e); }
+      finally{
+        // From now on the live listener may merge updates from other devices.
+        window._initialLoadDone = true;
+      }
     }
   }, 1000);
 };
@@ -6460,7 +6696,7 @@ function sharePendingWhatsApp(mode){
 // ============================================================
 async function showAutoBackups(){
   if(!window._firebaseReady || !window._firestore){alert('Firebase not connected.');return;}
-  const {db, doc, getDoc, BACKUP_COL} = window._firestore;
+  const {db, doc, getDoc, loadChunked, BACKUP_COL} = window._firestore;
   if(!BACKUP_COL){alert('Backup not configured.');return;}
 
   // List last 10 backup slots
@@ -6482,7 +6718,8 @@ async function showAutoBackups(){
       const snap=await getDoc(doc(db,BACKUP_COL,key));
       if(snap.exists()){
         const data=snap.data();
-        found.push({key, savedAt:data.savedAt, orders:(data.orders||[]).length, invoices:(data.invoices||[]).length});
+        const cnt=data._counts||{};
+        found.push({key, savedAt:data.savedAt, orders:cnt.orders!=null?cnt.orders:(data.orders||[]).length, invoices:cnt.invoices!=null?cnt.invoices:(data.invoices||[]).length});
       }
     }catch(e){}
   }
@@ -6498,9 +6735,10 @@ async function showAutoBackups(){
 
   if(!confirm('Restore from '+found[idx].key+'?\nThis will replace current data.'))return;
 
-  const snap=await getDoc(doc(db,BACKUP_COL,found[idx].key));
-  if(snap.exists()){
-    const data=snap.data();
+  let data=null;
+  try{ data=await loadChunked(doc(db,BACKUP_COL,found[idx].key)); }
+  catch(e){ console.error(e); alert('Could not read that backup: '+(e&&e.message?e.message:e)); return; }
+  if(data){
     colors=data.colors||colors;
     shapes=data.shapes||shapes;
     orders=data.orders||orders;
@@ -6524,10 +6762,9 @@ async function recoverInvoices(){
   // Try Firebase invoice backup
   if(window._firebaseReady && window._firestore && window._firestore.INV_DOC){
     try{
-      const {getDoc, INV_DOC} = window._firestore;
-      const snap = await getDoc(INV_DOC);
-      if(snap.exists()){
-        const data = snap.data();
+      const {loadChunked, INV_DOC} = window._firestore;
+      const data = await loadChunked(INV_DOC);
+      if(data){
         if((data.invoices||[]).length > 0){
           if(confirm('Found '+data.invoices.length+' invoices in cloud backup. Restore them?')){
             invoices = data.invoices;
