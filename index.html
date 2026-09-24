@@ -4890,11 +4890,17 @@ function renderProduction(){
     // Keep only matching parties inside each card, drop cards with none
     rawCards=rawCards.map(c=>{
       const parties={};
-      let net=0;
+      let net=0, proc=0, hit=false;
       Object.entries(c.parties).forEach(([p,kg])=>{
-        if(p.toLowerCase().includes(pwParty)){parties[p]=kg;net+=kg;}
+        if(p.toLowerCase().includes(pwParty)){
+          parties[p]=kg;net+=kg;hit=true;
+          const b=window._pwBoth[p+'||'+c.color+'||'+c.shape];
+          proc+=b?b.inProc:0;
+        }
       });
-      return net>0?{...c,parties,net}:null;
+      // Compiled: keep items that are only In Process (To Give = 0) too
+      const keep = pwMode==='compiled' ? hit : net>0;
+      return keep?{...c,parties,net,proc}:null;
     }).filter(Boolean);
   }
   totalNetKg=rawCards.reduce((s,c)=>s+c.net,0);
