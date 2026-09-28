@@ -4832,6 +4832,7 @@ function printPendingGrid(){
 }
 
 
+const PW_MIN_KG=1.0; // amounts below this are hidden on Pending Work
 function renderProduction(){
 
   // ── Build net-pending across ALL pending orders (all dates) ──
@@ -4886,8 +4887,12 @@ function renderProduction(){
       const due=s.due;
       itemInvKg+=s.totalSupplied;
       // Split Due into In-Process vs To-Give; pick whichever this tab shows
-      const inProc=toGiveFor(party,color,shape).inProc;
-      const toGive=Math.max(0,due-inProc);
+      // Leftovers under 1 kg are hidden from Pending Work (not cancelled, data unchanged):
+      // a To Give or In Process amount below 1 kg counts as 0 on this screen.
+      const inProcRaw=toGiveFor(party,color,shape).inProc;
+      const toGiveRaw=Math.max(0,due-inProcRaw);
+      const inProc=inProcRaw>=PW_MIN_KG?inProcRaw:0;
+      const toGive=toGiveRaw>=PW_MIN_KG?toGiveRaw:0;
       // Party Grid shows BOTH columns, so include the row if EITHER bucket has qty
       const isCompiled = pwMode==='compiled';
       const pNet = isCompiled ? Math.max(toGive,inProc)
@@ -4903,7 +4908,7 @@ function renderProduction(){
         if(!window._pwBoth) window._pwBoth={};
         window._pwBoth[party+'||'+color+'||'+shape]={toGive,inProc,due};
       }
-      itemDue+=due; itemProc+=inProc;
+      itemDue+=toGive+inProc; itemProc+=inProc;
     });
     totalOrderKg+=v.totalKg;
     totalInvKg+=itemInvKg;
