@@ -5,7 +5,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, writeBatch, query, where, documentId } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCCowfX1uhxB4UMGmeV5fUhnw-KBGrrUxA",
@@ -148,7 +148,7 @@
   // ===========================================================
 
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, query, where, documentId, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
   window._firebaseReady = true;
 
   // Listen for real-time updates from other devices
@@ -1776,7 +1776,13 @@ async function pruneOldBackups(){
       const pad = n => String(n).padStart(2,'0');
       keep.add(d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())); // YYYY-MM-DD
     }
-    const snap = await getDocs(collection(db, BACKUP_COL));
+    // Fetch ONLY backups older than the oldest kept date (ids start with YYYY-MM-DD),
+    // instead of downloading every backup just to read its name.
+    const { query, where, documentId } = window._firestore;
+    const oldestKeep = [...keep].sort()[0];
+    const snap = (query && where && documentId)
+      ? await getDocs(query(collection(db, BACKUP_COL), where(documentId(), '<', oldestKeep)))
+      : await getDocs(collection(db, BACKUP_COL));
     const toDelete = [];
     snap.forEach(docSnap=>{
       const id = docSnap.id;                 // e.g. 2026-09-05_afternoon_142930
@@ -1878,6 +1884,7 @@ function getBackupSlot(){
 }
 
 function autoBackup(){
+  if(window._role==='monitor' || window._monitorReadOnly) return; // view-only device never writes
   if(!window._firebaseReady || !window._firestore) return;
   const {db, doc, writeChunked, BACKUP_COL} = window._firestore;
   if(!BACKUP_COL) return;
@@ -2166,6 +2173,7 @@ function switchTab(t,el){
     if(el2) el2.classList.toggle('active',id===t);
   });
   if(t==='reports') renderReport();
+  if(t==='production') renderProduction();
   if(t==='comparison') renderComparison();
   if(t==='orderlist') renderOrders();
   if(t==='invoices' && !editInvId){resetInvForm();}
@@ -4003,6 +4011,7 @@ function saveInvoice(){
   const chargeAmt=parseFloat(document.getElementById('if-charge-amt').value||0)||0;
   const bags=parseInt(document.getElementById('if-bags').value||0)||0;
   if(!party||!items.length){alert('Select a party and add at least one item.');return;}
+  if(!date){alert('Please select the invoice date.');return;}
   if(editInvId){
     const inv=invoices.find(x=>x.id===editInvId);
     if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;inv.chargeLabel=chargeLabel;inv.chargeAmt=chargeAmt;inv.bags=bags;}
@@ -4834,7 +4843,9 @@ function printPendingGrid(){
 
 
 const PW_MIN_KG=1.0; // amounts below this are hidden on Pending Work
+function tabIsOpen(id){ const el=document.getElementById('tab-'+id); return !!(el && el.classList.contains('active')); }
 function renderProduction(){
+  if(!tabIsOpen('production')) return; // heavy: only calculate while Pending Work is open
 
   // ── Build net-pending across ALL pending orders (all dates) ──
   // ordered[color||shape] = {totalKg, parties:{name->{kg, earliestDate}}, dates:[]}
@@ -6374,6 +6385,7 @@ function shareComparisonWA(){
 
 function renderReport(){
   if(!document.getElementById('rpt-type2') && !document.getElementById('rpt-from')) return;
+  if(!tabIsOpen('reports')) return; // heavy: only calculate while Reports is open
 
   // Populate dropdowns
   const partyEl=document.getElementById('rpt-party');
