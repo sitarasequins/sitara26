@@ -21,6 +21,7 @@
   const DATA_DOC    = doc(db, 'sitara26', 'appdata');
   const INV_DOC     = doc(db, 'sitara26', 'invoices_backup');
   const COURIER_DOC = doc(db, 'sitara26', 'courier_data');
+  const PRICING_DOC = doc(db, 'sitara26', 'pricing');
   const BACKUP_COL  = 'sitara26_backups';
 
   // ================= SPLIT (CHUNKED) STORAGE =================
@@ -148,8 +149,16 @@
   // ===========================================================
 
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, query, where, documentId, DATA_DOC, INV_DOC, COURIER_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, query, where, documentId, DATA_DOC, INV_DOC, COURIER_DOC, PRICING_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
   window._firebaseReady = true;
+
+  // Price list lives in its own small doc; keep it live on every device.
+  onSnapshot(PRICING_DOC, (snap) => {
+    if(snap.metadata && snap.metadata.hasPendingWrites) return;
+    if(!snap.exists()) return;
+    window._pricing = snap.data();
+    if(window.onPricingUpdate) window.onPricingUpdate();
+  }, (e) => console.error('Pricing listener failed:', e));
 
   // Listen for real-time updates from other devices
   let _snapSeq = 0;
@@ -272,7 +281,7 @@ tr:hover td{background:#f8faff}
 .badge-cancelled{background:#f9fafb;color:#9ca3af;border:1px solid #e5e7eb;text-decoration:line-through}
 /* Split layout */
 .split{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
-@media(max-width:720px){.split{grid-template-columns:1fr}}
+@media(max-width:720px){.split{grid-template-columns:1fr}.pl-grid{grid-template-columns:1fr!important}}
 .form-panel{background:#fff;border-radius:14px;padding:20px;position:sticky;top:12px;border:1px solid #e8e8e8;box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .form-panel h4{font-size:15px;font-weight:700;margin-bottom:16px;color:#1a1a1a;padding-bottom:10px;border-bottom:1.5px solid #f0f0f0}
 /* Form fields */
@@ -301,7 +310,7 @@ tr:hover td{background:#f8faff}
 .oi-al{color:#999;font-size:11px;margin-left:8px}
 .oi-none{padding:6px 10px;color:#bbb;font-size:12px}
 .oi-hl{background:#fde68a;color:#111;border-radius:2px;padding:0 1px}
-.item-row-i{display:flex;gap:5px;margin-bottom:5px;align-items:center;position:relative}
+.item-row-i{display:flex;gap:5px;margin-bottom:5px;align-items:center;position:relative;flex-wrap:wrap}
 .item-row-i .ii-shape{width:82px;flex-shrink:0;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;background:#f0f7ff;font-weight:600}
 .item-row-i .ii-color-wrap{flex:1;position:relative}
 .item-row-i .ii-color{width:100%;font-size:13px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;box-sizing:border-box}
@@ -529,6 +538,7 @@ tr:hover td{background:#f8faff}
     <button class="tab" data-tab="invoices" onclick="editInvId=null;switchTab('invoices',this)">New Invoice</button>
     <button class="tab active" data-tab="invlist" onclick="switchTab('invlist',this)">Invoice List</button>
     <button class="tab" data-tab="catalog" onclick="switchTab('catalog',this)">Create</button>
+    <button class="tab" data-tab="pricelist" onclick="switchTab('pricelist',this)">Price List</button>
     <button class="tab" data-tab="production" onclick="switchTab('production',this)">Pending Work</button>
     <button class="tab" data-tab="comparison" onclick="switchTab('comparison',this)">Comparison</button>
     <button class="tab" data-tab="reports" onclick="switchTab('reports',this)">📊 Reports</button>
@@ -634,7 +644,7 @@ tr:hover td{background:#f8faff}
               style="width:100%;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box">
             <div class="combo-drop" id="inv-party-drop"></div>
           </div>
-          <input id="if-date" type="date" style="width:150px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box;flex-shrink:0">
+          <input id="if-date" type="date" onchange="invRefreshAutoRates()" style="width:150px;padding:6px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;box-sizing:border-box;flex-shrink:0">
         </div>
         <div style="display:flex;gap:5px;font-size:10px;color:#999;font-weight:600;padding:0 2px 3px">
           <span style="width:82px">SHAPE</span><span style="flex:1">COLOR</span><span style="width:56px">KG</span><span style="width:56px">RATE</span><span style="width:22px"></span>
@@ -782,9 +792,15 @@ tr:hover td{background:#f8faff}
         <button class="btn btn-primary" onclick="addParty()">Add</button>
       </div>
     </div>
+    <datalist id="dl-families"></datalist>
     <div style="padding:12px;background:#f5f5f5;border-radius:8px;font-size:12px;color:#888">
       Colors, shapes and parties are case-insensitive. Click View on a party to see all their orders &amp; invoices.
     </div>
+  </div>
+
+  <!-- PRICE LIST -->
+  <div id="tab-pricelist" class="view">
+    <div id="pl-body"></div>
   </div>
 
   <!-- PENDING WORK -->
@@ -1715,7 +1731,7 @@ async function saveAndClose(){
       const backupRef = doc(db, BACKUP_COL, backupKey);
       await writeChunked(backupRef, {
         colors,shapes,orders,parties, invoices:mergedInvoices,
-        nextOid,nextPaId,nextInvNum,nextInvoiceNum,
+        nextOid,nextPaId,nextInvNum,nextInvoiceNum, pricing:pr(),
         savedAt:nowIso, slot, date:today, source:'save-and-close'});
       // VERIFY: read it back (all chunks). If it isn't really there, abort — do NOT close.
       const check = await loadChunked(backupRef);
@@ -1903,7 +1919,7 @@ function autoBackup(){
     const backupDoc = doc(db, BACKUP_COL, backupKey);
     const payload = {
       colors, shapes, orders, parties, invoices,
-      nextOid, nextPaId, nextInvNum, nextInvoiceNum,
+      nextOid, nextPaId, nextInvNum, nextInvoiceNum, pricing: pr(),
       savedAt: new Date().toISOString(),
       slot: slot,
       date: today
@@ -2168,12 +2184,13 @@ function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderPa
 function switchTab(t,el){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['orders','orderlist','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','pricelist','production','comparison','reports'].forEach(id=>{
     const el2=document.getElementById('tab-'+id);
     if(el2) el2.classList.toggle('active',id===t);
   });
   if(t==='reports') renderReport();
   if(t==='production') renderProduction();
+  if(t==='pricelist') renderPriceList();
   if(t==='comparison') renderComparison();
   if(t==='orderlist') renderOrders();
   if(t==='invoices' && !editInvId){resetInvForm();}
@@ -2714,6 +2731,7 @@ function renderCatalog(){
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">#</th>
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Color Code</th>
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Alias</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Family <button class="btn btn-sm" onclick="applyFamilySuggestions()" style="font-size:10px;padding:2px 8px;height:auto;margin-left:6px;text-transform:none">Suggest</button></th>
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Actions</th>
       </tr></thead>
       <tbody>${filtColors.map((c,i)=>{
@@ -2723,6 +2741,7 @@ function renderCatalog(){
           <td style="padding:7px 10px;color:#bbb;font-size:12px">${i+1}</td>
           <td style="padding:7px 10px;font-weight:600">${name}</td>
           <td style="padding:7px 10px;color:#888;font-size:12px">${alias||'—'}</td>
+          <td style="padding:4px 10px"><input list="dl-families" value="${(familyOf(name)||'').replace(/"/g,'&quot;')}" placeholder="—" onchange="setColorFamily('${name.replace(/'/g,"\\'")}',this.value)" style="width:110px;padding:4px 7px;border:1.5px solid #ddd;border-radius:6px;font-size:12px"></td>
           <td style="padding:7px 10px">
             <div style="display:flex;gap:5px">
               <button class="btn btn-sm" onclick="editColorAlias(${realIdx})" style="font-size:11px;padding:3px 8px">✎ Edit</button>
@@ -2743,11 +2762,13 @@ function renderCatalog(){
       <thead><tr>
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">#</th>
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Shape</th>
+        <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Group <button class="btn btn-sm" onclick="applyGroupSuggestions()" style="font-size:10px;padding:2px 8px;height:auto;margin-left:6px;text-transform:none">Suggest</button></th>
         <th style="text-align:left;padding:7px 10px;background:#f8f9fa;border-bottom:2px solid #e0e0e0;font-size:11px;color:#888;text-transform:uppercase">Actions</th>
       </tr></thead>
       <tbody>${filtShapes.map((s,i)=>`<tr style="border-bottom:1px solid #f5f5f5;background:${i%2?'#fafafa':'#fff'}">
         <td style="padding:7px 10px;color:#bbb;font-size:12px">${i+1}</td>
         <td style="padding:7px 10px;font-weight:600">${s}</td>
+        <td style="padding:4px 10px"><select onchange="setShapeGroup('${s.replace(/'/g,"\\'")}',this.value)" style="padding:4px 7px;border:1.5px solid #ddd;border-radius:6px;font-size:12px"><option value="">—</option>${PL_GROUPS.map(g=>`<option ${groupOf(s)===g?'selected':''}>${g}</option>`).join('')}</select></td>
         <td style="padding:7px 10px">
           <button class="btn btn-sm btn-danger" onclick="delShape('${s}')" style="font-size:11px;padding:3px 8px">🗑 Delete</button>
         </td>
@@ -3745,9 +3766,10 @@ function addInvItemRow(item=null){
         onfocus="oColorList(this)" oninput="oColorList(this)" onkeydown="iColorKey(event,this)">
       <div class="oi-drop" style="display:none"></div>
     </div>
-    <input class="ii-kg" type="number" min="0" step="0.01" value="${kg}" placeholder="kg" oninput="updateInvFormTotal()" onkeydown="iKgKey(event,this)">
-    <input class="ii-rate" type="number" min="0" value="${price}" placeholder="rate" oninput="updateInvFormTotal()" onkeydown="iRateKey(event,this)">
-    <button class="item-del" onclick="this.closest('.item-row-i').remove();updateInvFormTotal()">✕</button>`;
+    <input class="ii-kg" type="number" min="0" step="0.01" value="${kg}" placeholder="kg" oninput="updateInvFormTotal();invRowRate(this.closest('.item-row-i'))" onkeydown="iKgKey(event,this)">
+    <input class="ii-rate" type="number" min="0" value="${price}" placeholder="rate" oninput="this.closest('.item-row-i').dataset.autoRate='0';updateInvFormTotal()" onkeydown="iRateKey(event,this)">
+    <button class="item-del" onclick="this.closest('.item-row-i').remove();updateInvFormTotal()">✕</button>
+    <div class="oi-dupwarn ii-ratewarn" style="display:none"></div>`;
   c.appendChild(d);updateInvFormTotal();
   return d;
 }
@@ -3792,13 +3814,7 @@ function iColorKey(e,inp){
 // After picking a color in an invoice row, auto-fill last-billed rate then focus kg
 function iAfterColor(inp){
   const row=inp.closest('.item-row-i');
-  const rateEl=row.querySelector('.ii-rate');
-  if(rateEl && !rateEl.value){
-    const party=(document.getElementById('if-party-input')||{value:''}).value.trim();
-    const shape=row.querySelector('.ii-shape').value.trim();
-    const lr=lastBilledRate(party,inp.value.trim(),shape);
-    if(lr>0) rateEl.value=lr;
-  }
+  invRowRate(row);
   row.querySelector('.ii-kg').focus();
   updateInvFormTotal();
 }
@@ -3842,7 +3858,649 @@ function lastBilledRate(party,color,shape){
   return best?best.price:0;
 }
 // Party changed on invoice -> refresh pending panel
+// ============================================================
+// PRICE LIST (stored in its own cloud doc: sitara26/pricing)
+//   families: { COLOUR NAME -> family }      e.g. {"BG12":"OG","SLG":"SLG"}
+//   groups:   { size -> size group }          e.g. {"3n":"3n","4n":"Small","1014":"Design"}
+//   lists:    { scope -> [ {from:'YYYY-MM-DD', rates:{'FAMILY|Group':rate}} ] }
+//             scope = 'DEFAULT' | 'L:<location>' | 'P:<party>'
+// ============================================================
+const PL_GROUPS=['2n','3n','Normal','Design','Special design'];
+const PL_NORMAL=['4n','5n','6n','4fc','5fc','6fc','4k','3k','6/1','8/1','4/0'];
+function pr(){
+  if(!window._pricing||typeof window._pricing!=='object') window._pricing={};
+  const p=window._pricing;
+  if(!p.families) p.families={}; if(!p.groups) p.groups={}; if(!p.lists) p.lists={};
+  if(!p._normal){   // one-time rename of the size group "Small" -> "Normal"
+    Object.keys(p.groups).forEach(k=>{ if(p.groups[k]==='Small') p.groups[k]='Normal'; });
+    Object.values(p.lists).forEach(l=>(l||[]).forEach(e=>{ Object.keys(e.rates||{}).forEach(k=>{
+      if(k.endsWith('|Small')){ e.rates[k.slice(0,-6)+'|Normal']=e.rates[k]; delete e.rates[k]; } }); }));
+    p._normal=1;
+  }
+  return p;
+}
+(function(){ try{ const c=localStorage.getItem('sitara_pricing'); if(c && !window._pricing) window._pricing=JSON.parse(c); }catch(e){} })();
+function savePricing(){
+  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return false; }
+  const p=pr(); p.updatedAt=new Date().toISOString();
+  try{ localStorage.setItem('sitara_pricing', JSON.stringify(p)); }catch(e){}
+  if(window._firebaseReady && window._firestore && window._firestore.PRICING_DOC){
+    const {setDoc, PRICING_DOC}=window._firestore;
+    setDoc(PRICING_DOC, JSON.parse(JSON.stringify(p)))
+      .then(()=>showSaveToast('Price list saved'))
+      .catch(e=>{ console.error('Pricing save failed',e); showSaveToast('Price list save failed! Check connection',true); });
+  }
+  return true;
+}
+window.onPricingUpdate=function(){
+  try{ localStorage.setItem('sitara_pricing', JSON.stringify(pr())); }catch(e){}
+  if(tabIsOpen('catalog')) renderCatalog();
+  if(tabIsOpen('pricelist') && !plDirty) renderPriceList();
+};
+function plNorm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function familyOf(color){ return pr().families[String(color||'').trim().toUpperCase()]||''; }
+function groupOf(shape){ return pr().groups[String(shape||'').trim().toLowerCase()]||''; }
+function plPartyScope(party){ return 'P:'+plNorm(party); }
+function plLocScope(loc){ return 'L:'+plNorm(loc); }
+function plEntryOn(scope,date){
+  let best=null;
+  (pr().lists[scope]||[]).forEach(e=>{ if(e.from<=date && (!best||e.from>best.from)) best=e; });
+  return best;
+}
+// List price for party+item on a date: party list, then location list, then default list.
+function listRate(party,color,shape,date){
+  const fam=familyOf(color), grp=groupOf(shape);
+  if(!fam||!grp||!date) return null;
+  const scopes=[plPartyScope(party)];
+  const loc=stkPartyLocation(party); if(loc) scopes.push(plLocScope(loc));
+  scopes.push('DEFAULT');
+  const chain=famChain(fam);
+  for(const sc of scopes){
+    const e=plEntryOn(sc,date); if(!e||!e.rates) continue;
+    for(const f of chain){ const v=parseFloat(e.rates[f+'|'+grp]); if(v>0) return v; }
+  }
+  return null;
+}
+// Rate for one order: lower of price on order date and price on invoice date.
+function ruleRate(party,color,shape,orderDate,invDate){
+  const a=orderDate?listRate(party,color,shape,orderDate):null;
+  const b=listRate(party,color,shape,invDate);
+  if(a&&b) return Math.min(a,b);
+  return a||b||null;
+}
+// Suggest the rate for an invoice line. Uses the oldest open orders this qty fills.
+// Returns {rate, options:[{rate,date}]} — options has >1 entry when the orders differ.
+function suggestInvRate(party,color,shape,kg,invDate){
+  const c=String(color||'').trim().toUpperCase(), s=String(shape||'').trim().toLowerCase();
+  const p=(parties.find(x=>x.name.trim().toLowerCase()===String(party||'').trim().toLowerCase())||{name:String(party||'').trim()}).name;
+  if(!p||!c||!s) return {rate:null,options:[]};
+  const rem=perOrderRemaining(p,c,s).filter(r=>r.remaining>0.0001);
+  const opts=[];
+  let left=parseFloat(kg)||0;
+  for(const r of rem){
+    const rt=ruleRate(p,c,s,r.date,invDate);
+    if(rt && !opts.some(o=>o.rate===rt)) opts.push({rate:rt,date:r.date});
+    left-=r.remaining;
+    if(left<=0.0001) break;
+  }
+  if(!opts.length){ const rt=listRate(p,c,s,invDate); if(rt) opts.push({rate:rt,date:''}); }
+  if(opts.length) return {rate:opts[0].rate,options:opts};
+  const lr=lastBilledRate(p,c,s);
+  return {rate:lr>0?lr:null,options:[]};
+}
+// Fill the rate on an invoice row (only if empty or filled automatically before).
+function invRowRate(row){
+  if(!row) return;
+  const rateEl=row.querySelector('.ii-rate'), warn=row.querySelector('.ii-ratewarn');
+  const party=(document.getElementById('if-party-input')||{value:''}).value.trim();
+  const date=(document.getElementById('if-date')||{value:''}).value||today();
+  const color=row.querySelector('.ii-color').value, shape=row.querySelector('.ii-shape').value;
+  const kg=row.querySelector('.ii-kg').value;
+  const auto=(!rateEl.value || row.dataset.autoRate==='1');
+  const sg=suggestInvRate(party,color,shape,kg,date);
+  if(auto && sg.rate){ rateEl.value=sg.rate; row.dataset.autoRate='1'; }
+  if(warn){
+    if(sg.options.length>1){
+      warn.innerHTML='⚠ This qty covers orders at different rates: '+sg.options.map(o=>
+        `<span onclick="invPickRate(this,${o.rate})" style="cursor:pointer;text-decoration:underline;margin:0 4px">${o.rate}${o.date?' ('+fmtDate(o.date)+' order)':''}</span>`).join(' / ')+' — choose one';
+      warn.style.display='block';
+    } else { warn.style.display='none'; warn.innerHTML=''; }
+  }
+  updateInvFormTotal();
+}
+function invPickRate(el,rate){
+  const row=el.closest('.item-row-i');
+  row.querySelector('.ii-rate').value=rate; row.dataset.autoRate='0';
+  const w=row.querySelector('.ii-ratewarn'); if(w){ w.style.display='none'; }
+  updateInvFormTotal();
+}
+// ---- suggestions for families / groups (applied only after the user confirms) ----
+function suggestFamily(c){
+  const cf=commonFamily(c); if(cf) return cf;
+  const full=colorName(c).toUpperCase().trim(), a=colorAlias(c).toUpperCase();
+  const plus=/\+$/.test(full) ? '+' : '';
+  const parts=full.replace(/\+$/,'').split('/').map(x=>x.trim()).filter(Boolean);   // "GG31/OG137" -> ["GG31","OG137"]
+  const names=[a,...parts];
+  if(names.some(x=>x==='BG5'||x==='OG100')) return 'BG5'+plus;
+  for(const s of names){ const m=s.match(/^(DD|OG|TG)\d/); if(m) return m[1]+plus; }
+  for(const s of parts){ const m=s.match(/^[A-Z]([DGT])\d+$/); if(m) return {D:'DD',G:'OG',T:'TG'}[m[1]]+plus; }
+  return full;
+}
+function suggestGroup(s){
+  s=String(s).toLowerCase();
+  if(s==='2n') return '2n'; if(s==='3n') return '3n';
+  if(PL_NORMAL.includes(s)) return 'Normal';
+  if(/^\d{4}/.test(s)) return 'Design';
+  return '';
+}
+function plAllFamilies(){
+  return [...new Set(Object.values(pr().families).filter(Boolean))].sort();
+}
+function setColorFamily(name,val){
+  const k=String(name).toUpperCase(), v=String(val||'').trim().toUpperCase();
+  if(v) pr().families[k]=v; else delete pr().families[k];
+  savePricing(); refreshFamilyDatalist();
+}
+function setShapeGroup(name,val){
+  const k=String(name).toLowerCase();
+  if(val) pr().groups[k]=val; else delete pr().groups[k];
+  savePricing();
+}
+function refreshFamilyDatalist(){
+  const dl=document.getElementById('dl-families');
+  if(dl) dl.innerHTML=plAllFamilies().map(f=>`<option value="${f.replace(/"/g,'&quot;')}">`).join('');
+}
+function applyFamilySuggestions(){
+  const todo=colors.filter(c=>!familyOf(colorName(c)));
+  if(!todo.length){ alert('All colours already have a family.'); return; }
+  const sample=todo.slice(0,12).map(c=>colorName(c)+' → '+suggestFamily(c)).join('\n');
+  if(!confirm(todo.length+' colour(s) have no family. Suggested:\n\n'+sample+(todo.length>12?'\n…and '+(todo.length-12)+' more':'')+'\n\nApply these suggestions? You can change any of them after.')) return;
+  todo.forEach(c=>{ pr().families[colorName(c).toUpperCase()]=suggestFamily(c); });
+  savePricing(); refreshFamilyDatalist(); renderCatalog();
+}
+function applyGroupSuggestions(){
+  const todo=shapes.filter(s=>!groupOf(s) && suggestGroup(s));
+  if(!todo.length){ alert('No sizes to suggest — set the rest by hand.'); return; }
+  const by={}; todo.forEach(s=>{ const g=suggestGroup(s); (by[g]=by[g]||[]).push(s); });
+  const txt=Object.entries(by).map(([g,l])=>g+': '+l.slice(0,10).join(', ')+(l.length>10?' …+'+(l.length-10):'')).join('\n');
+  if(!confirm('Suggested size groups for '+todo.length+' size(s):\n\n'+txt+'\n\nSpecial designs are not suggested — set those by hand.\nApply?')) return;
+  todo.forEach(s=>{ pr().groups[String(s).toLowerCase()]=suggestGroup(s); });
+  savePricing(); renderCatalog();
+}
+// ---- Price list screen ----
+let plScope='DEFAULT', plFrom='', plDraft=null, plDirty=false, plSuggested={}, plExtraFams=[];
+function plScopeLabel(sc){
+  if(sc==='DEFAULT') return 'Default (all locations)';
+  if(sc.startsWith('L:')) return '📍 '+sc.slice(2);
+  return '👤 '+(parties.find(p=>plPartyScope(p.name)===sc)||{name:sc.slice(2)}).name;
+}
+function plConfirmDiscard(){ return !plDirty || confirm('You have unsaved rate changes. Discard them?'); }
+function plSetScope(v){ if(!plConfirmDiscard()){ renderPriceList(); return; } plScope=v; plFrom=''; plDraft=null; plDirty=false; plSuggested={}; plExtraFams=[]; renderPriceList(); }
+function plSetFrom(v){ if(!plConfirmDiscard()){ renderPriceList(); return; } plFrom=v; plDraft=null; plDirty=false; plSuggested={}; renderPriceList(); }
+function plNewDate(){
+  const inp=document.getElementById('pl-newdate'); const d=inp&&inp.value;
+  if(!d){ alert('Pick the date the new rates start from.'); return; }
+  if(!plConfirmDiscard()) return;
+  const list=pr().lists[plScope]||[];
+  if(list.some(e=>e.from===d)){ plFrom=d; plDraft=null; plDirty=false; renderPriceList(); return; }
+  const prev=plEntryOn(plScope,d);
+  plFrom=d; plDraft={from:d, rates:Object.assign({}, prev?prev.rates:{}), isNew:true}; plDirty=true; plSuggested={};
+  renderPriceList();
+}
+function plCell(fam,grp,val){
+  if(!plDraft) return;
+  const k=fam+'|'+grp, v=parseFloat(val);
+  if(v>0) plDraft.rates[k]=v; else delete plDraft.rates[k];
+  delete plSuggested[k]; plDirty=true;
+  const el=document.getElementById('pl-dirty'); if(el) el.style.display='inline';
+}
+function plAddFam(v){ v=String(v||'').trim().toUpperCase(); if(v && !plExtraFams.includes(v)) plExtraFams.push(v); renderPriceList(); }
+function plSave(){
+  if(!plDraft) return;
+  const list=pr().lists[plScope]=pr().lists[plScope]||[];
+  const i=list.findIndex(e=>e.from===plDraft.from);
+  const entry={from:plDraft.from, rates:plDraft.rates};
+  if(i>=0) list[i]=entry; else list.push(entry);
+  list.sort((a,b)=>a.from.localeCompare(b.from));
+  if(savePricing()){ plDirty=false; plSuggested={}; plDraft=null; renderPriceList(); }
+}
+// Parties that belong to this scope (for "fill from billing")
+function plScopeParties(sc){
+  if(sc==='DEFAULT') return null;
+  if(sc.startsWith('P:')) return parties.filter(p=>plPartyScope(p.name)===sc).map(p=>p.name);
+  return parties.filter(p=>p.location && plLocScope(p.location)===sc).map(p=>p.name);
+}
+function plFillFromBilling(){
+  if(!plDraft) return;
+  const ps=plScopeParties(plScope); const set=ps?new Set(ps):null;
+  const since=new Date(); since.setDate(since.getDate()-60);
+  const sinceISO=since.toISOString().slice(0,10);
+  const cnt={};
+  invoices.forEach(inv=>{
+    if(!inv.date||inv.date<sinceISO) return;
+    if(set && !set.has(inv.party)) return;
+    (inv.items||[]).forEach(it=>{
+      const pz=parseFloat(it.price)||0; if(pz<=0) return;
+      const f=familyOf(it.color), g=groupOf(it.shape); if(!f||!g) return;
+      const k=f+'|'+g; (cnt[k]=cnt[k]||{})[pz]=(cnt[k][pz]||0)+1;
+    });
+  });
+  let n=0;
+  Object.entries(cnt).forEach(([k,c])=>{
+    if(plDraft.rates[k]) return;           // never overwrite a rate you already have
+    const best=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
+    plDraft.rates[k]=parseFloat(best[0]); plSuggested[k]=true; n++;
+  });
+  plDirty=plDirty||n>0;
+  renderPriceList();
+  alert(n?n+' rate(s) filled from the last 60 days of billing (shown in yellow). Check them, then press Save rates.':'Nothing to fill — no billing in the last 60 days for empty cells (or colours/sizes have no family/group yet).');
+}
+function plHistoryHtml(){
+  const list=(pr().lists[plScope]||[]).slice().sort((a,b)=>a.from.localeCompare(b.from));
+  if(!list.length) return '<div style="color:#bbb;font-size:12px;padding:6px 0">No rates saved yet for this list.</div>';
+  const rows=list.map((e,i)=>{
+    const prev=i?list[i-1].rates:{}; const ch=[];
+    new Set([...Object.keys(prev),...Object.keys(e.rates||{})]).forEach(k=>{
+      const a=prev[k], b=(e.rates||{})[k];
+      if(a!==b) ch.push(k.replace('|',' ')+': '+(a!=null?a+'→':'')+(b!=null?b:'removed'));
+    });
+    return `<tr><td style="padding:5px 8px;white-space:nowrap;font-weight:600">${fmtDate(e.from)} ${e.from.slice(0,4)}</td><td style="padding:5px 8px;font-size:12px;color:#555">${i?(ch.join(' · ')||'no change'):Object.keys(e.rates||{}).length+' rate(s) set'}</td></tr>`;
+  }).reverse().join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:12px">${rows}</table>`;
+}
+function plLocationNames(){
+  const locs={};
+  parties.forEach(p=>{ if(p.location){ const k=plLocScope(p.location); if(!locs[k]) locs[k]=p.location.trim(); } });
+  Object.keys(pr().lists).forEach(k=>{ if(k.startsWith('L:') && !locs[k]) locs[k]=k.slice(2); });
+  return locs;
+}
+function plLatest(sc){ const l=pr().lists[sc]||[]; return l.length?l.reduce((a,b)=>a.from>b.from?a:b).from:''; }
+function plDateShort(d){ return d?fmtDate(d):'—'; }
+let plSearch='';
+function plSideHtml(){
+  const q=plSearch.trim().toLowerCase();
+  const item=(sc,label)=>{
+    if(q && !label.toLowerCase().includes(q)) return '';
+    const on=sc===plScope;
+    return `<div onclick="plSetScope('${sc.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;gap:6px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;${on?'background:#eff6ff;color:#1d4ed8;font-weight:600':'color:#333'}">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span><span style="font-size:11px;color:${on?'#1d4ed8':'#aaa'};white-space:nowrap">${plDateShort(plLatest(sc))}</span></div>`;
+  };
+  const hd=t=>`<div style="font-size:10.5px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.05em;margin:10px 10px 4px">${t}</div>`;
+  const locs=Object.entries(plLocationNames()).sort((a,b)=>a[1].localeCompare(b[1]));
+  const partyScopes=Object.keys(pr().lists).filter(k=>k.startsWith('P:'));
+  if(plScope.startsWith('P:') && !partyScopes.includes(plScope)) partyScopes.push(plScope);
+  const pname=sc=>(parties.find(p=>plPartyScope(p.name)===sc)||{name:sc.slice(2)}).name;
+  return item('DEFAULT','Default')+
+    hd('Locations')+locs.map(([k,t])=>item(k,t)).join('')+
+    hd('Party specials')+partyScopes.sort((a,b)=>pname(a).localeCompare(pname(b))).map(k=>item(k,pname(k))).join('')+
+    (window._monitorReadOnly?'':`<input list="dl-pl-parties" placeholder="+ Add party" onchange="plAddParty(this.value);this.value=''"
+      style="width:100%;margin-top:6px;padding:6px 9px;border-radius:7px;border:1.5px dashed #ccc;font-size:12px;box-sizing:border-box">
+      <datalist id="dl-pl-parties">${parties.map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}">`).join('')}</datalist>`);
+}
+function plAddParty(name){
+  const p=parties.find(x=>x.name.toLowerCase()===String(name||'').trim().toLowerCase());
+  if(!p){ if(name) alert('Party not found: '+name); return; }
+  plSetScope(plPartyScope(p.name));
+}
+function plSetSearch(v){ plSearch=v; const s=document.getElementById('pl-side-items'); if(s) s.innerHTML=plSideHtml(); }
+function plGroupHint(g){
+  const l=Object.entries(pr().groups).filter(([,v])=>v===g).map(([k])=>k);
+  return l.length?l.slice(0,3).join(' ')+(l.length>3?'…':''):'not set';
+}
+function plRenderLists(el){
+  if(!el) return;
+  const ro=!!window._monitorReadOnly;
+  const common=plMode==='common';
+  refreshFamilyDatalist();
+  const list=(pr().lists[plScope]||[]).slice().sort((a,b)=>b.from.localeCompare(a.from));
+  if(!plDraft){
+    const e=plFrom?list.find(x=>x.from===plFrom):list[0];
+    if(e){ plFrom=e.from; plDraft={from:e.from, rates:Object.assign({},e.rates||{})}; }
+  }
+  const isLatest=plDraft && !plDraft.isNew && list.length && plDraft.from===list[0].from;
+  // families shown: those with rates in this list, those billed in this scope (90 days), and ones added by hand
+  const fams=new Set(plExtraFams);
+  (pr().lists[plScope]||[]).forEach(e=>Object.keys(e.rates||{}).forEach(k=>fams.add(k.split('|')[0])));
+  if(plDraft) Object.keys(plDraft.rates).forEach(k=>fams.add(k.split('|')[0]));
+  const ps=plScopeParties(plScope); const set=ps?new Set(ps):null;
+  const since=new Date(); since.setDate(since.getDate()-90); const sinceISO=since.toISOString().slice(0,10);
+  const famKg={};
+  invoices.forEach(inv=>{ if(!inv.date||inv.date<sinceISO||(set&&!set.has(inv.party))) return;
+    (inv.items||[]).forEach(it=>{ const f=familyOf(it.color); if(f&&groupOf(it.shape)) famKg[f]=(famKg[f]||0)+(parseFloat(it.kg)||0); }); });
+  if(!common) Object.entries(famKg).filter(([,kg])=>kg>=5).forEach(([f])=>fams.add(f));
+  const order=['OG','OG+','BG5','DD','TG'];
+  const famList=common?[...fams]:[...fams].sort((a,b)=>{ const ia=order.indexOf(a), ib=order.indexOf(b);
+    if(ia>=0||ib>=0) return (ia<0?99:ia)-(ib<0?99:ib); return (famKg[b]||0)-(famKg[a]||0)||a.localeCompare(b); });
+  const noFam=colors.filter(c=>!familyOf(colorName(c))).length, noGrp=shapes.filter(s=>!groupOf(s)).length;
+  const card='background:#fff;border:1px solid #ebebeb;border-radius:12px;padding:14px 16px';
+  const sel='padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;background:#fff';
+  // header
+  const title=plScope==='DEFAULT'?(common?'Common items':'Default'):plScope.startsWith('L:')?(plLocationNames()[plScope]||plScope.slice(2)):(parties.find(p=>plPartyScope(p.name)===plScope)||{name:plScope.slice(2)}).name;
+  const sub=plScope==='DEFAULT'?'Same price for every party. Used when a party has no rate of its own.':plScope.startsWith('L:')?(ps.length+' part'+(ps.length===1?'y':'ies')):'Special rates for this party only';
+  const pill=plDraft?(plDraft.isNew?'<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-weight:600">new · not saved</span>'
+    :isLatest?'<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#15803d;font-weight:600">current</span>'
+    :'<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:#f3f4f6;color:#6b7280;font-weight:600">old rates</span>'):'';
+  const dateSel=list.length||plDraft?`<select onchange="plSetFrom(this.value)" style="${sel}">
+      ${plDraft&&plDraft.isNew?`<option selected>${fmtDate(plDraft.from)} ${plDraft.from.slice(0,4)} (new)</option>`:''}
+      ${list.map(e=>`<option value="${e.from}" ${!(plDraft&&plDraft.isNew)&&e.from===plFrom?'selected':''}>${fmtDate(e.from)} ${e.from.slice(0,4)}${e===list[0]?' (latest)':''}</option>`).join('')}
+    </select>`:'';
+  const newCtl=ro?'':`<input type="date" id="pl-newdate" value="${today()}" style="${sel}"><button class="btn btn-sm" onclick="plNewDate()">New rates from date</button>`;
+  // grid
+  const th='padding:7px 4px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.03em;text-align:center;border-bottom:2px solid #f0f0f0;background:#fafbfc';
+  let body;
+  if(plDraft){
+    body=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:520px">
+      <colgroup><col style="width:20%"><col><col><col><col><col></colgroup>
+      <tr><th style="${th};text-align:left;padding-left:10px">Family</th>${PL_GROUPS.map(g=>`<th style="${th}">${g==='Special design'?'Special':g}<div style="font-size:10px;font-weight:400;color:#bbb;text-transform:none;letter-spacing:0;margin-top:2px">${plGroupHint(g)}</div></th>`).join('')}</tr>
+      ${famList.map(f=>`<tr><td style="padding:5px 10px;font-weight:700;border-bottom:1px solid #f4f4f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${f}">${f}</td>${PL_GROUPS.map(g=>{
+        const k=f+'|'+g, v=plDraft.rates[k]; const sug=plSuggested[k];
+        return `<td style="padding:4px;border-bottom:1px solid #f4f4f4"><input type="number" min="0" value="${v!=null?v:''}" ${ro?'readonly':''} onchange="plCell('${f.replace(/'/g,"\\'")}','${g}',this.value);this.style.background=''" style="width:100%;box-sizing:border-box;padding:6px 4px;border:1.5px solid ${ro?'#f0f0f0':'#e5e5e5'};border-radius:6px;font-size:13px;text-align:center;${sug?'background:#fef9c3':''}${ro?';background:#fafafa':''}"></td>`;}).join('')}</tr>`).join('')||`<tr><td colspan="6" style="padding:14px;color:#999;font-size:12px;text-align:center">No families yet${ro?'':' — add one below'}.</td></tr>`}
+    </table></div>
+    ${ro?'':`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+      <input list="dl-families" placeholder="+ add family" onchange="plAddFam(this.value);this.value=''" style="${sel};width:130px">
+      <button class="btn btn-sm" onclick="plFillFromBilling()">Fill empty from billing</button>
+      <span id="pl-dirty" style="display:${plDirty?'inline':'none'};font-size:12px;color:#b45309;font-weight:600">● unsaved changes</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-primary" onclick="plSave()">💾 Save rates</button>
+    </div>`}
+    <div style="font-size:11px;color:#aaa;margin-top:8px">Blank = use location list → default → last billed rate</div>`;
+  } else {
+    body=`<div style="padding:24px;text-align:center;color:#999;font-size:13px">No rates for this list yet.${ro?'':'<br>Pick a start date above and press <b>New rates from date</b>.'}</div>`;
+  }
+  const setup=(!ro && (noFam||noGrp))?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px">
+      <span style="flex:1;min-width:200px">Setup: ${noFam} colour(s) need a family · ${noGrp} size(s) need a group. Until then they use the last billed rate.</span>
+      ${noFam?'<button class="btn btn-sm" onclick="applyFamilySuggestions();renderPriceList()">Suggest families</button>':''}
+      ${noGrp?'<button class="btn btn-sm" onclick="applyGroupSuggestions();renderPriceList()">Suggest size groups</button>':''}
+    </div>`:'';
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:${common?'minmax(0,1fr)':'200px minmax(0,1fr)'};gap:14px;align-items:start" class="pl-grid">
+      <div style="${card};padding:8px;${common?'display:none':''}">
+        <input placeholder="🔍 Search list" value="${plSearch.replace(/"/g,'&quot;')}" oninput="plSetSearch(this.value)" style="width:100%;box-sizing:border-box;padding:6px 9px;border-radius:7px;border:1.5px solid #e5e5e5;font-size:12px;margin-bottom:4px">
+        <div id="pl-side-items" style="max-height:70vh;overflow-y:auto">${plSideHtml()}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        <div style="${card}">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+            <div><span style="font-size:16px;font-weight:700">${title}</span> ${pill}
+              <div style="font-size:12px;color:#888;margin-top:2px">${plDraft?'Rates from '+fmtDate(plDraft.from)+' '+plDraft.from.slice(0,4)+' · ':''}${sub}</div></div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${dateSel}${newCtl}</div>
+          </div>
+          ${body}
+        </div>
+        ${common?'':`<div style="${card}">
+          <div style="font-size:13px;font-weight:700;margin-bottom:6px">History · ${title}</div>
+          ${plHistoryHtml()}
+        </div>`}
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// PARTY RATES layout (same as the "Party Rates" / "Common Items" Excel)
+//   Party rates  = one list per party (scope P:<party>), columns e.g. OG, OG10, BG5, DD, DD16
+//   Common items = the Default list (same price for every party)
+//   A family with no rate falls back to its parent: OG10/BG5/TG/OG+ -> OG, DD16/DD+ -> DD, BG5+ -> BG5
+// ============================================================
+const PL_DEFAULT_PARENTS={'OG10':'OG','BG5':'OG','TG':'OG','TG+':'OG','OG+':'OG','BG5+':'BG5','DD16':'DD','DD+':'DD'};
+const PL_PARTY_GROUPS=['2n','3n','Normal','Design'];
+function plParents(){ const p=pr(); if(!p.parents) p.parents=Object.assign({},PL_DEFAULT_PARENTS); return p.parents; }
+function famChain(f){ const out=[]; const par=plParents(); while(f && !out.includes(f) && out.length<4){ out.push(f); f=par[f]; } return out; }
+// Colours that belong to the "Common Items" families (and OG10 / DD16)
+function aliasOfName(n){ const c=colors.find(x=>colorName(x).toUpperCase()===String(n).toUpperCase()); return c?colorAlias(c).toUpperCase().replace(/\s+/g,''):''; }
+function commonFamily(c){
+  const full=colorName(c).toUpperCase().trim();
+  const base=full.replace(/\s*\+\s*$/,'').trim();
+  const parts=base.split('/').map(x=>x.trim()).filter(Boolean);
+  const names=[colorAlias(c).toUpperCase().replace(/\s+/g,''),...parts,...parts.map(aliasOfName)];
+  if(names.some(x=>/^OG10( ?L)?$/.test(x))) return 'OG10';
+  if(names.includes('DD16')) return 'DD16';
+  const map={'SLG':'GOLDEN','SLG(2)':'GOLDEN','MGOLD':'GOLDEN','DGOLD':'GOLDEN',
+    'RCRL':'RCRL / SCRL / MCRL','SCRL':'RCRL / SCRL / MCRL','MCRL':'RCRL / SCRL / MCRL',
+    'MRL':'MR','MRD':'MR','MILKY AR':'AR','PAANI AR':'AR',
+    'MILKY OP':'PEARL','RED OP':'PEARL','CHIKU OP':'PEARL','WHITE OPQ':'PEARL',
+    'GREEN M':'SM / METAL','GREY M':'SM / METAL','ORANGE M':'SM / METAL'};
+  if(map[full]) return map[full];
+  if(/^SM\d+$/.test(full) || /^[A-Z]+ MET$/.test(full)) return 'SM / METAL';
+  return null;
+}
+let plMode='party', plPDate='', plPEdits={}, plPFilter='', plPAdded=[];
+function plDateNow(){ return plPDate||today(); }
+function plPartyList(){
+  const p=pr(); if(!p.partyOrder) p.partyOrder=[];
+  const have=new Set(Object.keys(p.lists).filter(k=>k.startsWith('P:')));
+  const out=[];
+  p.partyOrder.forEach(n=>{ if(have.has(plPartyScope(n))){ out.push(n); have.delete(plPartyScope(n)); } });
+  have.forEach(sc=>out.push((parties.find(x=>plPartyScope(x.name)===sc)||{name:sc.slice(2)}).name));
+  plPAdded.forEach(n=>{ if(!out.some(x=>plNorm(x)===plNorm(n))) out.push(n); });
+  return out;
+}
+function plPartyCols(){
+  const p=pr(); const cols=(p.partyCols||[]).slice();
+  Object.keys(p.lists).filter(k=>k.startsWith('P:')).forEach(k=>(p.lists[k]||[]).forEach(e=>Object.keys(e.rates||{}).forEach(r=>{ const f=r.split('|')[0]; if(!cols.includes(f)) cols.push(f); })));
+  return cols.length?cols:['OG','DD'];
+}
+function plPartyRates(name){ const e=plEntryOn(plPartyScope(name),plDateNow()); return e?e.rates||{}:{}; }
+function plPDirtyCount(){ return Object.values(plPEdits).reduce((a,o)=>a+Object.keys(o).length,0); }
+function plPCell(name,key,val){
+  const sc=plPartyScope(name); plPEdits[sc]=plPEdits[sc]||{};
+  const cur=plPartyRates(name)[key]; const v=parseFloat(val);
+  const nv=v>0?v:null;
+  if((cur||null)===nv) delete plPEdits[sc][key]; else plPEdits[sc][key]=nv;
+  if(!Object.keys(plPEdits[sc]).length) delete plPEdits[sc];
+  const n=plPDirtyCount(); const el=document.getElementById('plp-dirty');
+  if(el){ el.textContent=n?`● ${n} unsaved change${n>1?'s':''}`:''; }
+}
+function plPConfirmDiscard(){ return !plPDirtyCount() || confirm('You have unsaved rate changes. Discard them?'); }
+function plSetMode(m){ if(!plPConfirmDiscard()||!plConfirmDiscard()) return; plPEdits={}; plDirty=false; plDraft=null; plMode=m; if(m==='common'){ plScope='DEFAULT'; plFrom=''; } renderPriceList(); }
+function plPSetDate(v){ if(!plPConfirmDiscard()){ renderPriceList(); return; } plPEdits={}; plPDate=v; renderPriceList(); }
+function plPSave(){
+  const d=plDateNow(); const n=plPDirtyCount(); if(!n) return;
+  if(!confirm(`Save ${n} change${n>1?'s':''} as rates from ${fmtDate(d)} ${d.slice(0,4)}?\nRates before this date stay as they were (kept in history).`)) return;
+  const p=pr();
+  Object.entries(plPEdits).forEach(([sc,ch])=>{
+    const list=p.lists[sc]=p.lists[sc]||[];
+    const base=plEntryOn(sc,d); const rates=Object.assign({},base?base.rates:{});
+    Object.entries(ch).forEach(([k,v])=>{ if(v==null) delete rates[k]; else rates[k]=v; });
+    const i=list.findIndex(e=>e.from===d);
+    if(i>=0) list[i].rates=rates; else list.push({from:d,rates});
+    list.sort((a,b)=>a.from.localeCompare(b.from));
+    const nm=(parties.find(x=>plPartyScope(x.name)===sc)||{name:sc.slice(2)}).name;
+    if(!(p.partyOrder||[]).some(x=>plNorm(x)===plNorm(nm))) (p.partyOrder=p.partyOrder||[]).push(nm);
+  });
+  if(savePricing()){ plPEdits={}; plPAdded=[]; renderPriceList(); }
+}
+function plPAddParty(v){
+  const p=parties.find(x=>x.name.toLowerCase()===String(v||'').trim().toLowerCase());
+  if(!p){ if(v) alert('Party not found: '+v); return; }
+  if(!plPAdded.includes(p.name)) plPAdded.push(p.name);
+  renderPriceList();
+  setTimeout(()=>{ const r=document.querySelector(`tr[data-party="${CSS.escape(p.name)}"]`); if(r){ r.scrollIntoView({block:'center'}); const i=r.querySelector('input'); if(i) i.focus(); } },50);
+}
+function plPCopyFrom(name){
+  const src=prompt('Copy all rates into "'+name+'" from which party?');
+  if(!src) return;
+  const s=parties.find(x=>x.name.toLowerCase()===src.trim().toLowerCase());
+  if(!s){ alert('Party not found: '+src); return; }
+  const r=plPartyRates(s.name); const cols=plPartyCols();
+  cols.forEach(f=>PL_PARTY_GROUPS.forEach(g=>{ const k=f+'|'+g; plPCell(name,k,r[k]!=null?r[k]:''); }));
+  renderPriceList();
+}
+function plPartyHistory(){
+  const rows=[];
+  Object.entries(pr().lists).forEach(([sc,list])=>{
+    if(!(sc.startsWith('P:')||sc==='DEFAULT')) return;
+    const l=(list||[]).slice().sort((a,b)=>a.from.localeCompare(b.from));
+    const nm=sc==='DEFAULT'?'Common items':(parties.find(x=>plPartyScope(x.name)===sc)||{name:sc.slice(2)}).name;
+    l.forEach((e,i)=>{
+      if(!i){ rows.push({d:e.from,who:nm,txt:Object.keys(e.rates||{}).length+' rate(s) set'}); return; }
+      const prev=l[i-1].rates||{}, ch=[];
+      new Set([...Object.keys(prev),...Object.keys(e.rates||{})]).forEach(k=>{ const a=prev[k], b=(e.rates||{})[k]; if(a!==b) ch.push(k.replace('|',' ')+' '+(a!=null?a+'→':'')+(b!=null?b:'removed')); });
+      if(ch.length) rows.push({d:e.from,who:nm,txt:ch.join(' · ')});
+    });
+  });
+  rows.sort((a,b)=>b.d.localeCompare(a.d));
+  // merge "first list" rows of the same date into one line
+  const out=[]; const firsts={};
+  rows.forEach(r=>{ if(/rate\(s\) set$/.test(r.txt)){ (firsts[r.d]=firsts[r.d]||[]).push(r.who); } else out.push(r); });
+  Object.entries(firsts).forEach(([d,w])=>out.push({d,who:w.length>1?w.length+' lists':w[0],txt:'first rates loaded'}));
+  out.sort((a,b)=>b.d.localeCompare(a.d));
+  if(!out.length) return '<div style="color:#bbb;font-size:12px;padding:6px 0">No rates saved yet.</div>';
+  return `<table style="width:100%;border-collapse:collapse;font-size:12px">${out.slice(0,80).map(r=>`<tr><td style="padding:5px 8px;white-space:nowrap;font-weight:600;vertical-align:top">${fmtDate(r.d)} ${r.d.slice(0,4)}</td><td style="padding:5px 8px;white-space:nowrap;vertical-align:top">${r.who}</td><td style="padding:5px 8px;color:#555">${r.txt}</td></tr>`).join('')}</table>`;
+}
+function plRenderParty(el){
+  const ro=!!window._monitorReadOnly;
+  const cols=plPartyCols(), d=plDateNow();
+  const raw=plPartyList(), locOrder=[];
+  raw.forEach(n=>{ const l=stkPartyLocation(n)||''; if(!locOrder.includes(l)) locOrder.push(l); });
+  const names=raw.slice().sort((a,b)=>locOrder.indexOf(stkPartyLocation(a)||'')-locOrder.indexOf(stkPartyLocation(b)||'') || raw.indexOf(a)-raw.indexOf(b));
+  const q=plPFilter.trim().toLowerCase();
+  // most common value per location + column -> highlight special party rates
+  const mode={};
+  names.forEach(n=>{ const loc=stkPartyLocation(n)||''; const r=plPartyRates(n);
+    Object.entries(r).forEach(([k,v])=>{ const key=loc+'#'+k; (mode[key]=mode[key]||{})[v]=(mode[key][v]||0)+1; }); });
+  const usual=(loc,k)=>{ const m=mode[loc+'#'+k]; if(!m) return null; return parseFloat(Object.entries(m).sort((a,b)=>b[1]-a[1])[0][0]); };
+  const th='padding:6px 4px;font-size:11px;font-weight:700;color:#888;text-align:center;background:#fafbfc;border-bottom:1px solid #eee;white-space:nowrap';
+  const famColors=['#fafafa','#ffffff'];
+  let lastLoc=null;
+  const body=names.filter(n=>!q||n.toLowerCase().includes(q)||(stkPartyLocation(n)||'').toLowerCase().includes(q)).map(n=>{
+    const loc=stkPartyLocation(n)||''; const r=plPartyRates(n); const ed=plPEdits[plPartyScope(n)]||{};
+    const sep=(loc!==lastLoc)?`<tr><td colspan="${1+cols.length*4}" style="padding:10px 10px 4px;font-size:10.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;background:#fff">${loc||'No location'}</td></tr>`:''; lastLoc=loc;
+    return sep+`<tr data-party="${n.replace(/"/g,'&quot;')}"><td style="padding:3px 10px;font-weight:600;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;border-bottom:1px solid #f4f4f4">${n}${ro?'':` <span title="Copy rates from another party" onclick="plPCopyFrom('${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" style="cursor:pointer;color:#bbb;font-size:11px">⧉</span>`}</td>${cols.map((f,fi)=>PL_PARTY_GROUPS.map(g=>{
+      const k=f+'|'+g; const has=k in ed; const v=has?ed[k]:r[k]; const u=usual(loc,k);
+      const special=!has && v!=null && u!=null && v!==u;
+      const bg=has?'#fef9c3':special?'#ede9fe':famColors[fi%2];
+      return `<td style="padding:2px;border-bottom:1px solid #f4f4f4;background:${famColors[fi%2]}${g==='2n'?';border-left:2px solid #e9e3f2':''}"><input type="number" min="0" value="${v!=null?v:''}" placeholder="—" ${ro?'readonly':''} title="${special?'Special rate · usual for '+(loc||'this location')+': '+u:''}"
+        onchange="plPCell('${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${f}|${g}',this.value);this.style.background='#fef9c3'" style="width:52px;box-sizing:border-box;padding:4px 2px;border:1px solid ${ro?'transparent':'#e5e5e5'};border-radius:5px;font-size:12.5px;text-align:center;background:${bg};${special?'font-weight:700;color:#5b21b6':''}"></td>`;}).join('')).join('')}</tr>`;
+  }).join('');
+  const dates=new Set(); Object.entries(pr().lists).forEach(([sc,l])=>{ if(sc.startsWith('P:')) (l||[]).forEach(e=>dates.add(e.from)); });
+  const n=plPDirtyCount();
+  el.innerHTML=`
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <input placeholder="🔍 Party or location" value="${plPFilter.replace(/"/g,'&quot;')}" oninput="plPFilter=this.value;clearTimeout(window._plpf);window._plpf=setTimeout(()=>{renderPriceList();const i=document.getElementById('plp-filter');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},250)" id="plp-filter" style="padding:6px 10px;border-radius:7px;border:1.5px solid #ddd;font-size:12px;width:190px">
+      <span style="font-size:12px;color:#666">Rates on</span>
+      <input type="date" value="${d}" onchange="plPSetDate(this.value)" style="padding:5px 8px;border-radius:7px;border:1.5px solid #ddd;font-size:12px">
+      <span style="font-size:11px;color:#aaa">${dates.size?'saved dates: '+[...dates].sort().reverse().slice(0,4).map(x=>fmtDate(x)).join(', '):''}</span>
+      <span style="flex:1"></span>
+      ${ro?'':`<input list="dl-pl-parties2" placeholder="+ Add party" onchange="plPAddParty(this.value);this.value=''" style="padding:6px 10px;border-radius:7px;border:1.5px dashed #ccc;font-size:12px;width:150px">
+      <datalist id="dl-pl-parties2">${parties.filter(p=>!names.includes(p.name)).map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}">`).join('')}</datalist>`}
+    </div>
+    <div style="overflow:auto;max-height:68vh;border:1px solid #ebebeb;border-radius:10px;background:#fff">
+      <table style="border-collapse:separate;border-spacing:0;font-size:13px">
+        <thead style="position:sticky;top:0;z-index:2">
+          <tr><th rowspan="2" style="${th};text-align:left;padding-left:10px;position:sticky;left:0;z-index:3;background:#fafbfc">Party</th>${cols.map(f=>`<th colspan="4" style="${th};color:#3b1f5c;font-size:12px;border-left:2px solid #e9e3f2">${f}</th>`).join('')}</tr>
+          <tr>${cols.map(()=>PL_PARTY_GROUPS.map((g,i)=>`<th style="${th};font-weight:600${i===0?';border-left:2px solid #e9e3f2':''}">${g}</th>`).join('')).join('')}</tr>
+        </thead>
+        <tbody>${body||`<tr><td colspan="${1+cols.length*4}" style="padding:20px;text-align:center;color:#999">No party rates yet${ro?'':' — use Import Excel, or + Add party'}.</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:11px;color:#888">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#ede9fe;border-radius:2px"></span> special party rate (differs from the usual rate in its location)</span>
+      <span>— = no separate rate: OG10, BG5, TG use the party's OG rate; DD16 uses DD</span>
+      <span style="flex:1"></span>
+      ${ro?'':`<span id="plp-dirty" style="font-size:12px;color:#b45309;font-weight:600">${n?`● ${n} unsaved change${n>1?'s':''}`:''}</span>
+      <button class="btn btn-primary" onclick="plPSave()">💾 Save changes from ${fmtDate(d)}</button>`}
+    </div>`;
+}
+// ---- Import the "Common Items" + "Party Rates" Excel ----
+function plImportExcel(inp){
+  const f=inp.files&&inp.files[0]; inp.value=''; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const num=v=>{ const x=parseFloat(v); return x>0?x:null; };
+      const sheet=n=>{ const k=wb.SheetNames.find(s=>s.trim().toLowerCase()===n); return k?XLSX.utils.sheet_to_json(wb.Sheets[k],{header:1,defval:null}):null; };
+      const pr_=sheet('party rates'), ci=sheet('common items');
+      if(!pr_ && !ci){ alert('This file has no "Party Rates" or "Common Items" sheet.'); return; }
+      const partyRates={}, order=[], cols=[], unknown=[];
+      if(pr_){
+        const h=pr_.findIndex(r=>String(r[0]||'').trim().toLowerCase()==='party');
+        if(h<0){ alert('Party Rates: header row with "Party" not found.'); return; }
+        const famRow=pr_[h], grpRow=pr_[h+1]||[]; const colInfo=[]; let fam=null;
+        for(let c=1;c<Math.max(famRow.length,grpRow.length);c++){
+          if(famRow[c]!=null && String(famRow[c]).trim()) fam=String(famRow[c]).trim().toUpperCase();
+          const g=String(grpRow[c]||'').trim(); const G=PL_PARTY_GROUPS.concat(['Special design']).find(x=>x.toLowerCase()===g.toLowerCase());
+          if(fam&&G){ colInfo[c]=fam+'|'+G; if(!cols.includes(fam)) cols.push(fam); }
+        }
+        for(let r=h+2;r<pr_.length;r++){
+          const nm=String(pr_[r][0]||'').trim(); if(!nm) continue;
+          const p=parties.find(x=>x.name.trim().toLowerCase()===nm.toLowerCase());
+          if(!p){ unknown.push(nm); continue; }
+          const rates={}; colInfo.forEach((k,c)=>{ if(k){ const v=num(pr_[r][c]); if(v) rates[k]=v; } });
+          if(Object.keys(rates).length){ partyRates[p.name]=rates; order.push(p.name); }
+        }
+      }
+      const common={};
+      if(ci){
+        const h=ci.findIndex(r=>String(r[0]||'').trim().toLowerCase()==='family');
+        if(h>=0){
+          const hdr=ci[h].map(x=>String(x||'').trim().toLowerCase());
+          const gi={}; PL_GROUPS.forEach(g=>{ const i=hdr.indexOf(g.toLowerCase()); if(i>0) gi[g]=i; });
+          for(let r=h+1;r<ci.length;r++){
+            const fam=String(ci[r][0]||'').trim(); if(!fam) continue;
+            const row={}; Object.entries(gi).forEach(([g,i])=>{ const v=num(ci[r][i]); if(v) row[fam.toUpperCase()+'|'+g]=v; });
+            Object.assign(common,row);
+          }
+        }
+      }
+      const d=plDateNow();
+      const nCommonFams=new Set(Object.keys(common).map(k=>k.split('|')[0])).size;
+      if(!confirm(`Import price list?\n\n• ${order.length} parties with rates (${cols.join(', ')})\n• ${nCommonFams} common item families\n• Rates start from ${fmtDate(d)} ${d.slice(0,4)} (change the "Rates on" date first if needed)\n${unknown.length?'\n⚠ Not found in the app, skipped: '+unknown.join(', ')+'\n':''}\nOlder rates are kept in history.`)) return;
+      const p=pr();
+      const put=(sc,rates)=>{ const list=p.lists[sc]=p.lists[sc]||[]; const i=list.findIndex(e=>e.from===d); if(i>=0) list[i].rates=rates; else list.push({from:d,rates}); list.sort((a,b)=>a.from.localeCompare(b.from)); };
+      Object.entries(partyRates).forEach(([n,r])=>put(plPartyScope(n),r));
+      if(Object.keys(common).length) put('DEFAULT',common);
+      p.partyOrder=order.concat((p.partyOrder||[]).filter(n=>!order.includes(n)));
+      p.partyCols=cols.length?cols:p.partyCols;
+      plParents();
+      // colours -> families used in this price list
+      const changes=[];
+      colors.forEach(c=>{ const t=commonFamily(c); const nm=colorName(c); if(t && familyOf(nm)!==t) changes.push([nm,familyOf(nm)||'—',t]); });
+      if(changes.length){
+        const by={}; changes.forEach(([n,,t])=>(by[t]=by[t]||[]).push(n));
+        if(confirm('Also set colour families to match this price list?\n\n'+Object.entries(by).map(([t,l])=>t+': '+l.slice(0,8).join(', ')+(l.length>8?' …+'+(l.length-8):'')).join('\n')+'\n\nOK = update '+changes.length+' colour(s). Cancel = keep families as they are.'))
+          changes.forEach(([n,,t])=>{ p.families[n.toUpperCase()]=t; });
+      }
+      if(savePricing()){ plPEdits={}; plMode='party'; renderPriceList(); alert('Price list imported: '+order.length+' parties'+(nCommonFams?', '+nCommonFams+' common families':'')+'.'); }
+    }catch(err){ console.error(err); alert('Could not read this file: '+err.message); }
+  };
+  rd.readAsArrayBuffer(f);
+}
+function renderPriceList(){
+  const el=document.getElementById('pl-body'); if(!el) return;
+  const ro=!!window._monitorReadOnly;
+  const hasLoc=Object.keys(pr().lists).some(k=>k.startsWith('L:') && (pr().lists[k]||[]).length);
+  if(plMode==='lists' && !hasLoc) plMode='party';
+  const tab=(m,t)=>`<button class="btn btn-sm${plMode===m?' btn-primary':''}" onclick="plSetMode('${m}')">${t}</button>`;
+  const noFam=colors.filter(c=>!familyOf(colorName(c))).length, noGrp=shapes.filter(s=>!groupOf(s)).length;
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      ${tab('party','Party rates')}${tab('common','Common items')}${hasLoc?tab('lists','Location lists'):''}
+      <span style="flex:1"></span>
+      ${ro?'':`<button class="btn btn-sm" onclick="document.getElementById('pl-import-file').click()">📥 Import Excel</button>
+      <input type="file" id="pl-import-file" accept=".xlsx,.xls" style="display:none" onchange="plImportExcel(this)">`}
+    </div>
+    ${(!ro && (noFam||noGrp))?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px">
+      <span style="flex:1;min-width:200px">${noFam} colour(s) need a family · ${noGrp} size(s) need a group. Until then they use the last billed rate.</span>
+      ${noFam?'<button class="btn btn-sm" onclick="applyFamilySuggestions();renderPriceList()">Suggest families</button>':''}
+      ${noGrp?'<button class="btn btn-sm" onclick="applyGroupSuggestions();renderPriceList()">Suggest size groups</button>':''}
+    </div>`:''}
+    <div id="pl-view"></div>
+    <div style="background:#fff;border:1px solid #ebebeb;border-radius:12px;padding:14px 16px;margin-top:14px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">History</div>${plPartyHistory()}
+    </div>`;
+  const v=document.getElementById('pl-view');
+  if(plMode==='party') plRenderParty(v);
+  else { if(plMode==='common') plScope='DEFAULT'; plRenderLists(v); }
+}
+
+function invRefreshAutoRates(){
+  document.querySelectorAll('#inv-items-container .item-row-i').forEach(r=>{
+    if(r.querySelector('.ii-color').value.trim() && (r.dataset.autoRate==='1' || !r.querySelector('.ii-rate').value)) invRowRate(r);
+  });
+}
 function invPartyChanged(){
+  clearTimeout(window._invRateTimer); window._invRateTimer=setTimeout(invRefreshAutoRates,250);
   clearTimeout(window._invPartyTimer);
   window._invPartyTimer=setTimeout(renderInvPending,200);
 }
@@ -3888,8 +4546,6 @@ function colAliasFor(colorName_){
 }
 // Move a pending item into the invoice (left), autofill kg + last rate, grey it on right
 function invAddPending(color,shape,netKg){
-  const party=(document.getElementById('if-party-input')||{value:''}).value.trim();
-  const rate=lastBilledRate(party,color,shape);
   // Reuse an empty first row if present, else add
   let rows=[...document.querySelectorAll('#inv-items-container .item-row-i')];
   let target=rows.find(r=>!r.querySelector('.ii-color').value.trim() && !r.querySelector('.ii-kg').value.trim());
@@ -3897,7 +4553,9 @@ function invAddPending(color,shape,netKg){
   target.querySelector('.ii-shape').value=shape;
   target.querySelector('.ii-color').value=color;
   target.querySelector('.ii-kg').value=netKg.toFixed(2);
-  target.querySelector('.ii-rate').value=rate>0?rate:'';
+  target.querySelector('.ii-rate').value='';
+  target.dataset.autoRate='1';
+  invRowRate(target);
   window._invPickedKeys[color+'||'+shape]=true;
   updateInvFormTotal();
   renderInvPending();
@@ -4165,7 +4823,7 @@ function viewInvoice(invId){
   const inv=invoices.find(x=>x.id===invId);if(!inv)return;
   // Hide all tabs
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','orderlist','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','pricelist','production','comparison','reports'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
     if(el) el.classList.remove('active');
   });
@@ -4309,7 +4967,7 @@ function printPartyLedger(){
   document.getElementById('view-ledger').style.display='block';
   document.getElementById('view-invoice').style.display='none';
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','orderlist','invoices','invlist','catalog','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','pricelist','production','comparison','reports'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
     if(el) el.classList.remove('active');
   });
@@ -7020,6 +7678,7 @@ async function showAutoBackups(){
     nextPaId=data.nextPaId||nextPaId;
     nextInvNum=data.nextInvNum||nextInvNum;
     nextInvoiceNum=data.nextInvoiceNum||nextInvoiceNum;
+    if(data.pricing){ window._pricing=data.pricing; savePricing(); }
     repairDuplicateOrderIds();
     saveToBin();
     renderAll();
@@ -7108,7 +7767,7 @@ function changeAdminPw(){
 }
 function exportBackup(){
   const payload={colors,shapes,orders,parties,invoices,
-    nextOid,nextPaId,nextInvNum,nextInvoiceNum};
+    nextOid,nextPaId,nextInvNum,nextInvoiceNum,pricing:pr()};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -7132,6 +7791,7 @@ function importBackup(input){
       nextPaId    = data.nextPaId    || nextPaId;
       nextInvNum  = data.nextInvNum  || nextInvNum;
       nextInvoiceNum=data.nextInvoiceNum||nextInvoiceNum;
+      if(data.pricing){ window._pricing=data.pricing; savePricing(); }
       saveToBin();renderAll();
       alert('✅ Backup restored successfully!');
     }catch(e){alert('❌ Invalid backup file.');}
