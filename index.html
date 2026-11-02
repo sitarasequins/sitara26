@@ -792,6 +792,17 @@ tr:hover td{background:#f8faff}
         <button class="btn btn-primary" onclick="addParty()">Add</button>
       </div>
     </div>
+    <div class="tag-section">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <h4 style="margin:0">Print Groups <span id="grp-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
+        <span style="font-size:11px;color:#999">Used in Pending Work → Party Grid to tick a group of parties in one click. Add parties to a group from the Parties list above.</span>
+      </div>
+      <div id="grp-list"></div>
+      <div class="tag-add-row" style="margin-top:8px">
+        <input id="new-group" type="text" placeholder="New group name e.g. Morning dispatch" onkeydown="if(event.key==='Enter')grpAdd()">
+        <button class="btn btn-primary" onclick="grpAdd()">Add</button>
+      </div>
+    </div>
     <datalist id="dl-families"></datalist>
     <div style="padding:12px;background:#f5f5f5;border-radius:8px;font-size:12px;color:#888">
       Colors, shapes and parties are case-insensitive. Click View on a party to see all their orders &amp; invoices.
@@ -869,6 +880,7 @@ tr:hover td{background:#f8faff}
         <button onclick="pwCheckAll()" style="padding:5px 12px;border:1.5px solid #16a34a;border-radius:7px;font-size:11px;font-weight:600;color:#16a34a;background:#fff;cursor:pointer">✓ Check All</button>
         <button onclick="pwUncheckAll()" style="padding:5px 12px;border:1.5px solid #b45309;border-radius:7px;font-size:11px;font-weight:600;color:#b45309;background:#fff;cursor:pointer">✗ Uncheck All</button>
         <span id="pw-checkall-note" style="font-size:10.5px;color:#888"></span>
+        <span id="pw-groups" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"></span>
       </span>
     </div>
     <div id="prod-summary"></div>
@@ -2875,7 +2887,53 @@ function savePartyLocation(id){
   saveAll();renderParties();
   showSaveToast(loc?'Location saved':'Location removed');
 }
+function grpPartyChips(name){
+  const gs=pwGroups(); if(!gs.length) return '';
+  const ro=!!window._monitorReadOnly; const nm=name.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  return `<span style="display:flex;gap:3px;align-items:center;flex-wrap:wrap" title="Print groups — click to add or remove">${gs.map((g,i)=>{ const on=g.parties.includes(name);
+    return `<button ${ro?'disabled':''} onclick="grpToggle(${i},'${nm}')" style="padding:3px 8px;border:1.5px solid ${on?'#4338ca':'#e0e7ff'};border-radius:6px;font-size:11px;font-weight:600;background:${on?'#4338ca':'#fff'};color:${on?'#fff':'#a5b4fc'};cursor:${ro?'default':'pointer'}">${on?'✓ ':''}${g.name}</button>`; }).join('')}</span>`;
+}
+function grpToggle(i,name){
+  const g=pwGroups()[i]; if(!g) return;
+  const k=g.parties.indexOf(name); if(k>=0) g.parties.splice(k,1); else g.parties.push(name);
+  if(savePricing((k>=0?'Removed from ':'Added to ')+g.name)){ renderParties(); renderGroupsAdmin(); }
+}
+function grpAdd(){
+  const inp=document.getElementById('new-group'); const name=(inp.value||'').trim(); if(!name) return;
+  if(pwGroups().some(g=>g.name.toLowerCase()===name.toLowerCase())){ alert('Group already exists.'); return; }
+  pwGroups().push({name,parties:[]}); inp.value='';
+  if(savePricing('Group "'+name+'" added')){ renderParties(); renderGroupsAdmin(); }
+}
+function grpRename(i){
+  const g=pwGroups()[i]; if(!g) return;
+  const n=(prompt('New name for "'+g.name+'":',g.name)||'').trim(); if(!n||n===g.name) return;
+  if(pwGroups().some((x,j)=>j!==i&&x.name.toLowerCase()===n.toLowerCase())){ alert('Group already exists.'); return; }
+  g.name=n; if(savePricing('Group renamed')){ renderParties(); renderGroupsAdmin(); }
+}
+function grpDelete(i){
+  const g=pwGroups()[i]; if(!g||!confirm('Delete group "'+g.name+'"? Parties are not deleted.')) return;
+  pwGroups().splice(i,1); if(savePricing('Group deleted')){ renderParties(); renderGroupsAdmin(); }
+}
+function grpMove(i,d){
+  const gs=pwGroups(), j=i+d; if(j<0||j>=gs.length) return;
+  [gs[i],gs[j]]=[gs[j],gs[i]]; if(savePricing('Order saved')){ renderParties(); renderGroupsAdmin(); }
+}
+function renderGroupsAdmin(){
+  const el=document.getElementById('grp-list'); if(!el) return;
+  const gs=pwGroups(), ro=!!window._monitorReadOnly;
+  const c=document.getElementById('grp-count'); if(c) c.textContent='('+gs.length+')';
+  el.innerHTML=gs.length?gs.map((g,i)=>`<div class="party-row-item" style="align-items:flex-start">
+      <div style="min-width:0"><span style="font-size:13px;font-weight:700;color:#3730a3">${g.name}</span> <span style="font-size:11px;color:#888">${g.parties.length} part${g.parties.length===1?'y':'ies'}</span>
+        <div style="font-size:11.5px;color:#666;margin-top:3px">${g.parties.length?g.parties.slice().sort().join(' · '):'<span style="color:#bbb">No parties yet — use the group buttons in the Parties list</span>'}</div></div>
+      ${ro?'':`<div style="display:flex;gap:6px;flex:none">
+        <button class="btn btn-sm" onclick="grpMove(${i},-1)" title="Move up" ${i?'':'disabled'}>↑</button>
+        <button class="btn btn-sm" onclick="grpMove(${i},1)" title="Move down" ${i<gs.length-1?'':'disabled'}>↓</button>
+        <button class="btn btn-sm" onclick="grpRename(${i})">Rename</button>
+        <button class="btn btn-sm btn-danger" onclick="grpDelete(${i})">Delete</button></div>`}
+    </div>`).join(''):'<div style="font-size:12px;color:#bbb;padding:4px 0">No groups yet. Add one below.</div>';
+}
 function renderParties(){
+  renderGroupsAdmin();
   const countEl=document.getElementById('party-count');
   if(countEl)countEl.textContent='('+parties.length+')';
   const container=document.getElementById('party-tags');
@@ -2891,6 +2949,7 @@ function renderParties(){
           <input type="text" id="ploc-${p.id}" value="${(p.location||'').replace(/"/g,'&quot;')}" placeholder="📍 location..." onkeydown="if(event.key==='Enter')savePartyLocation(${p.id})" style="font-size:13px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;width:170px">
           <button onclick="savePartyLocation(${p.id})" title="Save location" style="font-size:13px;padding:4px 8px;border:1px solid #16a34a;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;margin-left:3px">✓</button>
         </span>
+        ${grpPartyChips(p.name)}
         <button class="btn btn-sm" onclick="editPartyPhone(${p.id})" style="${p.phone?'background:#f0fdf4;border-color:#bbf7d0;color:#16a34a':''}">📱</button>
         <button class="btn btn-sm" onclick="openPartyDetail(${p.id})">View</button>
         <button class="btn btn-sm" onclick="editPartyInline(${p.id})">Edit</button>
@@ -2920,6 +2979,7 @@ function editPartyInline(id){
   if(parties.some(x=>x.id!==id&&x.name.toLowerCase()===name.toLowerCase())){alert('Party already exists.');return;}
   const old=p.name;
   p.name=name;
+  try{ let ch=false; pwGroups().forEach(g=>{ const k=g.parties.indexOf(old); if(k>=0){ g.parties[k]=name; ch=true; } }); if(ch) savePricing('Groups updated'); }catch(e){}
   orders.forEach(o=>{if(o.party===old)o.party=name;});
   invoices.forEach(inv=>{if(inv.party===old)inv.party=name;});
   saveAll();renderParties();renderOrders();renderInvoiceList();
@@ -3880,22 +3940,23 @@ function pr(){
   return p;
 }
 (function(){ try{ const c=localStorage.getItem('sitara_pricing'); if(c && !window._pricing) window._pricing=JSON.parse(c); }catch(e){} })();
-function savePricing(){
+function savePricing(msg){
   if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return false; }
   const p=pr(); p.updatedAt=new Date().toISOString();
   try{ localStorage.setItem('sitara_pricing', JSON.stringify(p)); }catch(e){}
   if(window._firebaseReady && window._firestore && window._firestore.PRICING_DOC){
     const {setDoc, PRICING_DOC}=window._firestore;
     setDoc(PRICING_DOC, JSON.parse(JSON.stringify(p)))
-      .then(()=>showSaveToast('Price list saved'))
+      .then(()=>showSaveToast(msg||'Price list saved'))
       .catch(e=>{ console.error('Pricing save failed',e); showSaveToast('Price list save failed! Check connection',true); });
   }
   return true;
 }
 window.onPricingUpdate=function(){
   try{ localStorage.setItem('sitara_pricing', JSON.stringify(pr())); }catch(e){}
-  if(tabIsOpen('catalog')) renderCatalog();
+  if(tabIsOpen('catalog')){ renderCatalog(); renderParties(); }
   if(tabIsOpen('pricelist') && !plDirty) renderPriceList();
+  if(tabIsOpen('production') && prodView==='partygrid') pwRenderGroups();
 };
 function plNorm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 function familyOf(color){ return pr().families[String(color||'').trim().toUpperCase()]||''; }
@@ -5156,6 +5217,59 @@ function pwTogglePartyPrint(key){
 function pwClearExcluded(){ pwExcludedParties=new Set(); renderProduction(); }
 function pwCheckAll(){ pwExcludedParties=new Set(); renderProduction(); }
 function pwUncheckAll(){ pwExcludedParties=new Set(pwAllPartyNames); renderProduction(); }
+// ── Saved party groups for printing (stored with the price list doc, synced to all devices) ──
+function pwGroups(){ const p=pr(); if(!Array.isArray(p.partyGroups)) p.partyGroups=[]; return p.partyGroups; }
+function pwTicked(){ return pwAllPartyNames.filter(n=>!pwExcludedParties.has(n)); }
+function pwActiveGroup(){
+  const t=new Set(pwTicked()); if(!t.size) return -1;
+  return pwGroups().findIndex(g=>{ const m=g.parties.filter(n=>pwAllPartyNames.includes(n)); return m.length===t.size && m.every(n=>t.has(n)); });
+}
+function pwSelectGroup(i){
+  const g=pwGroups()[i]; if(!g) return;
+  const keep=new Set(g.parties);
+  pwExcludedParties=new Set(pwAllPartyNames.filter(n=>!keep.has(n)));
+  renderProduction();
+  const shown=pwAllPartyNames.filter(n=>keep.has(n)).length;
+  if(!shown) showSaveToast('No pending work for "'+g.name+'" parties',true);
+}
+function pwNewGroup(){
+  const t=pwTicked();
+  if(!t.length){ alert('Tick the parties for this group first, then press + New group.'); return; }
+  const name=(prompt('Name for this group of '+t.length+' part'+(t.length>1?'ies':'y')+':')||'').trim();
+  if(!name) return;
+  const gs=pwGroups(); const i=gs.findIndex(g=>g.name.toLowerCase()===name.toLowerCase());
+  if(i>=0){ if(!confirm('"'+gs[i].name+'" already exists. Replace its parties with the '+t.length+' ticked now?')) return; gs[i].parties=t; }
+  else gs.push({name, parties:t});
+  savePricing('Group "'+name+'" saved'); renderProduction();
+}
+function pwUpdateGroup(i){
+  const g=pwGroups()[i]; const t=pwTicked(); if(!g||!t.length) return;
+  // keep members that have no pending work right now (not visible), replace the visible ones with the ticked ones
+  const hidden=g.parties.filter(n=>!pwAllPartyNames.includes(n));
+  if(!confirm('Save the '+t.length+' ticked part'+(t.length>1?'ies':'y')+' as "'+g.name+'"?'+(hidden.length?'\n('+hidden.length+' member(s) with no pending work now are kept.)':''))) return;
+  g.parties=[...new Set(t.concat(hidden))]; savePricing('Group "'+g.name+'" updated'); renderProduction();
+}
+function pwRenameGroup(i){
+  const g=pwGroups()[i]; if(!g) return;
+  const n=(prompt('New name for "'+g.name+'" (leave empty to delete the group):',g.name)??null);
+  if(n===null) return;
+  if(!n.trim()){ if(confirm('Delete group "'+g.name+'"?')){ pwGroups().splice(i,1); savePricing('Group deleted'); renderProduction(); } return; }
+  g.name=n.trim(); savePricing('Group renamed'); renderProduction();
+}
+function pwRenderGroups(){
+  const el=document.getElementById('pw-groups'); if(!el) return;
+  const ro=!!window._monitorReadOnly, gs=pwGroups(), act=pwActiveGroup();
+  const t=pwTicked(); const tickedSet=new Set(t);
+  // a group that is active but has since been changed by hand -> offer "Update"
+  const chip=(g,i)=>{ const on=i===act; const n=g.parties.filter(x=>pwAllPartyNames.includes(x)).length;
+    return `<span style="display:inline-flex;align-items:center;border:1.5px solid ${on?'#4338ca':'#c7d2fe'};border-radius:7px;background:${on?'#4338ca':'#eef2ff'};overflow:hidden">
+      <button onclick="pwSelectGroup(${i})" title="${g.parties.map(x=>x.replace(/"/g,'&quot;')).join(', ')}" style="padding:5px 10px;border:0;background:transparent;font-size:11px;font-weight:700;color:${on?'#fff':'#3730a3'};cursor:pointer">${g.name} <span style="font-weight:400;opacity:.75">${n}</span></button>
+    </span>`; };
+  el.innerHTML=(gs.length?'<span style="width:1px;height:20px;background:#eee"></span><span style="font-size:11px;color:#888;font-weight:600">Groups:</span>':'')+
+    gs.map(chip).join('')+
+    (ro?'':`<button onclick="gotoTab('catalog');setTimeout(()=>{const s=document.getElementById('grp-list');if(s)s.scrollIntoView({block:'center'});},100)" title="Create and edit groups in the Create tab" style="padding:5px 8px;border:0;background:none;font-size:11px;color:#6366f1;cursor:pointer;text-decoration:underline">${gs.length?'Edit groups':'+ Make print groups'}</button>`);
+  if(act>=0) window._pwLastGroup=act;
+}
 // ── Date filter for Pending Work: 'till' = all pending as of today (normal),
 // 'today' = only items that have at least one order placed today,
 // 'date'  = only items that have at least one order placed on pwCustomDate. ──
@@ -5639,6 +5753,7 @@ function renderProduction(){
   if(checkWrap) checkWrap.style.display = prodView==='partygrid' ? 'flex' : 'none';
   const checkNote=document.getElementById('pw-checkall-note');
   if(checkNote) checkNote.textContent=pwExcludedParties.size?pwExcludedParties.size+' party(ies) skipped in Print/POS/WA':'';
+  if(prodView==='partygrid') pwRenderGroups();
   pwUpdateSortButtons();
   // Populate filter datalists
   const dlSh=document.getElementById('dl-pw-shapes');
