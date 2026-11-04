@@ -2245,8 +2245,34 @@ function settleDue(orderList, supplyList){
   return {due, totalOrd, totalSupplied};
 }
 // Net pending kg for a single party+color+shape using cycle settlement.
+// ── Speed: while a screen is being drawn, look-ups use a prebuilt index instead of
+// scanning every order and invoice again for each party+item (same results). ──
+function pwBuildIdx(){
+  const ord={}, inv={}, byId={};
+  orders.forEach(o=>{
+    if(!(o.id in byId)) byId[o.id]=o;
+    if(o.status!=='Pending') return;
+    (o.items||[]).forEach((it,idx)=>{ const k=o.party+'\u0001'+it.color+'\u0001'+it.shape; (ord[k]=ord[k]||[]).push({o,it,idx}); });
+  });
+  invoices.forEach(x=>{ (x.items||[]).forEach(i=>{ const k=x.party+'\u0001'+i.color+'\u0001'+i.shape; (inv[k]=inv[k]||[]).push({inv:x,i}); }); });
+  return {ord,inv,byId};
+}
+function withPwIdx(fn){
+  if(window._pwIdx) return fn();
+  window._pwIdx=pwBuildIdx();
+  try{ return fn(); } finally{ window._pwIdx=null; }
+}
+function pwKey(p,c,s){ return p+'\u0001'+c+'\u0001'+s; }
 function settledPendingFor(party,color,shape){
   const ordList=[],supList=[];
+  const X=window._pwIdx;
+  if(X){
+    const k=pwKey(party,color,shape);
+    (X.ord[k]||[]).forEach(({o,it})=>{ if(!it.cancelled) ordList.push({date:o.date,kg:it.kg,seq:o.invNum||o.id||0}); });
+    (X.inv[k]||[]).forEach(({inv,i})=>supList.push({date:inv.date,kg:i.kg,seq:inv.serial||inv.id||0}));
+    if(!ordList.length) return {due:0,totalOrd:0,totalSupplied:0};
+    return settleDue(ordList,supList);
+  }
   orders.filter(o=>o.status==='Pending' && o.party===party).forEach(o=>{
     o.items.filter(i=>!i.cancelled && i.color===color && i.shape===shape).forEach(i=>{
       ordList.push({date:o.date,kg:i.kg,seq:o.invNum||o.id||0});
@@ -2265,6 +2291,13 @@ function settledPendingFor(party,color,shape){
 // so we only flag orders whose OWN quantity is still unfulfilled.
 function perOrderRemaining(party,color,shape){
   const ords=[];
+  const sups=[];
+  const X=window._pwIdx;
+  if(X){
+    const k=pwKey(party,color,shape);
+    (X.ord[k]||[]).forEach(({o,it,idx})=>{ if(!it.cancelled) ords.push({oid:o.id, idx, date:o.date, seq:o.invNum||o.id||0, need:parseFloat(it.kg)||0, filled:0}); });
+    (X.inv[k]||[]).forEach(({inv,i})=>sups.push({date:inv.date, seq:inv.serial||inv.id||0, rem:parseFloat(i.kg)||0}));
+  } else {
   orders.filter(o=>o.status==='Pending' && o.party===party).forEach(o=>{
     o.items.forEach((it,idx)=>{
       if(!it.cancelled && it.color===color && it.shape===shape){
@@ -2272,12 +2305,12 @@ function perOrderRemaining(party,color,shape){
       }
     });
   });
-  const sups=[];
   invoices.filter(inv=>inv.party===party).forEach(inv=>{
     (inv.items||[]).forEach(i=>{
       if(i.color===color && i.shape===shape) sups.push({date:inv.date, seq:inv.serial||inv.id||0, rem:parseFloat(i.kg)||0});
     });
   });
+  }
   ords.sort((a,b)=>a.date.localeCompare(b.date)||(a.seq-b.seq));
   sups.sort((a,b)=>a.date.localeCompare(b.date)||(a.seq-b.seq));
   sups.forEach(s=>{
@@ -2388,8 +2421,9 @@ function partiesPendingForItem(color,shape){
 function toGiveFor(party,color,shape){
   const rows=perOrderRemaining(party,color,shape);
   let due=0, inProc=0;
+  const X=window._pwIdx;
   rows.forEach(r=>{
-    const o=orders.find(x=>x.id===r.oid);
+    const o=X?X.byId[r.oid]:orders.find(x=>x.id===r.oid);
     const it=o&&o.items[r.idx];
     const proc=it?(parseFloat(it.procKg)||0):0;
     due+=r.remaining;
@@ -5618,6 +5652,9 @@ const PW_MIN_KG=1.0; // amounts below this are hidden on Pending Work
 function tabIsOpen(id){ const el=document.getElementById('tab-'+id); return !!(el && el.classList.contains('active')); }
 function renderProduction(){
   if(!tabIsOpen('production')) return; // heavy: only calculate while Pending Work is open
+  return withPwIdx(renderProductionInner);
+}
+function renderProductionInner(){
 
   // ── Build net-pending across ALL pending orders (all dates) ──
   // ordered[color||shape] = {totalKg, parties:{name->{kg, earliestDate}}, dates:[]}
@@ -7159,6 +7196,9 @@ function shareComparisonWA(){
 function renderReport(){
   if(!document.getElementById('rpt-type2') && !document.getElementById('rpt-from')) return;
   if(!tabIsOpen('reports')) return; // heavy: only calculate while Reports is open
+  return withPwIdx(renderReportInner);
+}
+function renderReportInner(){
 
   // Populate dropdowns
   const partyEl=document.getElementById('rpt-party');
