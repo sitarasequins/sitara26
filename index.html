@@ -22,6 +22,7 @@
   const INV_DOC     = doc(db, 'sitara26', 'invoices_backup');
   const COURIER_DOC = doc(db, 'sitara26', 'courier_data');
   const PRICING_DOC = doc(db, 'sitara26', 'pricing');
+  const SHEETS_DOC = doc(db, 'sitara26', 'sheets');
   const BACKUP_COL  = 'sitara26_backups';
 
   // ================= SPLIT (CHUNKED) STORAGE =================
@@ -149,7 +150,7 @@
   // ===========================================================
 
   // Expose to global scope for use by app JS
-  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, query, where, documentId, DATA_DOC, INV_DOC, COURIER_DOC, PRICING_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
+  window._firestore = { db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, deleteDoc, query, where, documentId, DATA_DOC, INV_DOC, COURIER_DOC, PRICING_DOC, SHEETS_DOC, BACKUP_COL, writeChunked, loadChunked, fsSize };
   window._firebaseReady = true;
 
   // Price list lives in its own small doc; keep it live on every device.
@@ -159,6 +160,14 @@
     window._pricing = snap.data();
     if(window.onPricingUpdate) window.onPricingUpdate();
   }, (e) => console.error('Pricing listener failed:', e));
+
+  // Sheets / raw material lives in its own doc too (never touches orders or invoices).
+  onSnapshot(SHEETS_DOC, (snap) => {
+    if(snap.metadata && snap.metadata.hasPendingWrites) return;
+    if(!snap.exists()) return;
+    window._sheets = snap.data();
+    if(window.onSheetsUpdate) window.onSheetsUpdate();
+  }, (e) => console.error('Sheets listener failed:', e));
 
   // Listen for real-time updates from other devices
   let _snapSeq = 0;
@@ -263,6 +272,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-danger{color:#dc2626;border-color:#fecaca;background:#fff}
 .btn-danger:hover{background:#fef2f2;border-color:#fca5a5}
 .btn-sm{height:28px;font-size:12px;padding:0 11px;border-radius:7px}
+
+/* Sheets tab */
+#sh-body .sh-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+#sh-body .sh-note{font-size:12px;color:#777}
+#sh-body .sh-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:10px}
+#sh-body .sh-info{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:12px}
+#sh-body .sh-tabs{display:flex;gap:4px;border-bottom:2px solid #e3e5eb;margin:6px 0 14px;flex-wrap:wrap}
+#sh-body .sh-tab{padding:8px 13px;border:0;background:none;font-size:13px;font-weight:600;color:#888;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+#sh-body .sh-tab.on{color:#2563eb;border-bottom-color:#2563eb}
+#sh-body .sh-card{background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+#sh-body .sh-scroll{overflow:auto;max-height:66vh;border:1px solid #eceef3;border-radius:10px}
+#sh-body table.sh-table{border-collapse:collapse;width:100%}
+#sh-body .sh-table th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#888;text-align:left;padding:7px 8px;border-bottom:2px solid #eceef3;background:#fafbfc;white-space:nowrap;position:sticky;top:0}
+#sh-body .sh-table td{padding:6px 8px;border-bottom:1px solid #f1f2f6;vertical-align:top;font-size:13px}
+#sh-body .sh-table td.n,#sh-body .sh-table th.n{text-align:right;font-variant-numeric:tabular-nums}
+#sh-body .sh-table tr.tot td{font-weight:700;border-top:2px solid #1b1d2a;border-bottom:0}
+#sh-body input,#sh-body select{font-size:13px;padding:6px 8px;border:1.5px solid #d5d8e0;border-radius:7px;background:#fff}
+#sh-body input.sh-num{width:90px;text-align:right}
+#sh-body .sh-pill{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px;background:#f1f2f6;color:#555;margin:1px 2px 1px 0}
+#sh-body .sh-neg{color:#b91c1c}#sh-body .sh-pos{color:#15803d}#sh-body .sh-muted{color:#aaa}
 /* Stats */
 .stat{background:#fff;border-radius:10px;padding:12px 16px;border:1px solid #ebebeb;transition:box-shadow .15s}
 .stat:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
@@ -539,6 +568,7 @@ tr:hover td{background:#f8faff}
     <button class="tab active" data-tab="invlist" onclick="switchTab('invlist',this)">Invoice List</button>
     <button class="tab" data-tab="catalog" onclick="switchTab('catalog',this)">Create</button>
     <button class="tab" data-tab="pricelist" onclick="switchTab('pricelist',this)">Price List</button>
+    <button class="tab" data-tab="sheets" onclick="switchTab('sheets',this)">Sheets</button>
     <button class="tab" data-tab="production" onclick="switchTab('production',this)">Pending Work</button>
     <button class="tab" data-tab="comparison" onclick="switchTab('comparison',this)">Comparison</button>
     <button class="tab" data-tab="reports" onclick="switchTab('reports',this)">📊 Reports</button>
@@ -794,6 +824,18 @@ tr:hover td{background:#f8faff}
     </div>
     <div class="tag-section">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <h4 style="margin:0">Suppliers <span id="sup-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
+        <span style="font-size:11px;color:#999">Sheet and film suppliers, used on the Sheets → Purchases page.</span>
+      </div>
+      <div id="sup-list"></div>
+      <div class="tag-add-row" style="margin-top:8px">
+        <input id="new-sup" type="text" placeholder="e.g. Munna Plastics" onkeydown="if(event.key==='Enter')supAdd()">
+        <input id="new-sup-loc" type="text" placeholder="Location (optional)" onkeydown="if(event.key==='Enter')supAdd()">
+        <button class="btn btn-primary" onclick="supAdd()">Add</button>
+      </div>
+    </div>
+    <div class="tag-section">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <h4 style="margin:0">Print Groups <span id="grp-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
         <span style="font-size:11px;color:#999">Used in Pending Work → Party Grid to tick a group of parties in one click. Add parties to a group from the Parties list above.</span>
       </div>
@@ -812,6 +854,11 @@ tr:hover td{background:#f8faff}
   <!-- PRICE LIST -->
   <div id="tab-pricelist" class="view">
     <div id="pl-body"></div>
+  </div>
+
+  <!-- SHEETS / RAW MATERIAL -->
+  <div id="tab-sheets" class="view">
+    <div id="sh-body"></div>
   </div>
 
   <!-- PENDING WORK -->
@@ -2196,13 +2243,14 @@ function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderPa
 function switchTab(t,el){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['orders','orderlist','invoices','invlist','catalog','pricelist','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','pricelist','sheets','production','comparison','reports'].forEach(id=>{
     const el2=document.getElementById('tab-'+id);
     if(el2) el2.classList.toggle('active',id===t);
   });
   if(t==='reports') renderReport();
   if(t==='production') renderProduction();
   if(t==='pricelist') renderPriceList();
+  if(t==='sheets') renderSheets();
   if(t==='comparison') renderComparison();
   if(t==='orderlist') renderOrders();
   if(t==='invoices' && !editInvId){resetInvForm();}
@@ -2967,7 +3015,7 @@ function renderGroupsAdmin(){
     </div>`).join(''):'<div style="font-size:12px;color:#bbb;padding:4px 0">No groups yet. Add one below.</div>';
 }
 function renderParties(){
-  renderGroupsAdmin();
+  renderGroupsAdmin(); renderSuppliers();
   const countEl=document.getElementById('party-count');
   if(countEl)countEl.textContent='('+parties.length+')';
   const container=document.getElementById('party-tags');
@@ -3992,6 +4040,512 @@ window.onPricingUpdate=function(){
   if(tabIsOpen('pricelist') && !plDirty) renderPriceList();
   if(tabIsOpen('production') && prodView==='partygrid') pwRenderGroups();
 };
+// ============================================================
+// SHEETS / RAW MATERIAL  (own doc: sitara26/sheets — never touches orders, invoices or pricing)
+// Purchases are typed in; everything used is worked out backwards from invoices
+// through the colour→sheet list, the film ratio and the cutting ratio.
+// ============================================================
+const SH_DEFAULT_MAP={"OG1":"49 R","OG23":"57 R","OG173":"76 N","OG2":"6 R","OG24":"68 R","OG3":"60 R","OG25":"67 R","OG4":"50 R","OG26":"62 R","OG5":"46 R","OG27":"69 R","OG6":"44 R","OG28":"65 R","OG7":"40 R","OG29":"66 R","OG8":"14 R","OG30":"11 R","OG9":"39 R","OG31":"63 R","OG10":"MILKY","OG32":"61 R","OG11":"41 R","OG33":"70 R","OG12":"47 R","OG34":"16 R","OG13":"48 R","OG35":"GO 154L/M13","OG14":"12 R","OG36":"90 R","OG15":"42 R","OG37":"VO 14","OG16":"45 R","OG38":"86 R","OG17":"156 R","OG39":"VO 15","OG18":"WO 47","OG40":"PINK O 138","OG19":"7 R","OG41":"121 R","OG42":"122 R","OG21":"101 R","OG43":"123 R","OG22":"58 R","OG44":"9 PR","OG45":"147 R","OG68":"110 R","OG46":"85 R","OG69":"127 R","OG47":"BO 78","OG70":"PRO 200","OG48":"BO 137","OG71":"16 PR","OG49":"65 N","OG72":"514 P","OG50":"91 R","OG73":"554 L","OG51":"126 R","OG74":"516 A","OG75":"11 L","OG76":"240 R","OG54":"99 R","OG77":"526 M/52N","OG55":"100 R/54N","OG78":"43 D","OG56":"116 R","OG79":"15 DD","OG57":"117 R","OG80":"512 N","OG81":"518 A","OG59":"89 R","OG82":"17 R","OG60":"87 R","OG83":"12 L","OG61":"130 R","OG84":"74 R","OG62":"130 L","OG85":"18 PR","OG63":"105 R","OG86":"AE 25","OG64":"128 R","OG87":"DV 24","OG65":"75 R","OG88":"206 R","OG66":"129 R","OG89":"515 L","OG67":"125 R","OG90":"15 RR","OG91":"PRO 194","OG114":"180 R","OG92":"142 R","OG115":"192 R","OG116":"187 R","OG94":"134 L","OG117":"185 R","OG95":"103 R","OG118":"191 R","OG96":"PO 130","OG119":"190 R","OG97":"PO 139","OG120":"186 R","OG98":"PO 135","OG121":"189 R","OG99":"PO 131","OG122":"188 R","OG100":"162 R","OG123":"181 R","OG101":"164 R","OG124":"BLACK","OG102":"161 R","OG125":"223 R","OG103":"171 R","OG126":"224 R","OG104":"172 R","OG127":"221 R","OG105":"169 R","OG128":"222 R","OG106":"168 L","OG129":"231 R","OG107":"183 R","OG130":"170 R","OG108":"179 R","OG131":"236 R","OG109":"178 R","OG132":"242 R","OG110":"182 R","OG133":"251 R","OG111":"177 R","OG134":"245 R","OG112":"184 R","OG135":"249 R","OG113":"185 R","OG136":"246 R","OG137":"252 R","OG154":"16 C","OG138":"250 R","OG155":"258 R","OG139":"248 R","OG156":"254 R","OG140":"247 R","OG157":"218 R","OG141":"253 R","OG158":"268 R","OG142":"30 PR","OG159":"OMA 195","OG143":"228 R","OG160":"267 R","OG144":"514 L/63N","OG161":"275 R","OG145":"547 L","OG162":"272 R","OG146":"54 L","OG163":"273 R","OG147":"549","OG164":"274 R","OG148":"512 A","OG165":"518 Y","OG149":"256 R","OG166":"DV 39","OG150":"257 R","OG167":"M 17","OG151":"49 DD","OG168":"M 18","OG152":"255 R","OG169":"195 R","OG153":"259 R","DD1":"LAAL PAANI","DD2":"DV 9","DD3":"DV 6","DD4":"DV 7","DD5":"DV 8","DD6":"DV 30","DD7":"DV 4","DD8":"DV 2","DD9":"DV 3","DD10":"DV 1","DD11":"BLACK","DD12":"MILKY","DD13":"PAANI","DD14":"DV 20","DD15":"DV 12","DD16":"DV 10 DARK","DD17":"DV 14","DD18":"DV 17","DD19":"DV 11","DD20":"DV 15","DD21":"DV 18","DD22":"57 R","DD23":"CHUNA","DD24":"DV 5","DD25":"DV 25","DD26":"DV 24","DD27":"DV 22","DD28":"DV 21","DD29":"134 L","DD30":"DV 29","DD31":"DV 31","DD32":"263 R","DD33":"162 R","DD34":"56 D","DD35":"VO 14","DD36":"49 R","DD37":"66 R","DD38":"61 R","DD39":"6 R","DD40":"63 R","DD41":"41 R","DD42":"48 R","DD43":"14 R","DD44":"45 R","DD45":"90 R","DD46":"65 R","DD47":"86 R","DD48":"44 R","DD49":"69 R","DD50":"40 R","TG1":"201 PRO","TG2":"6 PR","TG3":"7 PR","TG4":"8 PR","TG5":"12 PR","TG6":"1 PR","TG8":"PRO 193","TG9":"PRO 197","TG10":"LAL PAANI","TG11":"MEHROON","TG12":"11 PR","TG13":"16 PR","TG14":"14 PR","TG15":"15 PR","TG16":"13 PR","TG17":"20 PR","TG18":"LAL PAANI"};
+const SH_GROUPS=['2n','3n','Normal','Design','Special design'];
+const SH_NORMAL=['4n','5n','6n','4fc','5fc','6fc','4k','3k','6/1','8/1','4/0'];
+const SH_FAMS=['OG','DD','TG'];
+function shFams(){ const f=Object.keys(sh().films); return [...SH_FAMS, ...f.filter(x=>!SH_FAMS.includes(x)).sort()]; }
+let shTab='pending', shFilter='', shCache=null;
+function shFresh(){
+  const map={}; Object.entries(SH_DEFAULT_MAP).forEach(([k,v])=>map[k]={sheet:v});
+  return {version:1, startDate:today(), map,
+    films:{OG:{film:'Glass film',per100:22}, DD:{film:'',per100:null}, TG:{film:'',per100:null}},
+    yield:{'2n':null,'3n':null,'Normal':null,'Design':null,'Special design':null},
+    purchases:[], counts:{}, ready:{}, nextId:1};
+}
+function sh(){
+  if(!window._sheets||typeof window._sheets!=='object'||!window._sheets.map) window._sheets=Object.assign(shFresh(), window._sheets&&window._sheets.map?window._sheets:{});
+  const S=window._sheets;
+  if(!S.films) S.films={}; SH_FAMS.forEach(f=>{ if(!S.films[f]) S.films[f]={film:'',per100:null}; });
+  if(!S.yield) S.yield={}; if(!S.purchases) S.purchases=[]; if(!S.counts) S.counts={}; if(!S.ready) S.ready={};
+  if(!S.suppliers) S.suppliers=[];
+  S.purchases.forEach(p=>{ if(p.supplier && !S.suppliers.some(x=>x.name.toLowerCase()===p.supplier.toLowerCase())) S.suppliers.push({id:S.nextId++,name:p.supplier}); });
+  S.purchases.forEach(p=>{ if(!p.items){ p.items=[{material:p.material,code:'',kg:parseFloat(p.kg)||0,rolls:null,rate:null}]; p.supplier=p.supplier||''; p.invNo=p.invNo||''; delete p.material; delete p.kg; } });
+  if(!S.startDate) S.startDate=today(); if(!S.nextId) S.nextId=1;
+  return S;
+}
+(function(){ try{ const c=localStorage.getItem('sitara_sheets'); if(c && !window._sheets) window._sheets=JSON.parse(c); }catch(e){} })();
+function saveSheets(msg){
+  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return false; }
+  const S=sh(); S.updatedAt=new Date().toISOString(); shCache=null;
+  try{ localStorage.setItem('sitara_sheets', JSON.stringify(S)); }catch(e){}
+  if(window._firebaseReady && window._firestore && window._firestore.SHEETS_DOC){
+    const {setDoc, SHEETS_DOC}=window._firestore;
+    setDoc(SHEETS_DOC, JSON.parse(JSON.stringify(S)))
+      .then(()=>showSaveToast(msg||'Sheets saved'))
+      .catch(e=>{ console.error('Sheets save failed',e); showSaveToast('Sheets save failed! Check connection',true); });
+  }
+  return true;
+}
+window.onSheetsUpdate=function(){
+  shCache=null;
+  try{ localStorage.setItem('sitara_sheets', JSON.stringify(sh())); }catch(e){}
+  if(tabIsOpen('sheets')) renderSheets();
+  if(tabIsOpen('catalog')) renderSuppliers();
+};
+const shEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shF2=n=>(Math.round(n*100)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const shD=d=>{ if(!d||!/^20\d\d-\d\d-\d\d/.test(d)) return ''; const [y,m,dd]=d.split('-'); return dd+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+'-'+y; };
+const shCode=s=>String(s||'').toUpperCase().replace(/\s+/g,'');
+const shSheet=s=>String(s||'').toUpperCase().trim().replace(/\s+/g,' ').replace(/^0*(\d+)\s*([A-Z]+)$/,'$1 $2');
+const shKey=(c,s)=>String(c||'').trim().toUpperCase()+'\u0001'+String(s||'').trim().toLowerCase();
+
+// ---------- files (optional: same data as a file on this computer) ----------
+function shSaveFile(){
+  const S=sh(); const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='sitara_sheets_data_'+today()+'.json';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+}
+function shLoadFile(inp){
+  const f=inp.files[0]; inp.value=''; if(!f) return;
+  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const o=JSON.parse(e.target.result);
+      if(!o||!o.map||!Array.isArray(o.purchases)) throw new Error('This is not a Sitara Sheets data file.');
+      if(!confirm('Replace the Sheets data on every device with this file ('+o.purchases.length+' purchases)?')) return;
+      window._sheets=Object.assign(shFresh(),o); saveSheets('Sheets file loaded'); renderSheets();
+    }catch(err){ alert('Could not read this file: '+err.message); }
+  };
+  r.readAsText(f);
+}
+
+// ---------- calculation ----------
+function shGroupOf(shape){
+  const s=String(shape||'').trim().toLowerCase();
+  const g=groupOf(s); if(g) return g==='Small'?'Normal':g;
+  if(s==='2n'||s==='3n') return s;
+  if(SH_NORMAL.includes(s)) return 'Normal';
+  if(/^\d{4}/.test(s)) return 'Design';
+  return '';
+}
+let shLookup=null, shAlias=null;
+function shBuildLookup(){
+  shLookup={}; Object.entries(sh().map).forEach(([k,v])=>{ if(v&&v.sheet) shLookup[shCode(k)]={code:k,sheet:v.sheet,fam:v.fam||((k.toUpperCase().match(/^(OG|DD|TG)\s*\d/)||[])[1]||'')}; });
+  shAlias={}; (colors||[]).forEach(c=>{ if(c&&typeof c==='object'&&c.name&&c.alias) shAlias[shCode(c.name)]=shCode(c.alias); });
+}
+function shResolve(color){
+  const raw=String(color||'').toUpperCase().trim(); const plus=/\+\s*$/.test(raw);
+  const full=raw.replace(/\s*\+\s*$/,'');
+  const parts=[full,...full.split('/')].map(x=>x.trim()).filter(Boolean);
+  for(const p of parts){
+    const k=shCode(p);
+    let r=shLookup[k]; if(!r){ const a=shAlias[k]; if(a&&shLookup[a]) r=shLookup[a]; }
+    if(r){ // a colour ending in + uses the "+" family (e.g. OG+) when that family exists in Ratios
+      if(plus && r.fam && sh().films[r.fam+'+']) r=Object.assign({},r,{fam:r.fam+'+'});
+      return r;
+    }
+  }
+  return null;
+}
+// items: [{color,shape,kg}] -> raw material needed
+function shMaterials(items){
+  const S=sh(); const sheet={}, film={}, unmapped={}, noYield={}, noFilm={}; let seq=0;
+  items.forEach(it=>{
+    const kg=parseFloat(it.kg)||0; if(kg<=0) return;
+    const r=shResolve(it.color);
+    if(!r){ unmapped[it.color]=(unmapped[it.color]||0)+kg; return; }
+    seq+=kg;
+    const g=shGroupOf(it.shape); const y=g?parseFloat(S.yield[g]):NaN;
+    let lam=kg;
+    if(y>0) lam=kg*100/y; else noYield[g||('size '+it.shape)]=(noYield[g||('size '+it.shape)]||0)+kg;
+    const f=S.films[r.fam]; const per=f&&parseFloat(f.per100)>0&&f.film?parseFloat(f.per100):0;
+    const sheetKg=lam*100/(100+per), filmKg=lam-sheetKg;
+    const row=sheet[r.sheet]=sheet[r.sheet]||{seq:0,lam:0,kg:0,codes:{}};
+    row.seq+=kg; row.lam+=lam; row.kg+=sheetKg; row.codes[r.code]=(row.codes[r.code]||0)+kg;
+    if(per>0) film[f.film]=(film[f.film]||0)+filmKg; else if(r.fam) noFilm[r.fam]=(noFilm[r.fam]||0)+kg; else noFilm['(no film family)']=(noFilm['(no film family)']||0)+kg;
+  });
+  return {sheet,film,unmapped,noYield,noFilm,seq};
+}
+// sales index: colour+size -> [{date,kg}] (dated invoices only)
+function shSalesIdx(){
+  if(shCache&&shCache.sales) return shCache.sales;
+  const idx={};
+  invoices.forEach(x=>{ const d=x.date||''; if(!/^20\d\d-/.test(d)) return; (x.items||[]).forEach(it=>{ const k=shKey(it.color,it.shape); (idx[k]=idx[k]||[]).push({date:d,kg:parseFloat(it.kg)||0}); }); });
+  shCache=shCache||{}; shCache.sales=idx; return idx;
+}
+function shSoldBetween(k,after,upto,uptoInclusive){ // date > after, and (date <= upto | date < upto)
+  return (shSalesIdx()[k]||[]).reduce((a,s)=>a+((s.date>after && (upto==null || (uptoInclusive?s.date<=upto:s.date<upto)))?s.kg:0),0);
+}
+// ready sequins now = count − sold after the count date (never below 0)
+function shReadyNow(k){ const c=sh().ready[k]; if(!c) return 0; return Math.max(0,(parseFloat(c.kg)||0)-shSoldBetween(k,c.date,null)); }
+// sales from a date, as {color,shape,kg} per colour+size, less what came out of counted ready stock
+function shUsedItems(from,strictAfter){
+  const S=sh(); const idx=shSalesIdx(); const out=[];
+  const inWin=s=>strictAfter?s.date>from:s.date>=from;
+  Object.entries(idx).forEach(([k,list])=>{
+    let kg=list.reduce((a,s)=>a+(inWin(s)?s.kg:0),0);
+    const c=S.ready[k];
+    if(c&&kg>0){
+      // ready stock covers sales after the count date, oldest first
+      const beforeWindow=list.reduce((a,s)=>a+((s.date>c.date&&!inWin(s))?s.kg:0),0);
+      const remaining=Math.max(0,(parseFloat(c.kg)||0)-beforeWindow);
+      const inWindowAfterCount=list.reduce((a,s)=>a+((s.date>c.date&&inWin(s))?s.kg:0),0);
+      kg-=Math.min(remaining,inWindowAfterCount);
+    }
+    if(kg>0){ const [color,shape]=k.split('\u0001'); out.push({color,shape,kg}); }
+  });
+  return out;
+}
+// pending per colour+size (same settlement as Pending Work), less ready sequins
+function shPendingItems(){
+  const ord={}, sup={};
+  orders.forEach(o=>{ if(o.status!=='Pending') return; (o.items||[]).forEach(it=>{ if(it.cancelled) return; const k=o.party+'\u0001'+it.color+'\u0001'+it.shape; (ord[k]=ord[k]||[]).push({date:o.date||'',kg:it.kg,seq:o.invNum||o.id||0}); }); });
+  invoices.forEach(x=>{ (x.items||[]).forEach(it=>{ const k=x.party+'\u0001'+it.color+'\u0001'+it.shape; if(ord[k]) (sup[k]=sup[k]||[]).push({date:x.date||'',kg:it.kg,seq:x.serial||x.id||0}); }); });
+  const agg={};
+  Object.entries(ord).forEach(([k,l])=>{ const r=settleDue(l,sup[k]||[]); const due=typeof r==='number'?r:r.due; if(due>=PW_MIN_KG){ const [,color,shape]=k.split('\u0001'); const kk=shKey(color,shape); agg[kk]=agg[kk]||{color,shape,kg:0}; agg[kk].kg+=due; } });
+  let readyUsed=0;
+  Object.entries(agg).forEach(([kk,v])=>{ const r=shReadyNow(kk); const u=Math.min(r,v.kg); v.kg-=u; readyUsed+=u; });
+  return {items:Object.values(agg).filter(v=>v.kg>0), readyUsed};
+}
+function shCalc(){
+  if(shCache&&shCache.pending) return shCache;
+  shBuildLookup(); shSalesIdx();
+  const p=shPendingItems();
+  shCache.pending=shMaterials(p.items); shCache.readyUsed=p.readyUsed;
+  shCache.sold=shMaterials(shUsedItems(sh().startDate,false));
+  shCache.lastInv=invoices.reduce((a,i)=>(i.date&&i.date>a&&/^20\d\d-/.test(i.date))?i.date:a,'');
+  return shCache;
+}
+function shRecalc(){ shCache=null; }
+
+// ---------- screens ----------
+const SH_TABS=[['pending','Needed for pending orders'],['balance','Bought − used'],['purchases','Purchases'],['ready','Ready sequins'],['map','Colour → sheet list'],['ratios','Ratios']];
+function shSetTab(t){ shTab=t; shFilter=''; renderSheets(); }
+function shWarnings(){
+  const S=sh(); const w=[];
+  const ys=SH_GROUPS.filter(g=>!(parseFloat(S.yield[g])>0));
+  if(ys.length) w.push('Cutting ratio not set for <b>'+ys.join(', ')+'</b> — counted as 1 kg laminated sheet per 1 kg sequins. Set it in Ratios.');
+  const fs=shFams().filter(f=>!(S.films[f]&&S.films[f].film&&parseFloat(S.films[f].per100)>0));
+  if(fs.length) w.push('Film not set for <b>'+fs.join(', ')+'</b> — no film is counted for these colours, and the whole laminated weight is counted as sheet. Set it in Ratios.');
+  return w.map(x=>`<div class="sh-warn">${x}</div>`).join('');
+}
+function renderSheets(){
+  const el=document.getElementById('sh-body'); if(!el) return;
+  shRecalc();
+  const S=sh(); const C=shCalc();
+  el.innerHTML=`<div class="sh-bar">
+      <button class="btn btn-sm" onclick="shSaveFile()">💾 Save data file</button>
+      <button class="btn btn-sm" onclick="document.getElementById('sh-file').click()">📂 Load data file</button>
+      <input type="file" id="sh-file" accept=".json" hidden onchange="shLoadFile(this)">
+      <span class="sh-note">Live: ${orders.length} orders, ${invoices.length} invoices · last invoice ${shD(C.lastInv)}${S.updatedAt?' · sheets data saved '+shD(S.updatedAt.slice(0,10)):''}</span></div>
+    ${shWarnings()}
+    <div class="sh-tabs">${SH_TABS.map(([k,t])=>`<button class="sh-tab${shTab===k?' on':''}" onclick="shSetTab('${k}')">${t}</button>`).join('')}</div>
+    <div id="sh-view">${({pending:shVPending,balance:shVBalance,purchases:shVPurchases,ready:shVReady,map:shVMap,ratios:shVRatios})[shTab]()}</div>`;
+  if(window._monitorReadOnly) el.querySelectorAll('#sh-view input:not(#sh-flt), #sh-view select, #sh-view button, .sh-bar button').forEach(b=>{ b.disabled=true; b.style.opacity='0.5'; });
+}
+function shFilterBox(ph){ return `<input id="sh-flt" placeholder="🔍 ${ph}" value="${shEsc(shFilter)}" oninput="shFilter=this.value;clearTimeout(window._shft);window._shft=setTimeout(()=>{renderSheets();const i=document.getElementById('sh-flt');i.focus();i.setSelectionRange(i.value.length,i.value.length);},250)" style="width:220px">`; }
+function shUnmappedHtml(u){
+  const l=Object.entries(u).sort((a,b)=>b[1]-a[1]); if(!l.length) return '';
+  const tot=l.reduce((a,x)=>a+x[1],0);
+  return `<div class="sh-card"><b>Colours with no sheet code</b> <span class="sh-note">· ${shF2(tot)} kg not counted above. Add them in "Colour → sheet list".</span>
+    <div style="margin-top:8px">${l.slice(0,60).map(([c,k])=>`<span class="sh-pill">${shEsc(c)} ${shF2(k)}</span>`).join('')}${l.length>60?`<span class="sh-note"> …and ${l.length-60} more</span>`:''}</div></div>`;
+}
+function shStockOf(mats,m){ const v=mats[m]; if(!v) return 0; return Math.max(0, v.count?v.stock:(v.bought-v.used)); }
+function shVPending(){
+  const C=shCalc(); const r=C.pending; const q=shFilter.trim().toUpperCase(); const {mats}=shMovement();
+  let rows=Object.entries(r.sheet).sort((a,b)=>b[1].kg-a[1].kg);
+  if(q) rows=rows.filter(([s,v])=>s.includes(q)||Object.keys(v.codes).some(c=>c.toUpperCase().includes(q)));
+  const T=rows.reduce((a,[s,v])=>{ const st=shStockOf(mats,s); return {seq:a.seq+v.seq,lam:a.lam+v.lam,kg:a.kg+v.kg,st:a.st+st,buy:a.buy+Math.max(0,v.kg-st)}; },{seq:0,lam:0,kg:0,st:0,buy:0});
+  const films=Object.entries(r.film).sort((a,b)=>b[1]-a[1]);
+  return `<div class="sh-info">Sheet and film needed to make everything still pending in your orders (same pending rule as Pending Work; leftovers under 1 kg ignored).${C.readyUsed>0?` <b>${shF2(C.readyUsed)} kg</b> of pending is covered by counted ready sequins and is left out.`:' No ready sequins counted yet, so this is the most you could need.'} <b>In stock</b> is from Bought − used (or your count, if you entered one); <b>To buy</b> = needed − in stock.</div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Sheet or colour code')}<span class="sh-note">${rows.length} sheet(s)</span></div>
+  <div class="sh-scroll"><table class="sh-table">
+    <tr><th>Sheet</th><th>For colours (pending kg)</th><th class="n">Pending sequins kg</th><th class="n">Laminated kg</th><th class="n">Sheet kg needed</th><th class="n">In stock</th><th class="n">To buy</th></tr>
+    ${rows.map(([s,v])=>{ const st=shStockOf(mats,s), buy=Math.max(0,v.kg-st); return `<tr><td><b>${shEsc(s)}</b></td><td>${Object.entries(v.codes).sort((a,b)=>b[1]-a[1]).map(([c,k])=>`<span class="sh-pill">${shEsc(c)} ${shF2(k)}</span>`).join('')}</td><td class="n">${shF2(v.seq)}</td><td class="n">${shF2(v.lam)}</td><td class="n">${shF2(v.kg)}</td><td class="n ${mats[s]&&mats[s].count?'sh-pos':''}">${shF2(st)}</td><td class="n"><b class="${buy>0?'sh-neg':'sh-pos'}">${shF2(buy)}</b></td></tr>`; }).join('')||'<tr><td colspan="7" class="sh-muted" style="padding:16px;text-align:center">Nothing pending for mapped colours.</td></tr>'}
+    <tr class="tot"><td>Total</td><td></td><td class="n">${shF2(T.seq)}</td><td class="n">${shF2(T.lam)}</td><td class="n">${shF2(T.kg)}</td><td class="n">${shF2(T.st)}</td><td class="n">${shF2(T.buy)}</td></tr>
+  </table></div></div>
+  <div class="sh-card"><b>Film needed</b>
+    <table class="sh-table" style="margin-top:8px;max-width:560px"><tr><th>Film</th><th class="n">Kg needed</th><th class="n">In stock</th><th class="n">To buy</th></tr>
+    ${films.map(([f,k])=>{ const st=shStockOf(mats,f), buy=Math.max(0,k-st); return `<tr><td>${shEsc(f)}</td><td class="n">${shF2(k)}</td><td class="n">${shF2(st)}</td><td class="n"><b class="${buy>0?'sh-neg':'sh-pos'}">${shF2(buy)}</b></td></tr>`; }).join('')||'<tr><td colspan="4" class="sh-muted">No film ratio set yet.</td></tr>'}</table></div>
+  ${shUnmappedHtml(r.unmapped)}`;
+}
+function shMovement(){
+  const S=sh(); const r=shCalc().sold; const mats={};
+  const M=m=>mats[m]=mats[m]||{bought:0,used:0,kind:'sheet'};
+  Object.entries(r.sheet).forEach(([s,v])=>{ M(s).used+=v.kg; });
+  Object.entries(r.film).forEach(([f,k])=>{ M(f).used+=k; mats[f].kind='film'; });
+  const filmNames=new Set(shFams().map(f=>S.films[f]&&S.films[f].film).filter(Boolean));
+  shLines().forEach(p=>{ if(p.date>=S.startDate){ M(p.material).bought+=parseFloat(p.kg)||0; if(filmNames.has(p.material)) mats[p.material].kind='film'; } });
+  Object.keys(S.counts).forEach(m=>M(m));
+  const byDate={};
+  Object.entries(S.counts).forEach(([m,c])=>{ (byDate[c.date]=byDate[c.date]||[]).push(m); });
+  Object.entries(byDate).forEach(([d,list])=>{
+    const u=shMaterials(shUsedItems(d,true));
+    list.forEach(m=>{ const c=S.counts[m]; const used=(u.sheet[m]?u.sheet[m].kg:0)+(u.film[m]||0);
+      const bought=shLines().filter(p=>p.material===m&&p.date>d).reduce((a,p)=>a+(parseFloat(p.kg)||0),0);
+      mats[m].stock=c.kg+bought-used; mats[m].count=c; });
+  });
+  return {mats,unmapped:r.unmapped};
+}
+function shVBalance(){
+  const S=sh(); const C=shCalc(); const {mats,unmapped}=shMovement(); const q=shFilter.trim().toUpperCase();
+  let rows=Object.entries(mats).sort((a,b)=>(a[1].kind===b[1].kind?0:a[1].kind==='film'?-1:1)||b[1].used-a[1].used);
+  if(q) rows=rows.filter(([m])=>m.toUpperCase().includes(q));
+  return `<div class="sh-info">For each raw material: what you bought minus what your sales used, from the start date. This is the material you still hold <b>in any form</b> (raw sheet, laminated sheet and unsold sequins together). Sales covered by counted ready sequins are not counted as used. A minus figure means sales were made from stock you had before the start date. When you count one material, type the count and it becomes real stock from that day.</div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">
+    <span>Start date</span><input type="date" value="${S.startDate}" onchange="if(this.value){sh().startDate=this.value;saveSheets();renderSheets();}">
+    ${shFilterBox('Material')}<span class="sh-note">Sales counted up to last invoice: ${shD(C.lastInv)}</span></div>
+  <div class="sh-scroll"><table class="sh-table">
+    <tr><th>Material</th><th class="n">Bought kg</th><th class="n">Used by sales kg</th><th class="n">Bought − used</th><th class="n">Stock now</th><th>Count</th></tr>
+    ${rows.map(([m,v])=>{ const bal=v.bought-v.used; const id=shEsc(m).replace(/'/g,'&#39;');
+      return `<tr><td><b>${shEsc(m)}</b> ${v.kind==='film'?'<span class="sh-pill">film</span>':''}</td><td class="n">${shF2(v.bought)}</td><td class="n">${shF2(v.used)}</td><td class="n ${bal<0?'sh-neg':'sh-pos'}">${shF2(bal)}</td>
+      <td class="n">${v.count?`<b class="${v.stock<0?'sh-neg':''}">${shF2(v.stock)}</b>`:'<span class="sh-muted">not counted</span>'}</td>
+      <td style="white-space:nowrap">${v.count?`<span class="sh-note">${shF2(v.count.kg)} kg on ${shD(v.count.date)}</span> <button class="btn btn-sm" onclick="shSetCount('${id}')">Recount</button> <button class="btn btn-sm btn-danger" onclick="shClearCount('${id}')">✕</button>`:`<button class="btn btn-sm" onclick="shSetCount('${id}')">Enter count</button>`}</td></tr>`; }).join('')||'<tr><td colspan="6" class="sh-muted" style="padding:16px;text-align:center">No purchases or mapped sales since the start date.</td></tr>'}
+  </table></div></div>${shUnmappedHtml(unmapped)}`;
+}
+function shSetCount(m){
+  if(window._monitorReadOnly) return;
+  const S=sh();
+  const kg=prompt('Counted stock of "'+m+'" in kg (raw + laminated together, as kg of this material):', S.counts[m]?S.counts[m].kg:'');
+  if(kg===null) return; const v=parseFloat(kg); if(!(v>=0)){ alert('Type a number, 0 or more.'); return; }
+  const d=prompt('Date of this count (YYYY-MM-DD):', today()); if(d===null) return;
+  if(!/^20\d\d-\d\d-\d\d$/.test(d)){ alert('Date must look like 2026-11-12.'); return; }
+  S.counts[m]={kg:v,date:d}; saveSheets(); renderSheets();
+}
+function shClearCount(m){ if(window._monitorReadOnly) return; if(confirm('Remove the count for "'+m+'"?')){ delete sh().counts[m]; saveSheets(); renderSheets(); } }
+function shAllMaterials(){
+  const S=sh(); const s=new Set(); Object.values(S.map).forEach(v=>{ if(v&&v.sheet) s.add(v.sheet); });
+  shFams().forEach(f=>{ if(S.films[f]&&S.films[f].film) s.add(S.films[f].film); });
+  shLines().forEach(p=>s.add(p.material));
+  return [...s].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+}
+function shSuppliers(){ return sh().suppliers.slice().sort((a,b)=>a.name.localeCompare(b.name)); }
+function renderSuppliers(){
+  const el=document.getElementById('sup-list'); if(!el) return;
+  const list=shSuppliers(); const c=document.getElementById('sup-count'); if(c) c.textContent='('+list.length+')';
+  el.innerHTML=list.map(sp=>`<div class="party-row-item"><span style="font-size:13px;font-weight:600">${shEsc(sp.name)}${sp.location?`<span style="font-size:11px;color:#888;font-weight:400;margin-left:8px">📍 ${shEsc(sp.location)}</span>`:''}</span>
+      <div style="display:flex;gap:6px"><span style="font-size:11px;color:#999;align-self:center">${sh().purchases.filter(p=>p.supplier===sp.name).length} purchase(s)</span>
+        <button class="btn btn-sm" onclick="supEdit(${sp.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="supDel(${sp.id})">Delete</button></div></div>`).join('')||'<div class="empty">No suppliers yet.</div>';
+}
+function supAdd(){
+  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
+  const S=sh(); const inp=document.getElementById('new-sup'), li=document.getElementById('new-sup-loc');
+  const name=normalizeStr(inp.value); if(!name) return;
+  if(S.suppliers.some(x=>x.name.toLowerCase()===name.toLowerCase())){ alert('Supplier already exists.'); return; }
+  const sp={id:S.nextId++,name}; const loc=li?li.value.trim():''; if(loc) sp.location=loc;
+  S.suppliers.push(sp); inp.value=''; if(li) li.value='';
+  saveSheets('Supplier added'); renderSuppliers();
+}
+function supEdit(id){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp) return;
+  const nn=prompt('Edit supplier name:',sp.name); if(!nn||!nn.trim()) return;
+  const name=normalizeStr(nn);
+  if(S.suppliers.some(x=>x.id!==id&&x.name.toLowerCase()===name.toLowerCase())){ alert('Supplier already exists.'); return; }
+  const loc=prompt('Location (optional):',sp.location||''); if(loc===null) return;
+  const old=sp.name; sp.name=name; if(loc.trim()) sp.location=loc.trim(); else delete sp.location;
+  S.purchases.forEach(p=>{ if(p.supplier===old) p.supplier=name; });
+  saveSheets('Supplier updated'); renderSuppliers(); if(tabIsOpen('sheets')) renderSheets();
+}
+function supDel(id){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp) return;
+  const n=S.purchases.filter(p=>p.supplier===sp.name).length;
+  if(n){ alert(sp.name+' has '+n+' purchase(s). Delete or edit those first.'); return; }
+  if(!confirm('Delete supplier '+sp.name+'?')) return;
+  S.suppliers=S.suppliers.filter(x=>x.id!==id); saveSheets(); renderSuppliers();
+}
+function shLines(){ const out=[]; sh().purchases.forEach(p=>(p.items||[]).forEach(it=>out.push({date:p.date,material:it.material,kg:parseFloat(it.kg)||0}))); return out; }
+function shBillTotals(p){ return (p.items||[]).reduce((a,it)=>{ const kg=parseFloat(it.kg)||0, rl=parseFloat(it.rolls)||0, rt=parseFloat(it.rate); return {kg:a.kg+kg, rolls:a.rolls+rl, amt:a.amt+(rt>0?kg*rt:0)}; },{kg:0,rolls:0,amt:0}); }
+// what the user may type in the item box: sheet codes, films, and colour codes (OG100 → 162 R)
+function shItemOptions(){
+  const S=sh(); const o=[]; shAllMaterials().forEach(m=>o.push(m));
+  Object.entries(S.map).forEach(([k,v])=>{ if(v&&v.sheet) o.push(k+' → '+v.sheet); });
+  (colors||[]).forEach(c=>{ const n=typeof c==='object'?c.name:c; if(!n) return; shBuildLookup(); const r=shResolve(n); if(r&&shCode(r.code)!==shCode(n)) o.push(String(n).toUpperCase()+' → '+r.sheet); });
+  return o;
+}
+// typed text -> {material, code}; null if unknown
+function shItemResolve(raw){
+  raw=String(raw||'').trim(); if(!raw) return null;
+  const arrow=raw.split('→'); if(arrow.length>1){ return {material:shSheet(arrow[1]), code:arrow[0].trim().toUpperCase()}; }
+  const known=shAllMaterials(); let mat=known.find(m=>m.toUpperCase()===raw.toUpperCase())||known.find(m=>shSheet(m)===shSheet(raw));
+  if(mat) return {material:mat, code:''};
+  shBuildLookup(); const r=shResolve(raw); if(r) return {material:r.sheet, code:raw.toUpperCase()};
+  return null;
+}
+let shBill=null; // bill being typed
+function shNewBill(){ return {id:null,date:today(),supplier:'',invNo:'',items:[{material:'',code:'',typed:'',kg:'',rolls:'',rate:''}],note:''}; }
+function shVPurchases(){
+  const S=sh(); const q=shFilter.trim().toUpperCase(); if(!shBill) shBill=shNewBill();
+  const B=shBill; const T=shBillTotals({items:B.items});
+  const suppliers=shSuppliers().map(x=>x.name); if(B.supplier&&!suppliers.includes(B.supplier)) suppliers.push(B.supplier);
+  let rows=S.purchases.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  if(q) rows=rows.filter(p=>(p.supplier||'').toUpperCase().includes(q)||(p.invNo||'').toUpperCase().includes(q)||(p.note||'').toUpperCase().includes(q)||(p.items||[]).some(it=>(it.material||'').toUpperCase().includes(q)||(it.code||'').toUpperCase().includes(q)));
+  const all=rows.reduce((a,p)=>{ const t=shBillTotals(p); return {kg:a.kg+t.kg,rolls:a.rolls+t.rolls,amt:a.amt+t.amt}; },{kg:0,rolls:0,amt:0});
+  return `<div class="sh-card"><b>${B.id?'Edit purchase':'New purchase'}</b>
+    <div class="sh-bar">
+      <select id="shp-sup" style="width:220px" onchange="shBill.supplier=this.value"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
+      <span class="sh-note">Add suppliers in Create → Suppliers</span>
+      <input id="shp-inv" placeholder="Supplier inv. no." value="${shEsc(B.invNo)}" style="width:150px" oninput="shBill.invNo=this.value">
+      <input type="date" id="shp-date" value="${B.date}" onchange="shBill.date=this.value">
+      <input id="shp-note" placeholder="Note (optional)" value="${shEsc(B.note||'')}" style="width:200px" oninput="shBill.note=this.value"></div>
+    <table class="sh-table" style="max-width:900px"><tr><th>#</th><th>Sheet / colour code</th><th>Sheet</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Price / kg</th><th class="n">Amount</th><th></th></tr>
+    ${B.items.map((it,i)=>{ const kg=parseFloat(it.kg)||0, rt=parseFloat(it.rate); return `<tr><td class="sh-note">${i+1}</td>
+      <td><input list="shp-dl" value="${shEsc(it.typed)}" placeholder="162 R or OG100" style="width:200px" onchange="shBillItem(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td>${it.material?`<b>${shEsc(it.material)}</b>${it.code?` <span class="sh-note">(${shEsc(it.code)})</span>`:''}`:(it.typed?'<span class="sh-neg">not known</span>':'')}</td>
+      <td class="n"><input class="sh-num" type="number" min="0" step="0.01" value="${it.kg}" oninput="shBill.items[${i}].kg=this.value;shBillTotalsDraw()"></td>
+      <td class="n"><input class="sh-num" type="number" min="0" step="1" value="${it.rolls}" oninput="shBill.items[${i}].rolls=this.value;shBillTotalsDraw()"></td>
+      <td class="n"><input class="sh-num" type="number" min="0" step="0.01" value="${it.rate}" placeholder="optional" oninput="shBill.items[${i}].rate=this.value;shBillTotalsDraw()"></td>
+      <td class="n" id="shp-amt-${i}">${rt>0?shF2(kg*rt):''}</td>
+      <td>${B.items.length>1?`<button class="btn btn-sm btn-danger" onclick="shBill.items.splice(${i},1);renderSheets()">✕</button>`:''}</td></tr>`; }).join('')}
+    <tr class="tot"><td></td><td><button class="btn btn-sm" onclick="shBill.items.push({material:'',code:'',typed:'',kg:'',rolls:'',rate:''});renderSheets();setTimeout(()=>{const l=document.querySelectorAll('#sh-view input[list=shp-dl]');l[l.length-1].focus()},0)">+ Add item</button></td><td>Total</td><td class="n" id="shp-tkg">${shF2(T.kg)}</td><td class="n" id="shp-trl">${T.rolls}</td><td></td><td class="n" id="shp-tamt">${T.amt?shF2(T.amt):''}</td><td></td></tr></table>
+    <datalist id="shp-dl">${shItemOptions().map(m=>`<option value="${shEsc(m)}">`).join('')}</datalist>
+    <div class="sh-bar"><button class="btn btn-sm btn-primary" onclick="shSaveBill()">${B.id?'Update purchase':'Save purchase'}</button>${B.id?`<button class="btn btn-sm" onclick="shBill=null;renderSheets()">Cancel</button>`:''}<span class="sh-note" id="shp-err" style="color:#b91c1c"></span></div></div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Supplier, inv. no., sheet or note')}<span class="sh-note">${rows.length} purchase(s) · ${shF2(all.kg)} kg · ${all.rolls} rolls${all.amt?' · ₹'+shF2(all.amt):''}</span></div>
+  <div class="sh-scroll"><table class="sh-table"><tr><th>Date</th><th>Supplier</th><th>Inv. no.</th><th>Items</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Amount</th><th></th></tr>
+    ${rows.map(p=>{ const t=shBillTotals(p); return `<tr><td>${shD(p.date)}</td><td><b>${shEsc(p.supplier||'')}</b></td><td>${shEsc(p.invNo||'')}</td>
+      <td>${(p.items||[]).map(it=>`<span class="sh-pill">${shEsc(it.material)}${it.code?' ('+shEsc(it.code)+')':''} ${shF2(parseFloat(it.kg)||0)}${parseFloat(it.rolls)>0?' · '+it.rolls+' rl':''}${parseFloat(it.rate)>0?' @'+it.rate:''}</span>`).join('')}${p.note?` <span class="sh-note">${shEsc(p.note)}</span>`:''}</td>
+      <td class="n">${shF2(t.kg)}</td><td class="n">${t.rolls||''}</td><td class="n">${t.amt?shF2(t.amt):''}</td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shEditBill(${p.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="shDelPurchase(${p.id})">Delete</button></td></tr>`; }).join('')||'<tr><td colspan="8" class="sh-muted" style="padding:16px;text-align:center">No purchases entered yet.</td></tr>'}
+  </table></div></div>`;
+}
+function shBillItem(i,val){
+  const it=shBill.items[i]; it.typed=val; const r=shItemResolve(val);
+  if(r){ it.material=r.material; it.code=r.code; } else { it.material=''; it.code=''; }
+  renderSheets();
+  const l=document.querySelectorAll('#sh-view input.sh-num'); const kgInp=l[i*3]; if(kgInp&&r) kgInp.focus();
+}
+function shBillTotalsDraw(){
+  const T=shBillTotals({items:shBill.items});
+  const e=id=>document.getElementById(id);
+  if(e('shp-tkg')) e('shp-tkg').textContent=shF2(T.kg); if(e('shp-trl')) e('shp-trl').textContent=T.rolls; if(e('shp-tamt')) e('shp-tamt').textContent=T.amt?shF2(T.amt):'';
+  shBill.items.forEach((it,i)=>{ const kg=parseFloat(it.kg)||0, rt=parseFloat(it.rate); const c=e('shp-amt-'+i); if(c) c.textContent=rt>0?shF2(kg*rt):''; });
+}
+function shSaveBill(){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const B=shBill; const err=document.getElementById('shp-err');
+  if(!B.date){ err.textContent='Pick the date.'; return; }
+  if(!B.supplier){ err.textContent='Choose the supplier (add new ones in Create → Suppliers).'; return; }
+  const items=B.items.filter(it=>it.typed||it.kg);
+  if(!items.length){ err.textContent='Add at least one item.'; return; }
+  for(const it of items){
+    if(!it.material){
+      if(!it.typed){ err.textContent='Type the sheet code for every item.'; return; }
+      if(!confirm('"'+it.typed+'" is not in your sheet list, films or colours. Add it as a new material?')) { err.textContent='Fix item "'+it.typed+'".'; return; }
+      it.material=/\d/.test(it.typed)?shSheet(it.typed):it.typed.trim(); it.code='';
+    }
+    if(!(parseFloat(it.kg)>0)){ err.textContent='Type the kg for '+it.material+'.'; return; }
+  }
+  const bill={id:B.id||S.nextId++, date:B.date, supplier:B.supplier.trim(), invNo:B.invNo.trim(), note:(B.note||'').trim(),
+    items:items.map(it=>({material:it.material, code:it.code||'', kg:parseFloat(it.kg), rolls:parseFloat(it.rolls)>0?parseFloat(it.rolls):null, rate:parseFloat(it.rate)>0?parseFloat(it.rate):null}))};
+  const ix=S.purchases.findIndex(p=>p.id===bill.id); if(ix>=0) S.purchases[ix]=bill; else S.purchases.push(bill);
+  shBill=null; saveSheets('Purchase saved'); renderSheets();
+}
+function shEditBill(id){
+  const p=sh().purchases.find(x=>x.id===id); if(!p) return;
+  shBill={id:p.id,date:p.date,supplier:p.supplier||'',invNo:p.invNo||'',note:p.note||'',items:p.items.map(it=>({material:it.material,code:it.code||'',typed:it.code?it.code+' → '+it.material:it.material,kg:it.kg,rolls:it.rolls==null?'':it.rolls,rate:it.rate==null?'':it.rate}))};
+  renderSheets(); window.scrollTo(0,0);
+}
+function shDelPurchase(id){ if(window._monitorReadOnly) return; const S=sh(); const p=S.purchases.find(x=>x.id===id); if(p&&confirm('Delete purchase '+(p.invNo?'no. '+p.invNo+' ':'')+(p.supplier?'from '+p.supplier+' ':'')+'on '+shD(p.date)+' ('+shF2(shBillTotals(p).kg)+' kg)?')){ S.purchases=S.purchases.filter(x=>x.id!==id); if(shBill&&shBill.id===id) shBill=null; saveSheets(); renderSheets(); } }
+
+// ---- ready sequins: counted once per colour+size; sales after the count date come out of it first ----
+function shVReady(){
+  const S=sh(); const q=shFilter.trim().toUpperCase();
+  const names=[...new Set((colors||[]).map(c=>typeof c==='object'?c.name:c).filter(Boolean))].sort();
+  const sizes=[...new Set(invoices.flatMap(x=>(x.items||[]).map(i=>String(i.shape||'').trim().toLowerCase())).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  let rows=Object.entries(S.ready).map(([k,c])=>{ const [color,shape]=k.split('\u0001'); return {k,color,shape,c,sold:shSoldBetween(k,c.date,null),now:shReadyNow(k)}; }).sort((a,b)=>a.color.localeCompare(b.color,undefined,{numeric:true})||a.shape.localeCompare(b.shape,undefined,{numeric:true}));
+  if(q) rows=rows.filter(r=>r.color.includes(q)||r.shape.toUpperCase().includes(q));
+  window._shReadyKeys=rows.map(r=>r.k);
+  return `<div class="sh-info">Old stock of finished sequins. Count a colour + size whenever you like and type it here. From that day, sales of that colour + size come out of this stock first (so they use no sheet), and only what is left of a pending order is counted as needed. Cutting is not entered, so "ready now" is the least you have; a fresh count sets it right again.</div>
+  <div class="sh-card"><b>Enter a count</b>
+    <div class="sh-bar"><input type="date" id="shr-date" value="${today()}">
+      <input id="shr-color" list="shr-dlc" placeholder="Colour (e.g. BG5)" style="width:160px">
+      <datalist id="shr-dlc">${names.map(n=>`<option value="${shEsc(n)}">`).join('')}</datalist>
+      <input id="shr-shape" list="shr-dls" placeholder="Size (e.g. 3n)" style="width:120px">
+      <datalist id="shr-dls">${sizes.map(n=>`<option value="${shEsc(n)}">`).join('')}</datalist>
+      <input id="shr-kg" class="sh-num" type="number" min="0" step="0.01" placeholder="kg" onkeydown="if(event.key==='Enter')shAddReady()">
+      <button class="btn btn-sm btn-primary" onclick="shAddReady()">Save count</button></div>
+    <div class="sh-note" id="shr-err" style="color:#b91c1c"></div></div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Colour or size')}<span class="sh-note">${rows.length} counted · ready now ${shF2(rows.reduce((a,r)=>a+r.now,0))} kg</span></div>
+  <div class="sh-scroll"><table class="sh-table"><tr><th>Colour</th><th>Size</th><th class="n">Counted kg</th><th>On</th><th class="n">Sold since</th><th class="n">Ready now</th><th></th></tr>
+    ${rows.map((r,i)=>`<tr><td><b>${shEsc(r.color)}</b></td><td>${shEsc(r.shape)}</td><td class="n">${shF2(parseFloat(r.c.kg)||0)}</td><td>${shD(r.c.date)}</td><td class="n">${shF2(r.sold)}</td><td class="n"><b class="${r.now<=0?'sh-neg':''}">${shF2(r.now)}</b></td><td><button class="btn btn-sm btn-danger" onclick="shDelReady(${i})">Remove</button></td></tr>`).join('')||'<tr><td colspan="7" class="sh-muted" style="padding:16px;text-align:center">No ready sequins counted yet.</td></tr>'}
+  </table></div></div>`;
+}
+function shAddReady(){
+  if(window._monitorReadOnly) return;
+  const S=sh();
+  const d=document.getElementById('shr-date').value, color=document.getElementById('shr-color').value.trim().toUpperCase(), shape=document.getElementById('shr-shape').value.trim().toLowerCase(), kg=parseFloat(document.getElementById('shr-kg').value);
+  const err=document.getElementById('shr-err');
+  if(!d){ err.textContent='Pick the date of the count.'; return; }
+  if(!color){ err.textContent='Type the colour.'; return; }
+  if(!shape){ err.textContent='Type the size.'; return; }
+  if(!(kg>=0)){ err.textContent='Type the kg (0 or more).'; return; }
+  const k=shKey(color,shape);
+  if(S.ready[k] && !confirm('A count for '+color+' '+shape+' already exists ('+S.ready[k].kg+' kg on '+shD(S.ready[k].date)+'). Replace it?')) return;
+  S.ready[k]={kg,date:d}; saveSheets('Count saved'); renderSheets();
+}
+function shDelReady(i){ if(window._monitorReadOnly) return; const S=sh(); const k=(window._shReadyKeys||[])[i]; if(S.ready[k]&&confirm('Remove this count?')){ delete S.ready[k]; saveSheets(); renderSheets(); } }
+
+function shVMap(){
+  const S=sh(); const q=shFilter.trim().toUpperCase();
+  const key=k=>{ const m=k.toUpperCase().match(/^(OG|DD|TG)\s*(\d+)/); return m?[SH_FAMS.indexOf(m[1]),+m[2],k]:[9,0,k]; };
+  let rows=Object.entries(S.map).sort((a,b)=>{ const x=key(a[0]),y=key(b[0]); return x[0]-y[0]||x[1]-y[1]||x[2].localeCompare(y[2]); });
+  if(q) rows=rows.filter(([k,v])=>k.toUpperCase().includes(q)||(v.sheet||'').toUpperCase().includes(q));
+  return `<div class="sh-card"><b>Add a colour</b> <span class="sh-note">· for OG / DD / TG type the code like OG177. For other colours type the name exactly as in Create (e.g. SLG) and choose which film it gets.</span>
+    <div class="sh-bar"><input id="shm-code" placeholder="Colour code" style="width:150px"><input id="shm-sheet" placeholder="Sheet code" style="width:150px" onkeydown="if(event.key==='Enter')shAddMap()">
+      <select id="shm-fam"><option value="">Film: by code</option>${shFams().map(f=>`<option value="${shEsc(f)}">${shEsc(f)} film</option>`).join('')}<option value="-">No film</option></select>
+      <button class="btn btn-sm btn-primary" onclick="shAddMap()">Add colour</button></div><div class="sh-note" id="shm-err" style="color:#b91c1c"></div></div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Colour or sheet code')}<span class="sh-note">${rows.length} colour(s)</span></div>
+  <div class="sh-scroll"><table class="sh-table"><tr><th>Colour code</th><th>Sheet code</th><th>Film</th><th></th></tr>
+    ${rows.map(([k,v])=>{ const auto=(k.toUpperCase().match(/^(OG|DD|TG)\s*\d/)||[])[1]; const id=shEsc(k).replace(/'/g,'&#39;');
+      return `<tr><td><b>${shEsc(k)}</b></td><td><input value="${shEsc(v.sheet||'')}" placeholder="—" style="width:170px" onchange="shSetSheet('${id}',this.value)"></td>
+      <td>${auto?`<span class="sh-note">${auto} film</span>`:`<span class="sh-note">${v.fam&&v.fam!=='-'?v.fam+' film':'no film'}</span>`}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="shDelMap('${id}')">Remove</button></td></tr>`; }).join('')}
+  </table></div></div>`;
+}
+function shSetSheet(k,val){ if(window._monitorReadOnly) return; const S=sh(); if(!S.map[k]) return; S.map[k].sheet=val.trim()?shSheet(val):''; saveSheets(); renderSheets(); }
+function shDelMap(k){ if(window._monitorReadOnly) return; if(confirm('Remove "'+k+'" from the list?')){ delete sh().map[k]; saveSheets(); renderSheets(); } }
+function shAddMap(){
+  if(window._monitorReadOnly) return;
+  const S=sh();
+  const code=document.getElementById('shm-code').value.trim().toUpperCase().replace(/\s+/g,' '), sheet=document.getElementById('shm-sheet').value.trim(), fam=document.getElementById('shm-fam').value;
+  const err=document.getElementById('shm-err');
+  if(!code){ err.textContent='Type the colour code.'; return; }
+  if(!sheet){ err.textContent='Type the sheet code.'; return; }
+  const k=/^(OG|DD|TG)\s*\d+$/.test(code)?code.replace(/\s+/g,''):code;
+  if(Object.keys(S.map).some(x=>shCode(x)===shCode(k))){ err.textContent=k+' is already in the list. Change its sheet code in the table below.'; return; }
+  S.map[k]={sheet:shSheet(sheet)}; if(fam&&!/^(OG|DD|TG)\d/.test(k)) S.map[k].fam=fam;
+  saveSheets(); renderSheets();
+}
+function shVRatios(){
+  const S=sh();
+  return `<div class="sh-card"><b>Lamination: film on 100 kg of sheet</b>
+    <div class="sh-note" style="margin:4px 0 10px">Example: 100 kg of 162 R + 22 kg of glass film. The laminated weight is taken as sheet + film.</div>
+    <table class="sh-table" style="max-width:560px"><tr><th>Colours</th><th>Film name</th><th class="n">Film kg per 100 kg sheet</th></tr>
+    ${shFams().map(f=>{ const id=shEsc(f).replace(/'/g,'&#39;'); return `<tr><td><b>${shEsc(f)}</b></td><td><input value="${shEsc(S.films[f].film||'')}" placeholder="e.g. Rainbow film" style="width:220px" onchange="sh().films['${id}'].film=this.value.trim();saveSheets();renderSheets()"></td>
+      <td class="n"><input class="sh-num" type="number" min="0" step="0.1" value="${S.films[f].per100==null?'':S.films[f].per100}" onchange="shSetNum(sh().films['${id}'],'per100',this)"> ${SH_FAMS.includes(f)?'':`<button class="btn btn-sm btn-danger" onclick="shDelFam('${id}')">✕</button>`}</td></tr>`; }).join('')}</table>
+    <div class="sh-bar"><input id="shf-name" placeholder="New family (e.g. OG+)" style="width:180px" onkeydown="if(event.key==='Enter')shAddFam()"><button class="btn btn-sm btn-primary" onclick="shAddFam()">Add family</button>
+      <span class="sh-note">A colour ending in + (e.g. BG5+) uses the + family when it exists. Other colours get a family in Colour → sheet list.</span></div><div class="sh-note" id="shf-err" style="color:#b91c1c"></div></div>
+  <div class="sh-card"><b>Cutting: sequins from 100 kg of laminated sheet</b>
+    <div class="sh-note" style="margin:4px 0 10px">Type how many kg of finished sequins you get from 100 kg of laminated sheet. Example: 75 means 100 kg of laminated sheet gives 75 kg of sequins. Sizes with no group use 1 kg for 1 kg.</div>
+    <table class="sh-table" style="max-width:560px"><tr><th>Size group</th><th>Sizes</th><th class="n">Sequins kg from 100 kg</th></tr>
+    ${SH_GROUPS.map(g=>`<tr><td><b>${g}</b></td><td class="sh-note">${g==='Normal'?SH_NORMAL.join(' '):g==='Design'?'4-digit designs (1013, 1014…)':g==='Special design'?'as marked in Price List':g}</td>
+      <td class="n"><input class="sh-num" type="number" min="0" max="100" step="0.1" value="${S.yield[g]==null?'':S.yield[g]}" onchange="shSetNum(sh().yield,'${g}',this)"></td></tr>`).join('')}</table>
+    <div class="sh-note" style="margin-top:8px">Size groups come from the Price List when set there; otherwise 2n, 3n, the Normal sizes above and 4-digit designs.</div></div>`;
+}
+function shAddFam(){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const n=document.getElementById('shf-name').value.trim().toUpperCase(); const err=document.getElementById('shf-err');
+  if(!n){ err.textContent='Type the family name.'; return; }
+  if(S.films[n]){ err.textContent=n+' is already there.'; return; }
+  S.films[n]={film:'',per100:null}; saveSheets(); renderSheets();
+}
+function shDelFam(f){
+  if(window._monitorReadOnly) return; const S=sh();
+  const used=Object.entries(S.map).filter(([k,v])=>v.fam===f).map(([k])=>k);
+  if(used.length){ alert(f+' is used by: '+used.join(', ')+'. Change those colours first.'); return; }
+  if(confirm('Remove family '+f+'?')){ delete S.films[f]; saveSheets(); renderSheets(); }
+}
+function shSetNum(obj,key,inp){ if(window._monitorReadOnly) return; const v=parseFloat(inp.value); obj[key]=v>0?v:null; saveSheets(); renderSheets(); }
+
 function plNorm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 function familyOf(color){ return pr().families[String(color||'').trim().toUpperCase()]||''; }
 function groupOf(shape){ return pr().groups[String(shape||'').trim().toLowerCase()]||''; }
@@ -4918,7 +5472,7 @@ function viewInvoice(invId){
   const inv=invoices.find(x=>x.id===invId);if(!inv)return;
   // Hide all tabs
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','orderlist','invoices','invlist','catalog','pricelist','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','pricelist','sheets','production','comparison','reports'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
     if(el) el.classList.remove('active');
   });
@@ -5062,7 +5616,7 @@ function printPartyLedger(){
   document.getElementById('view-ledger').style.display='block';
   document.getElementById('view-invoice').style.display='none';
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  ['orders','orderlist','invoices','invlist','catalog','pricelist','production','comparison','reports'].forEach(id=>{
+  ['orders','orderlist','invoices','invlist','catalog','pricelist','sheets','production','comparison','reports'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
     if(el) el.classList.remove('active');
   });
