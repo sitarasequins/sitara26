@@ -2235,7 +2235,13 @@ function totalAmt(o){return o.items.reduce((s,i)=>s+(parseFloat(i.kg||0)*parseFl
 function normalizeStr(s){return s.trim();}
 function ciIncludes(arr,val){return arr.some(x=>x.toLowerCase()===val.toLowerCase().trim());}
 function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='modal-order-view')ovOid=null;}
-function renderAll(){renderOrders();renderInvoiceList();renderCatalog();renderParties();setToday();renderReport();}
+function renderAll(){
+  // Heavy lists are drawn only while their tab is open; switchTab draws them when opened.
+  if(tabIsOpen('orderlist')) renderOrders(); else { const c=document.getElementById('s-pending'); if(c) c.textContent=orders.filter(o=>o.status==='Pending').length; }
+  renderInvoiceList();
+  if(tabIsOpen('catalog')){ renderCatalog(); renderParties(); }
+  setToday(); renderReport();
+}
 
 // ============================================================
 // TABS
@@ -2253,6 +2259,7 @@ function switchTab(t,el){
   if(t==='sheets') renderSheets();
   if(t==='comparison') renderComparison();
   if(t==='orderlist') renderOrders();
+  if(t==='catalog'){ renderCatalog(); renderParties(); }
   if(t==='invoices' && !editInvId){resetInvForm();}
 }
 function gotoTab(t){
@@ -2708,6 +2715,13 @@ function renderOrders(){
     const kgB=b.items.reduce((s,i)=>s+parseFloat(i.kg||0),0);
     return kgB-kgA;
   });
+  // Keep the page light: without a filter show the latest orders only (all orders stay searchable)
+  const ORD_LIMIT=100; let hiddenCount=0;
+  if(!dateFilter && !partyFilter && !itemSearch && !window._orderShowAll && filteredOrders.length>ORD_LIMIT){
+    const recent=filteredOrders.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id-a.id)).slice(0,ORD_LIMIT);
+    const keep=new Set(recent.map(o=>o.id)); hiddenCount=filteredOrders.length-recent.length;
+    filteredOrders=filteredOrders.filter(o=>keep.has(o.id));
+  }
   filteredOrders.forEach(o=>{
     if(!byParty[o.party])byParty[o.party]=[];
     byParty[o.party].push(o);
@@ -2772,7 +2786,8 @@ function renderOrders(){
       </div>
       ${orderRows}
     </div>`;
-  }).join('');
+  }).join('')+(hiddenCount?`<div style="text-align:center;padding:10px"><button class="btn" onclick="window._orderShowAll=true;renderOrders()">Show all pending orders (${hiddenCount} older not shown — use the filters above to find any order)</button></div>`:
+    (window._orderShowAll&&filteredOrders.length>ORD_LIMIT?`<div style="text-align:center;padding:10px"><button class="btn" onclick="window._orderShowAll=false;renderOrders();window.scrollTo(0,0)">Show latest ${ORD_LIMIT} only</button></div>`:''));
 }
 
 // ============================================================
@@ -5445,6 +5460,7 @@ function dismissGap(n){
 function checkInvoiceGaps(){
   const el=document.getElementById('inv-gap-warn');
   if(!el)return;
+  el.style.display='none'; return; // gap warning switched off (13 Nov 2026)
   const serials=invoices.map(i=>parseInt(i.serial)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
   if(serials.length<2){el.style.display='none';return;}
   const min=serials[0], max=serials[serials.length-1];
