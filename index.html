@@ -2028,7 +2028,7 @@ window.addEventListener('offline', updateOnlineDot);
 
 function doSetup(){
   const pw=document.getElementById('setup-pw').value.trim();
-  if(pw==='magic'){          // Biller — full access
+  if(pw==='mumbai'){          // Biller — full access
     window._role='biller';
     document.getElementById('setup-screen').style.display='none';
     document.getElementById('setup-err').style.display='none';
@@ -2036,7 +2036,7 @@ function doSetup(){
     applyRoleUI();
     // This device kept newer local data at load time — push it to the cloud now.
     if(window._pendingUpload){ window._pendingUpload=false; saveAll(); }
-  } else if(pw==='786'){     // Monitor — view only
+  } else if(pw==='aka'){     // Monitor — view only
     window._role='monitor';
     document.getElementById('setup-screen').style.display='none';
     document.getElementById('setup-err').style.display='none';
