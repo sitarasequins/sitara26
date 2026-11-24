@@ -3290,7 +3290,7 @@ function normShape(tok){
 }
 // Match a color token (name or alias) against the catalog. Returns {name} or null.
 function matchColor(tok){
-  const t=tok.toLowerCase().replace(/\s+/g,'');
+  const t=tok.toLowerCase().replace(/[\s\-_.]+/g,'');   // "Og-37" / "og 37" / "OG.37" -> og37
   // exact name
   let c=colors.find(x=>colorName(x).toLowerCase()===t);
   if(c)return{name:colorName(c),via:'name'};
@@ -3304,23 +3304,35 @@ function parsePastedOrder(){
   const lines=raw.split(/\n/).map(l=>l.trim()).filter(l=>l);
   if(!lines.length){document.getElementById('paste-preview').innerHTML='<div style="color:#bbb;font-size:12px">Nothing to read.</div>';return;}
   const knownShapes=new Set(shapes.map(s=>s.toLowerCase()));
-  const parsed=lines.map(line=>{
+  // WhatsApp copy adds "[24/11, 2:30 pm] Name:" or "Name:" before each message — remove it,
+  // and use the name as the party when it is a known party and the party box is empty.
+  let sender='', curShape=null;
+  const parsed=[];
+  lines.forEach(line=>{
+    let txt=line.replace(/^\[[^\]]*\]\s*/,'');
+    const sm=txt.match(/^([^:]{2,60}):\s*(.*)$/);
+    if(sm && /[a-z]/i.test(sm[1]) && !/\d\s*(kg|k)\b/i.test(sm[1])){ sender=sender||sm[1].trim(); txt=sm[2].trim(); }
+    if(!txt) return;
     // Clean: replace commas/multiple spaces, drop trailing punctuation
-    let work=line.replace(/[,;]+/g,' ').replace(/\s+/g,' ').trim();
+    let work=txt.replace(/[,;]+/g,' ').replace(/\s+/g,' ').trim();
     const tokensRaw=work.split(' ');
+    // a line that is only a size (e.g. "1014" or "3no") sets the size for the lines below it
+    if(tokensRaw.every(t=>knownShapes.has(normShape(t)))){ curShape=normShape(tokensRaw.join(' ')); if(!knownShapes.has(curShape)) curShape=normShape(tokensRaw[0]); return; }
     // 1) find quantity: a number immediately before 'kg', else a standalone number
     let qty=null, usedIdx=new Set();
     // look for '<num>kg' or '<num> kg'
+    const KGW=/^(kg|kgs|k|kilo)$/;
     for(let i=0;i<tokensRaw.length;i++){
       const t=tokensRaw[i].toLowerCase();
-      let m=t.match(/^(\d+(?:\.\d+)?)kg$/);       // 100kg
+      let m=t.match(/^(\d+(?:\.\d+)?)(kg|kgs|kilo)$/);       // 100kg / 100kgs
+      if(!m && !knownShapes.has(normShape(t))) m=t.match(/^(\d+(?:\.\d+)?)k$/);  // 20k = 20 kg (but 4k is a size)
       if(m){qty=parseFloat(m[1]);usedIdx.add(i);break;}
-      if(/^\d+(?:\.\d+)?$/.test(t) && i+1<tokensRaw.length && tokensRaw[i+1].toLowerCase()==='kg'){
+      if(/^\d+(?:\.\d+)?$/.test(t) && i+1<tokensRaw.length && KGW.test(tokensRaw[i+1].toLowerCase())){
         qty=parseFloat(t);usedIdx.add(i);usedIdx.add(i+1);break;
       }
     }
     // remove standalone 'kg' tokens
-    tokensRaw.forEach((t,i)=>{ if(t.toLowerCase()==='kg') usedIdx.add(i); });
+    tokensRaw.forEach((t,i)=>{ if(/^(kg|kgs|kilo)$/.test(t.toLowerCase())) usedIdx.add(i); });
     // if still no qty, take the last standalone number
     if(qty===null){
       for(let i=tokensRaw.length-1;i>=0;i--){
@@ -3352,12 +3364,19 @@ function parsePastedOrder(){
         if(m){color=m.name;break;}
       }
     }
+    if(!shape && curShape) shape=curShape;   // size from the line above (e.g. "1014")
     const problems=[];
     if(!color)problems.push('color');
     if(!shape)problems.push('shape');
     if(qty===null||qty<=0)problems.push('qty');
-    return {line,color,shape,qty,problems};
+    parsed.push({line:txt,color,shape,qty,problems});
   });
+  if(sender){
+    const fp=document.getElementById('f-party');
+    const pm=(parties||[]).find(p=>String(p.name||p).toLowerCase()===sender.toLowerCase());
+    if(fp && pm && !fp.value.trim()){ fp.value=pm.name||pm; fp.dispatchEvent(new Event('input',{bubbles:true})); fp.dispatchEvent(new Event('change',{bubbles:true})); }
+  }
+  if(!parsed.length){document.getElementById('paste-preview').innerHTML='<div style="color:#bbb;font-size:12px">Nothing to read.</div>';return;}
   renderPastePreview(parsed);
 }
 function renderPastePreview(parsed){
