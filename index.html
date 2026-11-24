@@ -4608,18 +4608,18 @@ function shVMaster(){
   if(q) rows=rows.filter(m=>(shMLabel(m)+' '+(m.note||'')).toUpperCase().includes(q));
   const used=shMUsed();
   const sups=shSuppliers().map(x=>x.name);
-  return `<div class="sh-info">Master list of sheet / film items. <b>PO</b> and <b>Purchase</b> can only use items from here. The <b>code</b> is what goes to the supplier and must be the sheet name used in Need / Balance (e.g. 162 R, MILKY). Colour is only for you.</div>
+  return `<div class="sh-info">Master list of sheet / film items. <b>PO</b> and <b>Purchase</b> can only use items from here. Type a colour code (OG39) or a sheet code (VO 15) in one box — the sheet code is taken from <b>Map</b>. The sheet code is what goes to the supplier.</div>
   <div class="sh-card"><b>${shMEditId?'Edit item':'New item'}</b>
     <div class="sh-bar">
-      <input id="mst-color" placeholder="Colour (e.g. Golden)" value="${shEsc(E.color||'')}" style="width:150px">
-      <input id="mst-code" list="mst-code-dl" placeholder="Code (e.g. 162 R)" value="${shEsc(E.code||'')}" style="width:140px">
-      <input id="mst-len" class="sh-lm" type="number" min="0" step="any" placeholder="Length" value="${E.len||''}">
+      <input id="mst-cc" list="mst-code-dl" placeholder="Colour or sheet code (OG39 / 162 R)" value="${shEsc(E.code?(E.color&&!/,/.test(E.color)?E.color+' → '+shMName(E):shMName(E)):'')}" style="width:250px" oninput="shMCCShow()">
+      <span id="mst-cc-show" class="sh-note" style="min-width:120px">${E.code?'→ <b>'+shEsc(shMName(E))+'</b>':''}</span>
+      <input id="mst-len" class="sh-lm" style="width:84px" type="number" min="0" step="any" placeholder="Length" value="${E.len||''}">
       <input id="mst-mic" class="sh-lm" type="number" min="0" step="any" placeholder="Mic" value="${E.mic||''}">
       <select id="mst-sup" style="width:180px"><option value="">— Supplier —</option>${sups.map(x=>`<option value="${shEsc(x)}"${x===E.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
       <input id="mst-note" placeholder="Note (optional)" value="${shEsc(E.note||'')}" style="width:180px" onkeydown="if(event.key==='Enter')shMSave()">
       <button class="btn btn-sm btn-primary" onclick="shMSave()">${shMEditId?'Update':'+ Add'}</button>${shMEditId?`<button class="btn btn-sm" onclick="shMEditId=null;renderSheets()">Cancel</button>`:''}
       <span class="sh-note" id="mst-err" style="color:#b91c1c"></span></div>
-    <datalist id="mst-code-dl">${shAllMaterials().map(m=>`<option value="${shEsc(m)}">`).join('')}</datalist></div>
+    <datalist id="mst-code-dl">${shItemOptions().map(m=>`<option value="${shEsc(m)}">`).join('')}</datalist></div>
   <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Code, colour, supplier, size')}<span class="sh-note">${rows.length} item(s)</span></div>
   <div class="sh-scroll"><table class="sh-table"><tr><th>Supplier</th><th>Code</th><th>Colour</th><th class="n">Length</th><th class="n">Mic</th><th>Item name</th><th>Note</th><th class="n">Used</th><th></th></tr>
     ${rows.map(m=>`<tr><td><b>${shEsc(m.supplier)}</b></td><td><b>${shEsc(shMName(m))}</b></td><td>${shEsc(m.color||'')}</td><td class="n">${m.len}</td><td class="n">${m.mic}</td>
@@ -4627,12 +4627,25 @@ function shVMaster(){
       <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shMEditId=${m.id};renderSheets();window.scrollTo(0,0)">Edit</button> <button class="btn btn-sm btn-danger" onclick="shMDel(${m.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan="9" class="sh-muted" style="padding:16px;text-align:center">No items yet. Add your first item above.</td></tr>'}
   </table></div></div>`;
 }
+// one box: colour code (OG39) or sheet code (VO 15) -> {code: sheet code from Map, color: colour code(s), known}
+function shMCC(raw){
+  const t=String(raw||'').trim(); if(!t) return null;
+  const r=shItemResolve(t);
+  if(r){ const code=shSheet(r.material); let color=r.code||'';
+    if(!color){ const S=sh(); color=Object.entries(S.map).filter(([k,v])=>v&&v.sheet&&shSheet(v.sheet)===code).map(([k])=>k).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).join(', '); }
+    return {code,color,known:true}; }
+  return {code:shSheet(t),color:'',known:false};
+}
+function shMCCShow(){ const el=document.getElementById('mst-cc-show'); if(!el) return; const c=shMCC(document.getElementById('mst-cc').value);
+  el.innerHTML=!c?'':c.known?'→ sheet <b>'+shEsc(c.code)+'</b>'+(c.color?' · '+shEsc(c.color):''):'<span class="sh-neg">not in Map</span>'; }
 function shMUsed(){ const S=sh(); const u={}; S.pos.forEach(p=>(p.lines||[]).forEach(l=>{ if(l.mid!=null) u[l.mid]=(u[l.mid]||0)+1; })); S.purchases.forEach(p=>(p.items||[]).forEach(it=>{ if(it.mid!=null) u[it.mid]=(u[it.mid]||0)+1; })); return u; }
 function shMSave(){
   if(window._monitorReadOnly) return;
   const S=sh(); const v=id=>document.getElementById(id).value; const err=document.getElementById('mst-err');
-  const color=String(v('mst-color')).trim(), code=shSheet(v('mst-code')), len=parseFloat(v('mst-len')), mic=parseFloat(v('mst-mic')), supplier=v('mst-sup'), note=String(v('mst-note')).trim();
-  if(!code){ err.textContent='Type the code.'; return; }
+  const cc=shMCC(v('mst-cc'));
+  if(!cc){ err.textContent='Type a colour or sheet code.'; return; }
+  if(!cc.known&&!confirm('"'+cc.code+'" is not in Map or your sheet list. Add it as a new sheet code?')) return;
+  const color=cc.color, code=cc.code, len=parseFloat(v('mst-len')), mic=parseFloat(v('mst-mic')), supplier=v('mst-sup'), note=String(v('mst-note')).trim();
   if(!(len>0)){ err.textContent='Type the length.'; return; }
   if(!(mic>0)){ err.textContent='Type the mic.'; return; }
   if(!supplier){ err.textContent='Choose the supplier (add new ones in Create → Suppliers).'; return; }
@@ -4648,7 +4661,7 @@ function shMSave(){
       S.purchases.forEach(p=>(p.items||[]).forEach(it=>{ if(it.mid===m.id){ it.len=len; it.mic=mic; it.material=code; } }));
   } else S.master.push({id:S.nextId++,color,code,len,mic,supplier,note});
   shMEditId=null; saveSheets('Master saved'); renderSheets(); if(tabIsOpen('catalog')) renderSuppliers();
-  setTimeout(()=>{ const c=document.getElementById('mst-color'); if(c) c.focus(); },0);
+  setTimeout(()=>{ const c=document.getElementById('mst-cc'); if(c) c.focus(); },0);
 }
 function shMDel(id){
   if(window._monitorReadOnly) return;
