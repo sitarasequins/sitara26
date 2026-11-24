@@ -830,7 +830,7 @@ tr:hover td{background:#f8faff}
     <div class="tag-section">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <h4 style="margin:0">Suppliers <span id="sup-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
-        <span style="font-size:11px;color:#999">Sheet and film suppliers, used on Sheets → PO and Purchase. Colours listed under a supplier are the ones you buy from them — a PO for that colour to another supplier shows a caution.</span>
+        <span style="font-size:11px;color:#999">Sheet and film suppliers, used on Sheets → Master, PO and Purchase. Codes come from Sheets → Master — a PO for another supplier's item shows a caution.</span>
       </div>
       <div id="sup-list"></div>
       <div class="tag-add-row" style="margin-top:8px">
@@ -4104,6 +4104,7 @@ function sh(){
   if(!S.yield) S.yield={}; if(!S.purchases) S.purchases=[]; if(!S.counts) S.counts={}; if(!S.ready) S.ready={};
   if(!S.suppliers) S.suppliers=[];
   if(!S.pos) S.pos=[];
+  if(!S.master) S.master=[];
   S.purchases.forEach(p=>{ if(p.supplier && !S.suppliers.some(x=>x.name.toLowerCase()===p.supplier.toLowerCase())) S.suppliers.push({id:S.nextId++,name:p.supplier}); });
   S.purchases.forEach(p=>{ if(!p.items){ p.items=[{material:p.material,code:'',kg:parseFloat(p.kg)||0,rolls:null,rate:null}]; p.supplier=p.supplier||''; p.invNo=p.invNo||''; delete p.material; delete p.kg; } });
   if(!S.startDate) S.startDate=today(); if(!S.nextId) S.nextId=1;
@@ -4112,6 +4113,15 @@ function sh(){
     S.purchases.forEach(p=>{ const sp=S.suppliers.find(x=>x.name.toLowerCase()===String(p.supplier||'').toLowerCase()); if(!sp) return;
       (p.items||[]).forEach(it=>{ const k=shSheet(it.material); if(k&&!sp.colors.includes(k)) sp.colors.push(k); }); });
     S.supColSeeded=true;
+  }
+  if(!S.masterSeeded){ // first time: Master gets the items already used on POs / purchases with length + mic
+    const lm=(l,m)=>(parseFloat(l)>0&&parseFloat(m)>0)?parseFloat(l)+'x'+parseFloat(m):'';
+    const key=(sp,l,m,c)=>String(sp||'').trim().toLowerCase()+'|'+lm(l,m)+'|'+shSheet(c);
+    const find=(sp,l,m,c)=>S.master.find(x=>key(x.supplier,x.len,x.mic,x.code)===key(sp,l,m,c));
+    const add=(sp,l,m,c,col)=>{ if(!sp||!lm(l,m)||!shSheet(c)) return null; let x=find(sp,l,m,c); if(!x){ x={id:S.nextId++,color:col||'',code:shSheet(c),len:parseFloat(l),mic:parseFloat(m),supplier:sp,note:''}; S.master.push(x); } return x; };
+    S.pos.forEach(p=>(p.lines||[]).forEach(l=>{ const c=l.key||l.color; const x=add(p.supplier,l.len,l.mic,c,(l.color&&shSheet(l.color)!==shSheet(c))?l.color:''); if(x){ l.mid=x.id; l.color=x.code; l.key=x.code; } }));
+    S.purchases.forEach(p=>(p.items||[]).forEach(it=>{ const x=add(p.supplier,it.len,it.mic,it.material,''); if(x) it.mid=x.id; }));
+    S.masterSeeded=true;
   }
   return S;
 }
@@ -4262,7 +4272,7 @@ function shCalc(){
 function shRecalc(){ shCache=null; }
 
 // ---------- screens ----------
-const SH_TABS=[['pending','Need'],['balance','Balance'],['po','PO'],['popend','Pending'],['purchases','Purchase'],['ready','Ready'],['map','Map'],['ratios','Ratios']];
+const SH_TABS=[['pending','Need'],['balance','Balance'],['po','PO'],['popend','Pending'],['purchases','Purchase'],['ready','Ready'],['map','Map'],['ratios','Ratios'],['master','Master']];
 function shSetTab(t){ shTab=t; shFilter=''; renderSheets(); }
 function shWarnings(){
   const S=sh(); const w=[];
@@ -4283,7 +4293,7 @@ function renderSheets(){
       <span class="sh-note">Live: ${orders.length} orders, ${invoices.length} invoices · last invoice ${shD(C.lastInv)}${S.updatedAt?' · sheets data saved '+shD(S.updatedAt.slice(0,10)):''}</span></div>
     ${shWarnings()}
     <div class="sh-tabs">${SH_TABS.map(([k,t])=>`<button class="sh-tab${shTab===k?' on':''}" onclick="shSetTab('${k}')">${t}</button>`).join('')}</div>
-    <div id="sh-view">${({pending:shVPending,balance:shVBalance,po:shVPO,popend:shVPOPending,purchases:shVPurchases,ready:shVReady,map:shVMap,ratios:shVRatios})[shTab]()}</div>`;
+    <div id="sh-view">${({pending:shVPending,balance:shVBalance,po:shVPO,popend:shVPOPending,purchases:shVPurchases,ready:shVReady,map:shVMap,ratios:shVRatios,master:shVMaster})[shTab]()}</div>`;
   if(window._monitorReadOnly) el.querySelectorAll('#sh-view input:not(#sh-flt), #sh-view select, #sh-view button, .sh-bar button').forEach(b=>{ b.disabled=true; b.style.opacity='0.5'; });
 }
 function shFilterBox(ph){ return `<input id="sh-flt" placeholder="🔍 ${ph}" value="${shEsc(shFilter)}" oninput="shFilter=this.value;clearTimeout(window._shft);window._shft=setTimeout(()=>{renderSheets();const i=document.getElementById('sh-flt');i.focus();i.setSelectionRange(i.value.length,i.value.length);},250)" style="width:220px">`; }
@@ -4293,23 +4303,32 @@ function shUnmappedHtml(u){
   return `<div class="sh-card"><b>Colours with no sheet code</b> <span class="sh-note">· ${shF2(tot)} kg not counted above. Add them in "Colour → sheet list".</span>
     <div style="margin-top:8px">${l.slice(0,60).map(([c,k])=>`<span class="sh-pill">${shEsc(c)} ${shF2(k)}</span>`).join('')}${l.length>60?`<span class="sh-note"> …and ${l.length-60} more</span>`:''}</div></div>`;
 }
+function shBuyQty(need,st,od){ const r=need-st; if(r<=0.005) return 0; return Math.max(0,r-od); }
+function shOrdCell(od){ return `<td class="n" style="color:#1d4ed8">${od>0.005?shF2(od):'<span class="sh-muted">—</span>'}</td>`; }
+function shBuyCell(need,st,od){
+  const r=need-st;
+  if(r<=0.005) return '<td class="n"><b class="sh-pos">0.00</b></td>';
+  if(od>=r-0.005) return '<td class="n"><span class="sh-st part">Ordered</span></td>';
+  return `<td class="n"><b class="sh-neg">${shF2(r-od)}</b></td>`;
+}
 function shStockOf(mats,m){ const v=mats[m]; if(!v) return 0; return Math.max(0, v.count?v.stock:(v.bought-v.used)); }
 function shVPending(){
   const C=shCalc(); const r=C.pending; const q=shFilter.trim().toUpperCase(); const {mats}=shMovement();
   let rows=Object.entries(r.sheet).sort((a,b)=>b[1].kg-a[1].kg);
   if(q) rows=rows.filter(([s,v])=>s.includes(q)||Object.keys(v.codes).some(c=>c.toUpperCase().includes(q)));
-  const T=rows.reduce((a,[s,v])=>{ const st=shStockOf(mats,s); return {seq:a.seq+v.seq,lam:a.lam+v.lam,kg:a.kg+v.kg,st:a.st+st,buy:a.buy+Math.max(0,v.kg-st)}; },{seq:0,lam:0,kg:0,st:0,buy:0});
+  const OR=shOrderedBySheet(); const ordOf=m=>OR[shSheet(m)]||0;
+  const T=rows.reduce((a,[s,v])=>{ const st=shStockOf(mats,s), od=ordOf(s); return {seq:a.seq+v.seq,lam:a.lam+v.lam,kg:a.kg+v.kg,st:a.st+st,od:a.od+od,buy:a.buy+shBuyQty(v.kg,st,od)}; },{seq:0,lam:0,kg:0,st:0,od:0,buy:0});
   const films=Object.entries(r.film).sort((a,b)=>b[1]-a[1]);
-  return `<div class="sh-info">Sheet and film needed to make everything still pending in your orders (same pending rule as Pending Work; leftovers under 1 kg ignored).${C.readyUsed>0?` <b>${shF2(C.readyUsed)} kg</b> of pending is covered by counted ready sequins and is left out.`:' No ready sequins counted yet, so this is the most you could need.'} <b>In stock</b> is from Bought − used (or your count, if you entered one); <b>To buy</b> = needed − in stock.</div>
+  return `<div class="sh-info">Sheet and film needed to make everything still pending in your orders (same pending rule as Pending Work; leftovers under 1 kg ignored).${C.readyUsed>0?` <b>${shF2(C.readyUsed)} kg</b> of pending is covered by counted ready sequins and is left out.`:' No ready sequins counted yet, so this is the most you could need.'} <b>In stock</b> is from Bought − used (or your count, if you entered one). <b>Ordered</b> = kg still pending on open POs. <b>To buy</b> = needed − in stock − ordered; it says <b>Ordered</b> when your POs already cover it.</div>
   <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Sheet or colour code')}<span class="sh-note">${rows.length} sheet(s)</span></div>
   <div class="sh-scroll"><table class="sh-table">
-    <tr><th>Sheet</th><th>For colours (pending kg)</th><th class="n">Pending sequins kg</th><th class="n">Laminated kg</th><th class="n">Sheet kg needed</th><th class="n">In stock</th><th class="n">To buy</th></tr>
-    ${rows.map(([s,v])=>{ const st=shStockOf(mats,s), buy=Math.max(0,v.kg-st); return `<tr><td><b>${shEsc(s)}</b></td><td>${Object.entries(v.codes).sort((a,b)=>b[1]-a[1]).map(([c,k])=>`<span class="sh-pill">${shEsc(c)} ${shF2(k)}</span>`).join('')}</td><td class="n">${shF2(v.seq)}</td><td class="n">${shF2(v.lam)}</td><td class="n">${shF2(v.kg)}</td><td class="n ${mats[s]&&mats[s].count?'sh-pos':''}">${shF2(st)}</td><td class="n"><b class="${buy>0?'sh-neg':'sh-pos'}">${shF2(buy)}</b></td></tr>`; }).join('')||'<tr><td colspan="7" class="sh-muted" style="padding:16px;text-align:center">Nothing pending for mapped colours.</td></tr>'}
-    <tr class="tot"><td>Total</td><td></td><td class="n">${shF2(T.seq)}</td><td class="n">${shF2(T.lam)}</td><td class="n">${shF2(T.kg)}</td><td class="n">${shF2(T.st)}</td><td class="n">${shF2(T.buy)}</td></tr>
+    <tr><th>Sheet</th><th>For colours (pending kg)</th><th class="n">Pending sequins kg</th><th class="n">Laminated kg</th><th class="n">Sheet kg needed</th><th class="n">In stock</th><th class="n">Ordered</th><th class="n">To buy</th></tr>
+    ${rows.map(([s,v])=>{ const st=shStockOf(mats,s), od=ordOf(s); return `<tr><td><b>${shEsc(s)}</b></td><td>${Object.entries(v.codes).sort((a,b)=>b[1]-a[1]).map(([c,k])=>`<span class="sh-pill">${shEsc(c)} ${shF2(k)}</span>`).join('')}</td><td class="n">${shF2(v.seq)}</td><td class="n">${shF2(v.lam)}</td><td class="n">${shF2(v.kg)}</td><td class="n ${mats[s]&&mats[s].count?'sh-pos':''}">${shF2(st)}</td>${shOrdCell(od)}${shBuyCell(v.kg,st,od)}</tr>`; }).join('')||'<tr><td colspan="8" class="sh-muted" style="padding:16px;text-align:center">Nothing pending for mapped colours.</td></tr>'}
+    <tr class="tot"><td>Total</td><td></td><td class="n">${shF2(T.seq)}</td><td class="n">${shF2(T.lam)}</td><td class="n">${shF2(T.kg)}</td><td class="n">${shF2(T.st)}</td><td class="n" style="color:#1d4ed8">${shF2(T.od)}</td><td class="n">${shF2(T.buy)}</td></tr>
   </table></div></div>
   <div class="sh-card"><b>Film needed</b>
-    <table class="sh-table" style="margin-top:8px;max-width:560px"><tr><th>Film</th><th class="n">Kg needed</th><th class="n">In stock</th><th class="n">To buy</th></tr>
-    ${films.map(([f,k])=>{ const st=shStockOf(mats,f), buy=Math.max(0,k-st); return `<tr><td>${shEsc(f)}</td><td class="n">${shF2(k)}</td><td class="n">${shF2(st)}</td><td class="n"><b class="${buy>0?'sh-neg':'sh-pos'}">${shF2(buy)}</b></td></tr>`; }).join('')||'<tr><td colspan="4" class="sh-muted">No film ratio set yet.</td></tr>'}</table></div>
+    <table class="sh-table" style="margin-top:8px;max-width:560px"><tr><th>Film</th><th class="n">Kg needed</th><th class="n">In stock</th><th class="n">Ordered</th><th class="n">To buy</th></tr>
+    ${films.map(([f,k])=>{ const st=shStockOf(mats,f), od=ordOf(f); return `<tr><td>${shEsc(f)}</td><td class="n">${shF2(k)}</td><td class="n">${shF2(st)}</td>${shOrdCell(od)}${shBuyCell(k,st,od)}</tr>`; }).join('')||'<tr><td colspan="5" class="sh-muted">No film ratio set yet.</td></tr>'}</table></div>
   ${shUnmappedHtml(r.unmapped)}`;
 }
 function shMovement(){
@@ -4368,10 +4387,9 @@ function renderSuppliers(){
   const list=shSuppliers(); const c=document.getElementById('sup-count'); if(c) c.textContent='('+list.length+')';
   el.innerHTML=list.map(sp=>`<div class="party-row-item"><span style="font-size:13px;font-weight:600">${shEsc(sp.name)}${sp.location?`<span style="font-size:11px;color:#888;font-weight:400;margin-left:8px">📍 ${shEsc(sp.location)}</span>`:''}</span>
       <div style="display:flex;gap:6px"><span style="font-size:11px;color:#999;align-self:center">${sh().purchases.filter(p=>p.supplier===sp.name).length} purchase(s) · ${sh().pos.filter(p=>p.supplier===sp.name).length} PO(s)</span>
-        <button class="btn btn-sm" onclick="supColAdd(${sp.id})">+ Colour</button>
         <button class="btn btn-sm" onclick="supEdit(${sp.id})">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="supDel(${sp.id})">Delete</button></div></div>
-      <div style="padding:0 0 8px 4px;margin-top:-4px">${(sp.colors||[]).length?(sp.colors||[]).map((c,i)=>`<span style="display:inline-block;font-size:11px;font-weight:600;padding:2px 4px 2px 8px;border-radius:6px;background:#f1f2f6;color:#444;margin:2px">${shEsc(c)} <span style="cursor:pointer;color:#b91c1c;padding:0 3px" title="Remove" onclick="supColDel(${sp.id},${i})">✕</span></span>`).join(''):'<span style="font-size:11px;color:#bbb">No colours yet — they are added when you save a PO, or use + Colour.</span>'}</div>`).join('')||'<div class="empty">No suppliers yet.</div>';
+      <div style="padding:0 0 8px 4px;margin-top:-4px">${shSupCodes(sp.name).length?'<span style="font-size:11px;color:#999">Codes: </span>'+shSupCodes(sp.name).map(c=>`<span style="display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f1f2f6;color:#444;margin:2px">${shEsc(c)}</span>`).join(''):'<span style="font-size:11px;color:#bbb">No codes yet — add items for this supplier in Sheets → Master.</span>'}</div>`).join('')||'<div class="empty">No suppliers yet.</div>';
 }
 function supAdd(){
   if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
@@ -4392,6 +4410,7 @@ function supEdit(id){
   const old=sp.name; sp.name=name; if(loc.trim()) sp.location=loc.trim(); else delete sp.location;
   S.purchases.forEach(p=>{ if(p.supplier===old) p.supplier=name; });
   S.pos.forEach(p=>{ if(p.supplier===old) p.supplier=name; });
+  (S.master||[]).forEach(m=>{ if(m.supplier===old) m.supplier=name; });
   saveSheets('Supplier updated'); renderSuppliers(); if(tabIsOpen('sheets')) renderSheets();
 }
 function supDel(id){
@@ -4401,6 +4420,8 @@ function supDel(id){
   if(n){ alert(sp.name+' has '+n+' purchase(s). Delete or edit those first.'); return; }
   const np=S.pos.filter(p=>p.supplier===sp.name).length;
   if(np){ alert(sp.name+' has '+np+' PO(s). Delete or edit those first.'); return; }
+  const nm=(S.master||[]).filter(m=>m.supplier===sp.name).length;
+  if(nm){ alert(sp.name+' has '+nm+' item(s) in Sheets → Master. Delete those first.'); return; }
   if(!confirm('Delete supplier '+sp.name+'?')) return;
   S.suppliers=S.suppliers.filter(x=>x.id!==id); saveSheets(); renderSuppliers();
 }
@@ -4423,7 +4444,7 @@ function shItemResolve(raw){
   return null;
 }
 let shBill=null; // bill being typed
-function shNewBill(){ return {id:null,date:today(),supplier:'',invNo:'',items:[{len:'',mic:'',material:'',code:'',typed:'',kg:'',rolls:'',rate:''}],note:''}; }
+function shNewBill(){ return {id:null,date:today(),supplier:'',invNo:'',items:[shNewBillItem()],note:''}; }
 function shVPurchases(){
   const S=sh(); const q=shFilter.trim().toUpperCase(); if(!shBill) shBill=shNewBill();
   const B=shBill; const T=shBillTotals({items:B.items}); const AG=shDraftAgainst();
@@ -4433,26 +4454,24 @@ function shVPurchases(){
   const all=rows.reduce((a,p)=>{ const t=shBillTotals(p); return {kg:a.kg+t.kg,rolls:a.rolls+t.rolls,amt:a.amt+t.amt}; },{kg:0,rolls:0,amt:0});
   return `<div class="sh-card"><b>${B.id?'Edit purchase':'New purchase'}</b>
     <div class="sh-bar">
-      <select id="shp-sup" style="width:220px" onchange="shBill.supplier=this.value;shBillTotalsDraw()"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
-      <span class="sh-note">Add suppliers in Create → Suppliers</span>
+      <select id="shp-sup" style="width:220px" onchange="shBill.supplier=this.value;renderSheets()"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
       <input id="shp-inv" placeholder="Supplier inv. no." value="${shEsc(B.invNo)}" style="width:150px" oninput="shBill.invNo=this.value">
       <input type="date" id="shp-date" value="${B.date}" onchange="shBill.date=this.value;shBillTotalsDraw()">
       <input id="shp-note" placeholder="Note (optional)" value="${shEsc(B.note||'')}" style="width:200px" oninput="shBill.note=this.value"></div>
-    <div style="overflow-x:auto"><table class="sh-table"><tr><th>#</th><th class="n">Length</th><th class="n">Mic</th><th>Sheet / colour code</th><th>Sheet</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Price / kg</th><th class="n">Amount</th><th>Against PO</th><th></th></tr>
-    ${B.items.map((it,i)=>{ const kg=parseFloat(it.kg)||0, rt=parseFloat(it.rate); return `<tr><td class="sh-note">${i+1}</td>
-      <td class="n"><input class="sh-lm" type="number" min="0" step="any" value="${it.len==null?'':it.len}" placeholder="1000" oninput="shBill.items[${i}].len=this.value;shBillTotalsDraw()"></td>
-      <td class="n"><input class="sh-lm" type="number" min="0" step="any" value="${it.mic==null?'':it.mic}" placeholder="25" oninput="shBill.items[${i}].mic=this.value;shBillTotalsDraw()"></td>
-      <td><input list="shp-dl" value="${shEsc(it.typed)}" placeholder="162 R or OG100" style="width:150px" onchange="shBillItem(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
-      <td>${it.material?`<b>${shEsc(it.material)}</b>${it.code?` <span class="sh-note">(${shEsc(it.code)})</span>`:''}`:(it.typed?'<span class="sh-neg">not known</span>':'')}</td>
+    <div style="overflow-x:auto"><table class="sh-table"><tr><th>#</th><th>Item (from Master)</th><th>Code</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Price / kg</th><th class="n">Amount</th><th>Against PO</th><th></th></tr>
+    ${B.items.map((it,i)=>{ const kg=parseFloat(it.kg)||0, rt=parseFloat(it.rate); const m=shMById(it.mid); return `<tr><td class="sh-note">${i+1}</td>
+      <td>${it.legacy?`<span class="sh-note">old entry:</span> <b>${shEsc((shLM(it.len,it.mic)?shLM(it.len,it.mic)+' ':'')+it.material)}</b>`:
+        `<input list="msh-dl" value="${shEsc(it.typed)}" placeholder="Search Master: 162 R or 1000x25" style="width:260px" onchange="shBillItem(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()">`}</td>
+      <td>${m?`<b>${shEsc(shMName(m))}</b>${m.color?` <span class="sh-note">${shEsc(m.color)}</span>`:''}`:(it.legacy?'':(it.typed?'<span class="sh-neg">not in Master</span>':''))}</td>
       <td class="n"><input class="sh-num" type="number" min="0" step="0.01" value="${it.kg}" oninput="shBill.items[${i}].kg=this.value;shBillTotalsDraw()"></td>
       <td class="n"><input class="sh-num" type="number" min="0" step="1" value="${it.rolls}" oninput="shBill.items[${i}].rolls=this.value;shBillTotalsDraw()"></td>
       <td class="n"><input class="sh-num" type="number" min="0" step="0.01" value="${it.rate}" placeholder="optional" oninput="shBill.items[${i}].rate=this.value;shBillTotalsDraw()"></td>
       <td class="n" id="shp-amt-${i}">${rt>0?shF2(kg*rt):''}</td>
       <td id="shp-po-${i}" style="font-size:12px;min-width:150px">${shAgainstHtml(AG[i])}</td>
       <td>${B.items.length>1?`<button class="btn btn-sm btn-danger" onclick="shBill.items.splice(${i},1);renderSheets()">✕</button>`:''}</td></tr>`; }).join('')}
-    <tr class="tot"><td></td><td colspan="3"><button class="btn btn-sm" onclick="const pv=shBill.items[shBill.items.length-1]||{};shBill.items.push({len:pv.len||'',mic:pv.mic||'',material:'',code:'',typed:'',kg:'',rolls:'',rate:''});renderSheets();setTimeout(()=>{const l=document.querySelectorAll('#sh-view input[list=shp-dl]');l[l.length-1].focus()},0)">+ Add item</button></td><td>Total</td><td class="n" id="shp-tkg">${shF2(T.kg)}</td><td class="n" id="shp-trl">${T.rolls}</td><td></td><td class="n" id="shp-tamt">${T.amt?shF2(T.amt):''}</td><td></td><td></td></tr></table></div>
-    <div class="sh-note" style="margin-top:6px">Type Length + Mic to count this purchase against the oldest open PO of this supplier with the same length, mic and colour. Leave them empty if it is not against a PO.</div>
-    <datalist id="shp-dl">${shItemOptions().map(m=>`<option value="${shEsc(m)}">`).join('')}</datalist>
+    <tr class="tot"><td></td><td><button class="btn btn-sm" onclick="shBill.items.push(shNewBillItem());renderSheets();setTimeout(()=>{const l=document.querySelectorAll('#sh-view input[list=msh-dl]');if(l.length)l[l.length-1].focus()},0)">+ Add item</button></td><td>Total</td><td class="n" id="shp-tkg">${shF2(T.kg)}</td><td class="n" id="shp-trl">${T.rolls}</td><td></td><td class="n" id="shp-tamt">${T.amt?shF2(T.amt):''}</td><td></td><td></td></tr></table></div>
+    <div class="sh-note" style="margin-top:6px">Items come only from Sheets → Master. ${B.supplier?'Items of '+shEsc(B.supplier)+' are listed first.':'Choose the supplier first.'} A purchase counts against the oldest open PO of this supplier for the same item.</div>
+    ${shMDatalist(B.supplier)}
     <div class="sh-bar"><button class="btn btn-sm btn-primary" onclick="shSaveBill()">${B.id?'Update purchase':'Save purchase'}</button>${B.id?`<button class="btn btn-sm" onclick="shBill=null;renderSheets()">Cancel</button>`:''}<span class="sh-note" id="shp-err" style="color:#b91c1c"></span></div></div>
   <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Supplier, inv. no., sheet or note')}<span class="sh-note">${rows.length} purchase(s) · ${shF2(all.kg)} kg · ${all.rolls} rolls${all.amt?' · ₹'+shF2(all.amt):''}</span></div>
   <div class="sh-scroll"><table class="sh-table"><tr><th>Date</th><th>Supplier</th><th>Inv. no.</th><th>Items</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Amount</th><th></th></tr>
@@ -4462,11 +4481,13 @@ function shVPurchases(){
       <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shEditBill(${p.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="shDelPurchase(${p.id})">Delete</button></td></tr>`; }).join('')||'<tr><td colspan="8" class="sh-muted" style="padding:16px;text-align:center">No purchases entered yet.</td></tr>'}
   </table></div></div>`;
 }
+function shNewBillItem(){ return {mid:null,len:'',mic:'',material:'',code:'',typed:'',kg:'',rolls:'',rate:''}; }
 function shBillItem(i,val){
-  const it=shBill.items[i]; it.typed=val; const r=shItemResolve(val);
-  if(r){ it.material=r.material; it.code=r.code; } else { it.material=''; it.code=''; }
+  const it=shBill.items[i]; it.typed=val; const m=shMFind(val,shBill.supplier);
+  if(m){ it.mid=m.id; it.len=m.len; it.mic=m.mic; it.material=shMName(m); it.code=''; it.typed=shMLabel(m); }
+  else { it.mid=null; it.len=''; it.mic=''; it.material=''; it.code=''; }
   renderSheets();
-  const l=document.querySelectorAll('#sh-view input.sh-num'); const kgInp=l[i*3]; if(kgInp&&r) kgInp.focus();
+  const l=document.querySelectorAll('#sh-view input.sh-num'); const kgInp=l[i*3]; if(kgInp&&m) kgInp.focus();
 }
 function shBillTotalsDraw(){
   const T=shBillTotals({items:shBill.items});
@@ -4480,25 +4501,28 @@ function shSaveBill(){
   const S=sh(); const B=shBill; const err=document.getElementById('shp-err');
   if(!B.date){ err.textContent='Pick the date.'; return; }
   if(!B.supplier){ err.textContent='Choose the supplier (add new ones in Create → Suppliers).'; return; }
-  const items=B.items.filter(it=>it.typed||it.kg);
+  const items=B.items.filter(it=>it.legacy||it.typed||it.kg);
   if(!items.length){ err.textContent='Add at least one item.'; return; }
-  for(const it of items){
-    if(!it.material){
-      if(!it.typed){ err.textContent='Type the sheet code for every item.'; return; }
-      if(!confirm('"'+it.typed+'" is not in your sheet list, films or colours. Add it as a new material?')) { err.textContent='Fix item "'+it.typed+'".'; return; }
-      it.material=/\d/.test(it.typed)?shSheet(it.typed):it.typed.trim(); it.code='';
+  for(let i=0;i<items.length;i++){ const it=items[i]; const n='line '+(B.items.indexOf(it)+1);
+    if(!it.legacy){
+      const m=shMById(it.mid);
+      if(!m){ err.textContent=(it.typed?'"'+it.typed+'"':'Item')+' on '+n+' is not in Master. Pick an item from the list (add new ones in Sheets → Master).'; return; }
+      it.len=m.len; it.mic=m.mic; it.material=shMName(m); it.code='';
     }
-    if(!(parseFloat(it.kg)>0)){ err.textContent='Type the kg for '+it.material+'.'; return; }
-    if((parseFloat(it.len)>0)!==(parseFloat(it.mic)>0)){ err.textContent='Type both Length and Mic for '+it.material+' (or leave both empty).'; return; }
+    if(!(parseFloat(it.kg)>0)){ err.textContent='Type the kg on '+n+'.'; return; }
   }
   const bill={id:B.id||S.nextId++, date:B.date, supplier:B.supplier.trim(), invNo:B.invNo.trim(), note:(B.note||'').trim(),
-    items:items.map(it=>({len:parseFloat(it.len)>0?parseFloat(it.len):null, mic:parseFloat(it.mic)>0?parseFloat(it.mic):null, material:it.material, code:it.code||'', kg:parseFloat(it.kg), rolls:parseFloat(it.rolls)>0?parseFloat(it.rolls):null, rate:parseFloat(it.rate)>0?parseFloat(it.rate):null}))};
+    items:items.map(it=>{ const o={len:parseFloat(it.len)>0?parseFloat(it.len):null, mic:parseFloat(it.mic)>0?parseFloat(it.mic):null, material:it.material, code:it.code||'', kg:parseFloat(it.kg), rolls:parseFloat(it.rolls)>0?parseFloat(it.rolls):null, rate:parseFloat(it.rate)>0?parseFloat(it.rate):null};
+      if(it.mid!=null&&!it.legacy) o.mid=it.mid; return o; })};
   const ix=S.purchases.findIndex(p=>p.id===bill.id); if(ix>=0) S.purchases[ix]=bill; else S.purchases.push(bill);
   shBill=null; saveSheets('Purchase saved'); renderSheets();
 }
 function shEditBill(id){
   const p=sh().purchases.find(x=>x.id===id); if(!p) return;
-  shBill={id:p.id,date:p.date,supplier:p.supplier||'',invNo:p.invNo||'',note:p.note||'',items:p.items.map(it=>({len:it.len==null?'':it.len,mic:it.mic==null?'':it.mic,material:it.material,code:it.code||'',typed:it.code?it.code+' → '+it.material:it.material,kg:it.kg,rolls:it.rolls==null?'':it.rolls,rate:it.rate==null?'':it.rate}))};
+  shBill={id:p.id,date:p.date,supplier:p.supplier||'',invNo:p.invNo||'',note:p.note||'',items:p.items.map(it=>{
+    const m=shMById(it.mid)||shMMatch(p.supplier,it.len,it.mic,it.material);
+    const o={mid:m?m.id:null,len:it.len==null?'':it.len,mic:it.mic==null?'':it.mic,material:it.material,code:it.code||'',typed:m?shMLabel(m):(it.material||''),kg:it.kg,rolls:it.rolls==null?'':it.rolls,rate:it.rate==null?'':it.rate};
+    if(!m) o.legacy=true; return o; })};
   renderSheets(); window.scrollTo(0,0);
 }
 function shDelPurchase(id){ if(window._monitorReadOnly) return; const S=sh(); const p=S.purchases.find(x=>x.id===id); if(p&&confirm('Delete purchase '+(p.invNo?'no. '+p.invNo+' ':'')+(p.supplier?'from '+p.supplier+' ':'')+'on '+shD(p.date)+' ('+shF2(shBillTotals(p).kg)+' kg)?')){ S.purchases=S.purchases.filter(x=>x.id!==id); if(shBill&&shBill.id===id) shBill=null; saveSheets(); renderSheets(); } }
@@ -4557,31 +4581,94 @@ function shAgainstHtml(a){
   return `<span class="sh-pos">${shEsc(a.pos.join(', '))} · pending ${shF2(a.before)} → ${shF2(a.after)}</span>${a.extra>0.005?`<br><span class="sh-neg">${shF2(a.extra)} kg extra (more than PO)</span>`:''}`;
 }
 
-// supplier colour list
-function shColOwners(key){ return sh().suppliers.filter(sp=>(sp.colors||[]).includes(key)).map(sp=>sp.name); }
-function supColAdd(id){
-  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
-  const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp) return;
-  const v=prompt('Colour / sheet you buy from '+sp.name+' (e.g. Gold, 162 R, OG100):'); if(!v||!v.trim()) return;
-  const k=shColKey(v); if(sp.colors.includes(k)){ alert(k+' is already listed for '+sp.name+'.'); return; }
-  const others=shColOwners(k).filter(n=>n!==sp.name);
-  if(others.length&&!confirm(k+' is already listed for '+others.join(', ')+'. Add it to '+sp.name+' too?')) return;
-  sp.colors.push(k); sp.colors.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-  saveSheets('Colour added'); renderSuppliers();
+function shNextPoNo(){ const n=sh().pos.reduce((a,p)=>Math.max(a,parseInt(String(p.poNo||'').replace(/\D/g,''))||0),0); return 'PO-'+(n+1); }
+// ---- Master: the only place where sheet items (code + length + mic + supplier) are created ----
+function shMName(m){ return shSheet(m.code); }
+function shMById(id){ return id==null?null:(sh().master||[]).find(m=>m.id===id)||null; }
+function shMLabel(m){ return shLM(m.len,m.mic)+' '+shMName(m)+(m.color?' · '+m.color:'')+' — '+m.supplier; }
+function shMMatch(sup,len,mic,code){ const k=shPOKey(sup,len,mic,code); return (sh().master||[]).find(m=>shPOKey(m.supplier,m.len,m.mic,m.code)===k)||null; }
+function shMSorted(sup){ return (sh().master||[]).slice().sort((a,b)=>((b.supplier===sup)-(a.supplier===sup))||a.supplier.localeCompare(b.supplier)||shMName(a).localeCompare(shMName(b),undefined,{numeric:true})||a.len-b.len||a.mic-b.mic); }
+function shMDatalist(sup){ return `<datalist id="msh-dl">${shMSorted(sup).map(m=>`<option value="${shEsc(shMLabel(m))}">`).join('')}</datalist>`; }
+// typed text -> master item (full label, or "1000x25 162 R", or just "162 R" when that is unique)
+function shMFind(raw,sup){
+  const t=String(raw||'').trim(); if(!t) return null; const M=sh().master||[];
+  let m=M.find(x=>shMLabel(x).toUpperCase()===t.toUpperCase()); if(m) return m;
+  const norm=s=>shSheet(String(s).replace(/\s*[—·].*$/,'')).replace(/\s+/g,' ');
+  const tt=norm(t); const mine=M.filter(x=>x.supplier===sup);
+  const by=list=>list.filter(x=>norm(shLM(x.len,x.mic)+' '+shMName(x))===tt||shMName(x)===shSheet(t));
+  let c=by(mine); if(c.length===1) return c[0];
+  c=by(M); if(c.length===1) return c[0];
+  return null;
 }
-function supColDel(id,i){
-  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
-  const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp||!sp.colors[i]) return;
-  sp.colors.splice(i,1); saveSheets('Colour removed'); renderSuppliers();
+let shMEditId=null;
+function shVMaster(){
+  const S=sh(); const q=shFilter.trim().toUpperCase(); const M=S.master;
+  const E=shMById(shMEditId)||{};
+  let rows=M.slice().sort((a,b)=>a.supplier.localeCompare(b.supplier)||shMName(a).localeCompare(shMName(b),undefined,{numeric:true})||a.len-b.len||a.mic-b.mic);
+  if(q) rows=rows.filter(m=>(shMLabel(m)+' '+(m.note||'')).toUpperCase().includes(q));
+  const used=shMUsed();
+  const sups=shSuppliers().map(x=>x.name);
+  return `<div class="sh-info">Master list of sheet / film items. <b>PO</b> and <b>Purchase</b> can only use items from here. The <b>code</b> is what goes to the supplier and must be the sheet name used in Need / Balance (e.g. 162 R, MILKY). Colour is only for you.</div>
+  <div class="sh-card"><b>${shMEditId?'Edit item':'New item'}</b>
+    <div class="sh-bar">
+      <input id="mst-color" placeholder="Colour (e.g. Golden)" value="${shEsc(E.color||'')}" style="width:150px">
+      <input id="mst-code" list="mst-code-dl" placeholder="Code (e.g. 162 R)" value="${shEsc(E.code||'')}" style="width:140px">
+      <input id="mst-len" class="sh-lm" type="number" min="0" step="any" placeholder="Length" value="${E.len||''}">
+      <input id="mst-mic" class="sh-lm" type="number" min="0" step="any" placeholder="Mic" value="${E.mic||''}">
+      <select id="mst-sup" style="width:180px"><option value="">— Supplier —</option>${sups.map(x=>`<option value="${shEsc(x)}"${x===E.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
+      <input id="mst-note" placeholder="Note (optional)" value="${shEsc(E.note||'')}" style="width:180px" onkeydown="if(event.key==='Enter')shMSave()">
+      <button class="btn btn-sm btn-primary" onclick="shMSave()">${shMEditId?'Update':'+ Add'}</button>${shMEditId?`<button class="btn btn-sm" onclick="shMEditId=null;renderSheets()">Cancel</button>`:''}
+      <span class="sh-note" id="mst-err" style="color:#b91c1c"></span></div>
+    <datalist id="mst-code-dl">${shAllMaterials().map(m=>`<option value="${shEsc(m)}">`).join('')}</datalist></div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Code, colour, supplier, size')}<span class="sh-note">${rows.length} item(s)</span></div>
+  <div class="sh-scroll"><table class="sh-table"><tr><th>Supplier</th><th>Code</th><th>Colour</th><th class="n">Length</th><th class="n">Mic</th><th>Item name</th><th>Note</th><th class="n">Used</th><th></th></tr>
+    ${rows.map(m=>`<tr><td><b>${shEsc(m.supplier)}</b></td><td><b>${shEsc(shMName(m))}</b></td><td>${shEsc(m.color||'')}</td><td class="n">${m.len}</td><td class="n">${m.mic}</td>
+      <td class="sh-desc">${shEsc(shLM(m.len,m.mic)+' '+shMName(m))}</td><td class="sh-note">${shEsc(m.note||'')}</td><td class="n sh-note">${used[m.id]||''}</td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shMEditId=${m.id};renderSheets();window.scrollTo(0,0)">Edit</button> <button class="btn btn-sm btn-danger" onclick="shMDel(${m.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan="9" class="sh-muted" style="padding:16px;text-align:center">No items yet. Add your first item above.</td></tr>'}
+  </table></div></div>`;
 }
+function shMUsed(){ const S=sh(); const u={}; S.pos.forEach(p=>(p.lines||[]).forEach(l=>{ if(l.mid!=null) u[l.mid]=(u[l.mid]||0)+1; })); S.purchases.forEach(p=>(p.items||[]).forEach(it=>{ if(it.mid!=null) u[it.mid]=(u[it.mid]||0)+1; })); return u; }
+function shMSave(){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const v=id=>document.getElementById(id).value; const err=document.getElementById('mst-err');
+  const color=String(v('mst-color')).trim(), code=shSheet(v('mst-code')), len=parseFloat(v('mst-len')), mic=parseFloat(v('mst-mic')), supplier=v('mst-sup'), note=String(v('mst-note')).trim();
+  if(!code){ err.textContent='Type the code.'; return; }
+  if(!(len>0)){ err.textContent='Type the length.'; return; }
+  if(!(mic>0)){ err.textContent='Type the mic.'; return; }
+  if(!supplier){ err.textContent='Choose the supplier (add new ones in Create → Suppliers).'; return; }
+  const dup=shMMatch(supplier,len,mic,code); if(dup&&dup.id!==shMEditId){ err.textContent=shLM(len,mic)+' '+code+' for '+supplier+' already exists.'; return; }
+  const others=S.master.filter(m=>m.id!==shMEditId&&shMName(m)===code&&m.supplier!==supplier).map(m=>m.supplier);
+  if(others.length&&!confirm('Code '+code+' is already given to '+[...new Set(others)].join(', ')+'. Add it for '+supplier+' too?')) return;
+  if(shMEditId){
+    const m=shMById(shMEditId); const old=Object.assign({},m);
+    Object.assign(m,{color,code,len,mic,supplier,note});
+    // keep PO lines that use this item in step
+    S.pos.forEach(p=>(p.lines||[]).forEach(l=>{ if(l.mid===m.id){ l.len=len; l.mic=mic; l.color=code; l.key=code; } }));
+    if(old.supplier!==supplier||old.len!==len||old.mic!==mic||shSheet(old.code)!==code)
+      S.purchases.forEach(p=>(p.items||[]).forEach(it=>{ if(it.mid===m.id){ it.len=len; it.mic=mic; it.material=code; } }));
+  } else S.master.push({id:S.nextId++,color,code,len,mic,supplier,note});
+  shMEditId=null; saveSheets('Master saved'); renderSheets(); if(tabIsOpen('catalog')) renderSuppliers();
+  setTimeout(()=>{ const c=document.getElementById('mst-color'); if(c) c.focus(); },0);
+}
+function shMDel(id){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const m=shMById(id); if(!m) return; const n=shMUsed()[id]||0;
+  if(n){ alert(shMLabel(m)+' is used in '+n+' PO / purchase line(s). It cannot be deleted.'); return; }
+  if(!confirm('Delete '+shMLabel(m)+'?')) return;
+  S.master=S.master.filter(x=>x.id!==id); if(shMEditId===id) shMEditId=null; saveSheets('Master item deleted'); renderSheets();
+}
+// codes each supplier has in Master (shown under Create → Suppliers)
+function shSupCodes(name){ return [...new Set((sh().master||[]).filter(m=>m.supplier===name).map(shMName))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})); }
+// open PO pending kg per sheet code (for Need)
+function shOrderedBySheet(){ const o={}; shPOAlloc(null).lines.forEach(x=>{ if(x.pending>0){ const k=shSheet(x.l.key); o[k]=(o[k]||0)+x.pending; } }); return o; }
 
 let shPO=null; // PO being typed
-function shNextPoNo(){ const n=sh().pos.reduce((a,p)=>Math.max(a,parseInt(String(p.poNo||'').replace(/\D/g,''))||0),0); return 'PO-'+(n+1); }
-function shNewPO(){ return {id:null,poNo:shNextPoNo(),date:today(),supplier:'',note:'',lines:[{id:null,len:'',mic:'',color:'',kg:'',ok:false}]}; }
-function shPOCross(l){ // name(s) of the supplier this colour belongs to, if it is a cross order
-  const B=shPO; if(!B||!B.supplier||!String(l.color||'').trim()||l.ok) return null;
-  const owners=shColOwners(shColKey(l.color)); if(!owners.length||owners.includes(B.supplier)) return null;
-  return owners;
+function shNewPO(){ return {id:null,poNo:shNextPoNo(),date:today(),supplier:'',note:'',lines:[shNewPOLine()]}; }
+function shNewPOLine(){ return {id:null,mid:null,typed:'',kg:'',ok:false}; }
+function shPOCross(l){ // the item belongs to another supplier
+  const B=shPO; if(!B||!B.supplier||l.ok||l.legacy) return null;
+  const m=shMById(l.mid); if(!m||m.supplier===B.supplier) return null;
+  return [m.supplier];
 }
 function shVPO(){
   const S=sh(); const q=shFilter.trim().toUpperCase(); if(!shPO) shPO=shNewPO();
@@ -4590,25 +4677,26 @@ function shVPO(){
   const tot=B.lines.reduce((a,l)=>a+(parseFloat(l.kg)||0),0);
   let rows=S.pos.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.id-a.id);
   if(q) rows=rows.filter(p=>(p.supplier||'').toUpperCase().includes(q)||(p.poNo||'').toUpperCase().includes(q)||(p.note||'').toUpperCase().includes(q)||(p.lines||[]).some(l=>shPODesc(l).toUpperCase().includes(q)));
+  const cols=B.id?7:5;
   return `<div class="sh-card"><b>${B.id?'Edit PO':'New PO'}</b>
     <div class="sh-bar">
       <select style="width:220px" onchange="shPO.supplier=this.value;renderSheets()"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
       <span class="sh-note">PO no.</span><input value="${shEsc(B.poNo)}" style="width:90px" oninput="shPO.poNo=this.value">
       <input type="date" value="${B.date}" onchange="shPO.date=this.value">
       <input placeholder="Note (optional)" value="${shEsc(B.note||'')}" style="width:220px" oninput="shPO.note=this.value"></div>
-    <table class="sh-table" style="max-width:900px"><tr><th>#</th><th class="n">Length</th><th class="n">Mic</th><th>Colour</th><th class="n">Qty (kg)</th><th>Description</th>${B.id?'<th class="n">Recd.</th><th class="n">Pending</th>':''}<th></th></tr>
-    ${B.lines.map((l,i)=>{ const cross=shPOCross(l); const x=l.id!=null?A.byLine[l.id]:null; return `<tr><td class="sh-note">${i+1}</td>
-      <td class="n"><input class="sh-lm" id="po-len-${i}" type="number" min="0" step="any" value="${l.len}" placeholder="1000" oninput="shPO.lines[${i}].len=this.value;shPODraw()"></td>
-      <td class="n"><input class="sh-lm" id="po-mic-${i}" type="number" min="0" step="any" value="${l.mic}" placeholder="25" oninput="shPO.lines[${i}].mic=this.value;shPODraw()"></td>
-      <td><input id="po-col-${i}" value="${shEsc(l.color)}" placeholder="Gold / 162 R" style="width:140px" oninput="shPO.lines[${i}].color=this.value;shPO.lines[${i}].ok=false;shPODraw()" onchange="shPOColDone(${i})" onkeydown="if(event.key==='Enter')this.blur()"></td>
+    <table class="sh-table" style="max-width:900px"><tr><th>#</th><th>Item (from Master)</th><th>Description</th><th class="n">Qty (kg)</th>${B.id?'<th class="n">Recd.</th><th class="n">Pending</th>':''}<th></th></tr>
+    ${B.lines.map((l,i)=>{ const cross=shPOCross(l); const x=l.id!=null?A.byLine[l.id]:null; const m=shMById(l.mid); return `<tr><td class="sh-note">${i+1}</td>
+      <td>${l.legacy?'<span class="sh-note">old entry</span>':`<input id="po-item-${i}" list="msh-dl" value="${shEsc(l.typed)}" placeholder="Search Master: 162 R or 1000x25" style="width:280px" onchange="shPOItem(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()">`}</td>
+      <td class="sh-desc">${m?shEsc(shLM(m.len,m.mic)+' '+shMName(m))+(m.color?` <span class="sh-note" style="font-weight:400">${shEsc(m.color)}</span>`:''):(l.legacy?shEsc(shPODesc(l)):(l.typed?'<span class="sh-neg" style="font-weight:400">not in Master</span>':''))}</td>
       <td class="n"><input class="sh-num" id="po-kg-${i}" type="number" min="0" step="0.01" value="${l.kg}" oninput="shPO.lines[${i}].kg=this.value;shPODraw()"></td>
-      <td class="sh-desc" id="po-desc-${i}">${shLM(l.len,l.mic)||String(l.color||'').trim()?shEsc(shPODesc(l)):''}</td>
       ${B.id?`<td class="n">${x?shF2(x.recd):''}</td><td class="n">${l.closed?'<span class="sh-st done">Closed</span>':(x?`<b class="${x.pending>0?'sh-neg':'sh-pos'}">${shF2(x.pending)}</b>`:'')}</td>`:''}
       <td style="white-space:nowrap">${l.closed?`<button class="btn btn-sm" onclick="shPO.lines[${i}].closed=false;delete shPO.lines[${i}].closedKg;renderSheets()">Reopen</button> `:''}${B.lines.length>1?`<button class="btn btn-sm btn-danger" onclick="shPO.lines.splice(${i},1);renderSheets()">✕</button>`:''}</td></tr>
-      ${cross?`<tr><td></td><td colspan="${B.id?8:6}"><div class="sh-caution"><b>⚠ Cross order.</b> ${shEsc(shColKey(l.color))} usually comes from <b>${shEsc(cross.join(', '))}</b>, not ${shEsc(B.supplier)}.
+      ${cross?`<tr><td></td><td colspan="${cols}"><div class="sh-caution"><b>⚠ Cross order.</b> ${shEsc(m?shMName(m):'')} is given to <b>${shEsc(cross.join(', '))}</b>, not ${shEsc(B.supplier)}.
         <button class="btn btn-sm" style="margin-left:8px" onclick="shPO.lines[${i}].ok=true;renderSheets()">Order anyway</button>
-        <button class="btn btn-sm btn-danger" onclick="${B.lines.length>1?`shPO.lines.splice(${i},1)`:`shPO.lines[${i}]={id:null,len:'',mic:'',color:'',kg:'',ok:false}`};renderSheets()">Remove line</button></div></td></tr>`:''}`; }).join('')}
-    <tr class="tot"><td></td><td colspan="3"><button class="btn btn-sm" onclick="shPOAddLine()">+ Add item</button></td><td class="n" id="po-tkg">${shF2(tot)}</td><td>Total kg</td>${B.id?'<td></td><td></td>':''}<td></td></tr></table>
+        <button class="btn btn-sm btn-danger" onclick="${B.lines.length>1?`shPO.lines.splice(${i},1)`:`shPO.lines[${i}]=shNewPOLine()`};renderSheets()">Remove line</button></div></td></tr>`:''}`; }).join('')}
+    <tr class="tot"><td></td><td><button class="btn btn-sm" onclick="shPOAddLine()">+ Add item</button></td><td>Total kg</td><td class="n" id="po-tkg">${shF2(tot)}</td>${B.id?'<td></td><td></td>':''}<td></td></tr></table>
+    <div class="sh-note" style="margin-top:6px">Items come only from Sheets → Master. ${B.supplier?'Items of '+shEsc(B.supplier)+' are listed first.':'Choose the supplier first.'}</div>
+    ${shMDatalist(B.supplier)}
     <div class="sh-bar"><button class="btn btn-sm btn-primary" onclick="shSavePO()">${B.id?'Update PO':'Save PO'}</button>${B.id?`<button class="btn btn-sm" onclick="shPO=null;renderSheets()">Cancel</button>`:''}<span class="sh-note" id="po-err" style="color:#b91c1c"></span></div></div>
   <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Supplier, PO no., item or note')}<span class="sh-note">${rows.length} PO(s)</span></div>
   <div class="sh-scroll"><table class="sh-table"><tr><th>Date</th><th>PO</th><th>Supplier</th><th>Items</th><th class="n">Kg</th><th class="n">Pending</th><th>Status</th><th></th></tr>
@@ -4620,18 +4708,17 @@ function shVPO(){
   </table></div></div>`;
 }
 function shPODraw(){
-  const B=shPO; if(!B) return; const e=id=>document.getElementById(id);
-  B.lines.forEach((l,i)=>{ const d=e('po-desc-'+i); if(d) d.textContent=(shLM(l.len,l.mic)||String(l.color||'').trim())?shPODesc(l):''; });
-  const t=e('po-tkg'); if(t) t.textContent=shF2(B.lines.reduce((a,l)=>a+(parseFloat(l.kg)||0),0));
+  const B=shPO; if(!B) return; const t=document.getElementById('po-tkg');
+  if(t) t.textContent=shF2(B.lines.reduce((a,l)=>a+(parseFloat(l.kg)||0),0));
 }
-function shPOColDone(i){ // re-check caution after the colour is typed, then go on to Qty
-  const had=!!document.querySelector('#sh-view .sh-caution'); const cross=!!shPOCross(shPO.lines[i]);
-  if(cross||had){ renderSheets(); setTimeout(()=>{ const k=document.getElementById('po-kg-'+i); if(k) k.focus(); },0); }
+function shPOItem(i,val){
+  const l=shPO.lines[i]; l.typed=val; l.ok=false; const m=shMFind(val,shPO.supplier);
+  if(m){ l.mid=m.id; l.typed=shMLabel(m); } else l.mid=null;
+  renderSheets(); setTimeout(()=>{ const k=document.getElementById(m?'po-kg-'+i:'po-item-'+i); if(k) k.focus(); },0);
 }
 function shPOAddLine(){
-  const pv=shPO.lines[shPO.lines.length-1]||{};
-  shPO.lines.push({id:null,len:pv.len||'',mic:pv.mic||'',color:'',kg:'',ok:false});
-  renderSheets(); setTimeout(()=>{ const c=document.getElementById('po-col-'+(shPO.lines.length-1)); if(c) c.focus(); },0);
+  shPO.lines.push(shNewPOLine());
+  renderSheets(); setTimeout(()=>{ const c=document.getElementById('po-item-'+(shPO.lines.length-1)); if(c) c.focus(); },0);
 }
 function shSavePO(){
   if(window._monitorReadOnly) return;
@@ -4640,29 +4727,32 @@ function shSavePO(){
   if(!B.date){ err.textContent='Pick the date.'; return; }
   const poNo=String(B.poNo||'').trim(); if(!poNo){ err.textContent='Type the PO no.'; return; }
   if(S.pos.some(p=>p.id!==B.id&&String(p.poNo).trim().toUpperCase()===poNo.toUpperCase())){ err.textContent=poNo+' is already used. Type another PO no.'; return; }
-  const lines=B.lines.filter(l=>l.len||l.mic||String(l.color||'').trim()||l.kg);
+  const lines=B.lines.filter(l=>l.legacy||l.mid!=null||String(l.typed||'').trim()||l.kg);
   if(!lines.length){ err.textContent='Add at least one item.'; return; }
-  for(let i=0;i<lines.length;i++){ const l=lines[i]; const n='line '+(B.lines.indexOf(l)+1);
-    if(!(parseFloat(l.len)>0)){ err.textContent='Type the length on '+n+'.'; return; }
-    if(!(parseFloat(l.mic)>0)){ err.textContent='Type the mic on '+n+'.'; return; }
-    if(!String(l.color||'').trim()){ err.textContent='Type the colour on '+n+'.'; return; }
+  for(const l of lines){ const n='line '+(B.lines.indexOf(l)+1);
+    if(!l.legacy&&!shMById(l.mid)){ err.textContent=(String(l.typed||'').trim()?'"'+l.typed+'"':'Item')+' on '+n+' is not in Master. Pick an item from the list (add new ones in Sheets → Master).'; return; }
     if(!(parseFloat(l.kg)>0)){ err.textContent='Type the qty (kg) on '+n+'.'; return; }
-    if(shPOCross(l)){ err.textContent='Cross order on '+n+' — click "Order anyway" or "Remove line".'; renderSheets(); document.getElementById('po-err').textContent='Cross order on '+n+' — click "Order anyway" or "Remove line".'; return; }
+    if(shPOCross(l)){ err.textContent='Cross order on '+n+' — click "Order anyway" or "Remove line".'; return; }
   }
   const po={id:B.id||S.nextId++, poNo, date:B.date, supplier:B.supplier, note:String(B.note||'').trim(),
-    lines:lines.map(l=>{ const o={id:l.id!=null?l.id:S.nextId++, len:parseFloat(l.len), mic:parseFloat(l.mic), color:String(l.color).trim(), key:shColKey(l.color), kg:parseFloat(l.kg)};
+    lines:lines.map(l=>{ const m=shMById(l.mid);
+      const o=l.legacy?{id:l.id,len:l.len,mic:l.mic,color:l.color,key:l.key}:{id:l.id!=null?l.id:S.nextId++, mid:m.id, len:m.len, mic:m.mic, color:shMName(m), key:shMName(m)};
+      if(o.id==null) o.id=S.nextId++; o.kg=parseFloat(l.kg);
       if(l.ok) o.ok=true; if(l.closed){ o.closed=true; o.closedKg=parseFloat(l.closedKg)||0; } return o; })};
-  // colours nobody has yet are added to this supplier's list
-  const sp=S.suppliers.find(x=>x.name===po.supplier);
-  if(sp){ po.lines.forEach(l=>{ if(!shColOwners(l.key).length) sp.colors.push(l.key); }); sp.colors.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})); }
   const ix=S.pos.findIndex(p=>p.id===po.id); if(ix>=0) S.pos[ix]=po; else S.pos.push(po);
-  shPO=null; saveSheets('PO saved'); renderSheets(); if(tabIsOpen('catalog')) renderSuppliers();
+  shPO=null; saveSheets('PO saved'); renderSheets();
 }
 function shEditPO(id){
   const p=sh().pos.find(x=>x.id===id); if(!p) return;
-  shPO={id:p.id,poNo:p.poNo,date:p.date,supplier:p.supplier,note:p.note||'',lines:p.lines.map(l=>Object.assign({},l,{ok:!!l.ok}))};
+  shPO={id:p.id,poNo:p.poNo,date:p.date,supplier:p.supplier,note:p.note||'',lines:p.lines.map(l=>{
+    const m=shMById(l.mid)||shMMatch(p.supplier,l.len,l.mic,l.key)||shMMatch(((shMMatchAny(l.len,l.mic,l.key)||{}).supplier),l.len,l.mic,l.key);
+    const o=Object.assign({},l,{ok:!!l.ok});
+    if(m){ o.mid=m.id; o.typed=shMLabel(m); } else o.legacy=true;
+    return o; })};
   shTab='po'; renderSheets(); window.scrollTo(0,0);
 }
+function shMMatchAny(len,mic,code){ return (sh().master||[]).find(m=>shLM(m.len,m.mic)===shLM(len,mic)&&shMName(m)===shSheet(code))||null; }
+
 function shDelPO(id){
   if(window._monitorReadOnly) return;
   const S=sh(); const p=S.pos.find(x=>x.id===id); if(!p) return;
