@@ -5678,6 +5678,24 @@ function loadInvIntoForm(invId){
   if(pp) pp.style.display='none';
   document.getElementById('inv-form-title').scrollIntoView({behavior:'smooth',block:'start'});
 }
+// Rate rules: no item without a rate (0 / blank). Rate must be above ₹100 and below ₹1500,
+// except for party "Shop" and for JAALI / CHAMKI items.
+const INV_RATE_MIN=100, INV_RATE_MAX=1500;
+function invRateExempt(party,it){
+  if(String(party||'').trim().toLowerCase()==='shop') return true;
+  return /jaali|chamki/i.test(String(it.color||'')+' '+String(it.shape||''));
+}
+function invPriceProblems(party,items){
+  const out=[];
+  items.forEach((it,i)=>{
+    const nm=(i+1)+'. '+it.color+' '+it.shape+' ('+it.kg+' kg)';
+    const pr=parseFloat(it.price)||0;
+    if(pr<=0){ out.push(nm+' — rate is 0 / empty'); return; }
+    if(invRateExempt(party,it)) return;
+    if(!(pr>INV_RATE_MIN && pr<INV_RATE_MAX)) out.push(nm+' — rate ₹'+pr+' must be more than ₹'+INV_RATE_MIN+' and less than ₹'+INV_RATE_MAX);
+  });
+  return out;
+}
 function saveInvoice(){
   const pInput=document.getElementById('if-party-input');
   // Also check hidden backup field in case combo cleared
@@ -5691,6 +5709,7 @@ function saveInvoice(){
   const bags=parseInt(document.getElementById('if-bags').value||0)||0;
   if(!party||!items.length){alert('Select a party and add at least one item.');return;}
   if(!date){alert('Please select the invoice date.');return;}
+  { const bad=invPriceProblems(party,items); if(bad.length){ alert('Check the rates:\n\n'+bad.join('\n')); return; } }
   if(editInvId){
     const inv=invoices.find(x=>x.id===editInvId);
     if(inv){inv.party=party;inv.date=date;inv.items=items;inv.remarks=remarks;inv.chargeLabel=chargeLabel;inv.chargeAmt=chargeAmt;inv.bags=bags;}
