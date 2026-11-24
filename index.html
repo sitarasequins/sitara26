@@ -290,6 +290,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #sh-body .sh-table tr.tot td{font-weight:700;border-top:2px solid #1b1d2a;border-bottom:0}
 #sh-body input,#sh-body select{font-size:13px;padding:6px 8px;border:1.5px solid #d5d8e0;border-radius:7px;background:#fff}
 #sh-body input.sh-num{width:90px;text-align:right}
+#sh-body input.sh-lm{width:68px;text-align:right}
+#sh-body .sh-caution{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:7px 10px;font-size:12.5px}
+#sh-body .sh-desc{font-weight:700;color:#1d4ed8;white-space:nowrap}
+#sh-body .sh-st{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+#sh-body .sh-st.open{background:#fef3c7;color:#92400e}#sh-body .sh-st.part{background:#dbeafe;color:#1e40af}#sh-body .sh-st.done{background:#dcfce7;color:#166534}
 #sh-body .sh-pill{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px;background:#f1f2f6;color:#555;margin:1px 2px 1px 0}
 #sh-body .sh-neg{color:#b91c1c}#sh-body .sh-pos{color:#15803d}#sh-body .sh-muted{color:#aaa}
 /* Stats */
@@ -825,7 +830,7 @@ tr:hover td{background:#f8faff}
     <div class="tag-section">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <h4 style="margin:0">Suppliers <span id="sup-count" style="font-size:11px;color:#aaa;font-weight:400"></span></h4>
-        <span style="font-size:11px;color:#999">Sheet and film suppliers, used on the Sheets → Purchases page.</span>
+        <span style="font-size:11px;color:#999">Sheet and film suppliers, used on Sheets → PO and Purchase. Colours listed under a supplier are the ones you buy from them — a PO for that colour to another supplier shows a caution.</span>
       </div>
       <div id="sup-list"></div>
       <div class="tag-add-row" style="margin-top:8px">
@@ -4079,9 +4084,16 @@ function sh(){
   if(!S.films) S.films={}; SH_FAMS.forEach(f=>{ if(!S.films[f]) S.films[f]={film:'',per100:null}; });
   if(!S.yield) S.yield={}; if(!S.purchases) S.purchases=[]; if(!S.counts) S.counts={}; if(!S.ready) S.ready={};
   if(!S.suppliers) S.suppliers=[];
+  if(!S.pos) S.pos=[];
   S.purchases.forEach(p=>{ if(p.supplier && !S.suppliers.some(x=>x.name.toLowerCase()===p.supplier.toLowerCase())) S.suppliers.push({id:S.nextId++,name:p.supplier}); });
   S.purchases.forEach(p=>{ if(!p.items){ p.items=[{material:p.material,code:'',kg:parseFloat(p.kg)||0,rolls:null,rate:null}]; p.supplier=p.supplier||''; p.invNo=p.invNo||''; delete p.material; delete p.kg; } });
   if(!S.startDate) S.startDate=today(); if(!S.nextId) S.nextId=1;
+  S.suppliers.forEach(sp=>{ if(!Array.isArray(sp.colors)) sp.colors=[]; });
+  if(!S.supColSeeded){ // first time: each supplier gets the colours/sheets already bought from them
+    S.purchases.forEach(p=>{ const sp=S.suppliers.find(x=>x.name.toLowerCase()===String(p.supplier||'').toLowerCase()); if(!sp) return;
+      (p.items||[]).forEach(it=>{ const k=shSheet(it.material); if(k&&!sp.colors.includes(k)) sp.colors.push(k); }); });
+    S.supColSeeded=true;
+  }
   return S;
 }
 (function(){ try{ const c=localStorage.getItem('sitara_sheets'); if(c && !window._sheets) window._sheets=JSON.parse(c); }catch(e){} })();
@@ -4231,7 +4243,7 @@ function shCalc(){
 function shRecalc(){ shCache=null; }
 
 // ---------- screens ----------
-const SH_TABS=[['pending','Needed for pending orders'],['balance','Bought − used'],['purchases','Purchases'],['ready','Ready sequins'],['map','Colour → sheet list'],['ratios','Ratios']];
+const SH_TABS=[['pending','Need'],['balance','Balance'],['po','PO'],['popend','Pending'],['purchases','Purchase'],['ready','Ready'],['map','Map'],['ratios','Ratios']];
 function shSetTab(t){ shTab=t; shFilter=''; renderSheets(); }
 function shWarnings(){
   const S=sh(); const w=[];
@@ -4252,7 +4264,7 @@ function renderSheets(){
       <span class="sh-note">Live: ${orders.length} orders, ${invoices.length} invoices · last invoice ${shD(C.lastInv)}${S.updatedAt?' · sheets data saved '+shD(S.updatedAt.slice(0,10)):''}</span></div>
     ${shWarnings()}
     <div class="sh-tabs">${SH_TABS.map(([k,t])=>`<button class="sh-tab${shTab===k?' on':''}" onclick="shSetTab('${k}')">${t}</button>`).join('')}</div>
-    <div id="sh-view">${({pending:shVPending,balance:shVBalance,purchases:shVPurchases,ready:shVReady,map:shVMap,ratios:shVRatios})[shTab]()}</div>`;
+    <div id="sh-view">${({pending:shVPending,balance:shVBalance,po:shVPO,popend:shVPOPending,purchases:shVPurchases,ready:shVReady,map:shVMap,ratios:shVRatios})[shTab]()}</div>`;
   if(window._monitorReadOnly) el.querySelectorAll('#sh-view input:not(#sh-flt), #sh-view select, #sh-view button, .sh-bar button').forEach(b=>{ b.disabled=true; b.style.opacity='0.5'; });
 }
 function shFilterBox(ph){ return `<input id="sh-flt" placeholder="🔍 ${ph}" value="${shEsc(shFilter)}" oninput="shFilter=this.value;clearTimeout(window._shft);window._shft=setTimeout(()=>{renderSheets();const i=document.getElementById('sh-flt');i.focus();i.setSelectionRange(i.value.length,i.value.length);},250)" style="width:220px">`; }
@@ -4336,9 +4348,11 @@ function renderSuppliers(){
   const el=document.getElementById('sup-list'); if(!el) return;
   const list=shSuppliers(); const c=document.getElementById('sup-count'); if(c) c.textContent='('+list.length+')';
   el.innerHTML=list.map(sp=>`<div class="party-row-item"><span style="font-size:13px;font-weight:600">${shEsc(sp.name)}${sp.location?`<span style="font-size:11px;color:#888;font-weight:400;margin-left:8px">📍 ${shEsc(sp.location)}</span>`:''}</span>
-      <div style="display:flex;gap:6px"><span style="font-size:11px;color:#999;align-self:center">${sh().purchases.filter(p=>p.supplier===sp.name).length} purchase(s)</span>
+      <div style="display:flex;gap:6px"><span style="font-size:11px;color:#999;align-self:center">${sh().purchases.filter(p=>p.supplier===sp.name).length} purchase(s) · ${sh().pos.filter(p=>p.supplier===sp.name).length} PO(s)</span>
+        <button class="btn btn-sm" onclick="supColAdd(${sp.id})">+ Colour</button>
         <button class="btn btn-sm" onclick="supEdit(${sp.id})">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="supDel(${sp.id})">Delete</button></div></div>`).join('')||'<div class="empty">No suppliers yet.</div>';
+        <button class="btn btn-sm btn-danger" onclick="supDel(${sp.id})">Delete</button></div></div>
+      <div style="padding:0 0 8px 4px;margin-top:-4px">${(sp.colors||[]).length?(sp.colors||[]).map((c,i)=>`<span style="display:inline-block;font-size:11px;font-weight:600;padding:2px 4px 2px 8px;border-radius:6px;background:#f1f2f6;color:#444;margin:2px">${shEsc(c)} <span style="cursor:pointer;color:#b91c1c;padding:0 3px" title="Remove" onclick="supColDel(${sp.id},${i})">✕</span></span>`).join(''):'<span style="font-size:11px;color:#bbb">No colours yet — they are added when you save a PO, or use + Colour.</span>'}</div>`).join('')||'<div class="empty">No suppliers yet.</div>';
 }
 function supAdd(){
   if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
@@ -4358,6 +4372,7 @@ function supEdit(id){
   const loc=prompt('Location (optional):',sp.location||''); if(loc===null) return;
   const old=sp.name; sp.name=name; if(loc.trim()) sp.location=loc.trim(); else delete sp.location;
   S.purchases.forEach(p=>{ if(p.supplier===old) p.supplier=name; });
+  S.pos.forEach(p=>{ if(p.supplier===old) p.supplier=name; });
   saveSheets('Supplier updated'); renderSuppliers(); if(tabIsOpen('sheets')) renderSheets();
 }
 function supDel(id){
@@ -4365,6 +4380,8 @@ function supDel(id){
   const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp) return;
   const n=S.purchases.filter(p=>p.supplier===sp.name).length;
   if(n){ alert(sp.name+' has '+n+' purchase(s). Delete or edit those first.'); return; }
+  const np=S.pos.filter(p=>p.supplier===sp.name).length;
+  if(np){ alert(sp.name+' has '+np+' PO(s). Delete or edit those first.'); return; }
   if(!confirm('Delete supplier '+sp.name+'?')) return;
   S.suppliers=S.suppliers.filter(x=>x.id!==id); saveSheets(); renderSuppliers();
 }
@@ -4387,37 +4404,41 @@ function shItemResolve(raw){
   return null;
 }
 let shBill=null; // bill being typed
-function shNewBill(){ return {id:null,date:today(),supplier:'',invNo:'',items:[{material:'',code:'',typed:'',kg:'',rolls:'',rate:''}],note:''}; }
+function shNewBill(){ return {id:null,date:today(),supplier:'',invNo:'',items:[{len:'',mic:'',material:'',code:'',typed:'',kg:'',rolls:'',rate:''}],note:''}; }
 function shVPurchases(){
   const S=sh(); const q=shFilter.trim().toUpperCase(); if(!shBill) shBill=shNewBill();
-  const B=shBill; const T=shBillTotals({items:B.items});
+  const B=shBill; const T=shBillTotals({items:B.items}); const AG=shDraftAgainst();
   const suppliers=shSuppliers().map(x=>x.name); if(B.supplier&&!suppliers.includes(B.supplier)) suppliers.push(B.supplier);
   let rows=S.purchases.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   if(q) rows=rows.filter(p=>(p.supplier||'').toUpperCase().includes(q)||(p.invNo||'').toUpperCase().includes(q)||(p.note||'').toUpperCase().includes(q)||(p.items||[]).some(it=>(it.material||'').toUpperCase().includes(q)||(it.code||'').toUpperCase().includes(q)));
   const all=rows.reduce((a,p)=>{ const t=shBillTotals(p); return {kg:a.kg+t.kg,rolls:a.rolls+t.rolls,amt:a.amt+t.amt}; },{kg:0,rolls:0,amt:0});
   return `<div class="sh-card"><b>${B.id?'Edit purchase':'New purchase'}</b>
     <div class="sh-bar">
-      <select id="shp-sup" style="width:220px" onchange="shBill.supplier=this.value"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
+      <select id="shp-sup" style="width:220px" onchange="shBill.supplier=this.value;shBillTotalsDraw()"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
       <span class="sh-note">Add suppliers in Create → Suppliers</span>
       <input id="shp-inv" placeholder="Supplier inv. no." value="${shEsc(B.invNo)}" style="width:150px" oninput="shBill.invNo=this.value">
-      <input type="date" id="shp-date" value="${B.date}" onchange="shBill.date=this.value">
+      <input type="date" id="shp-date" value="${B.date}" onchange="shBill.date=this.value;shBillTotalsDraw()">
       <input id="shp-note" placeholder="Note (optional)" value="${shEsc(B.note||'')}" style="width:200px" oninput="shBill.note=this.value"></div>
-    <table class="sh-table" style="max-width:900px"><tr><th>#</th><th>Sheet / colour code</th><th>Sheet</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Price / kg</th><th class="n">Amount</th><th></th></tr>
+    <div style="overflow-x:auto"><table class="sh-table"><tr><th>#</th><th class="n">Length</th><th class="n">Mic</th><th>Sheet / colour code</th><th>Sheet</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Price / kg</th><th class="n">Amount</th><th>Against PO</th><th></th></tr>
     ${B.items.map((it,i)=>{ const kg=parseFloat(it.kg)||0, rt=parseFloat(it.rate); return `<tr><td class="sh-note">${i+1}</td>
-      <td><input list="shp-dl" value="${shEsc(it.typed)}" placeholder="162 R or OG100" style="width:200px" onchange="shBillItem(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td class="n"><input class="sh-lm" type="number" min="0" step="any" value="${it.len==null?'':it.len}" placeholder="1000" oninput="shBill.items[${i}].len=this.value;shBillTotalsDraw()"></td>
+      <td class="n"><input class="sh-lm" type="number" min="0" step="any" value="${it.mic==null?'':it.mic}" placeholder="25" oninput="shBill.items[${i}].mic=this.value;shBillTotalsDraw()"></td>
+      <td><input list="shp-dl" value="${shEsc(it.typed)}" placeholder="162 R or OG100" style="width:150px" onchange="shBillItem(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></td>
       <td>${it.material?`<b>${shEsc(it.material)}</b>${it.code?` <span class="sh-note">(${shEsc(it.code)})</span>`:''}`:(it.typed?'<span class="sh-neg">not known</span>':'')}</td>
       <td class="n"><input class="sh-num" type="number" min="0" step="0.01" value="${it.kg}" oninput="shBill.items[${i}].kg=this.value;shBillTotalsDraw()"></td>
       <td class="n"><input class="sh-num" type="number" min="0" step="1" value="${it.rolls}" oninput="shBill.items[${i}].rolls=this.value;shBillTotalsDraw()"></td>
       <td class="n"><input class="sh-num" type="number" min="0" step="0.01" value="${it.rate}" placeholder="optional" oninput="shBill.items[${i}].rate=this.value;shBillTotalsDraw()"></td>
       <td class="n" id="shp-amt-${i}">${rt>0?shF2(kg*rt):''}</td>
+      <td id="shp-po-${i}" style="font-size:12px;min-width:150px">${shAgainstHtml(AG[i])}</td>
       <td>${B.items.length>1?`<button class="btn btn-sm btn-danger" onclick="shBill.items.splice(${i},1);renderSheets()">✕</button>`:''}</td></tr>`; }).join('')}
-    <tr class="tot"><td></td><td><button class="btn btn-sm" onclick="shBill.items.push({material:'',code:'',typed:'',kg:'',rolls:'',rate:''});renderSheets();setTimeout(()=>{const l=document.querySelectorAll('#sh-view input[list=shp-dl]');l[l.length-1].focus()},0)">+ Add item</button></td><td>Total</td><td class="n" id="shp-tkg">${shF2(T.kg)}</td><td class="n" id="shp-trl">${T.rolls}</td><td></td><td class="n" id="shp-tamt">${T.amt?shF2(T.amt):''}</td><td></td></tr></table>
+    <tr class="tot"><td></td><td colspan="3"><button class="btn btn-sm" onclick="const pv=shBill.items[shBill.items.length-1]||{};shBill.items.push({len:pv.len||'',mic:pv.mic||'',material:'',code:'',typed:'',kg:'',rolls:'',rate:''});renderSheets();setTimeout(()=>{const l=document.querySelectorAll('#sh-view input[list=shp-dl]');l[l.length-1].focus()},0)">+ Add item</button></td><td>Total</td><td class="n" id="shp-tkg">${shF2(T.kg)}</td><td class="n" id="shp-trl">${T.rolls}</td><td></td><td class="n" id="shp-tamt">${T.amt?shF2(T.amt):''}</td><td></td><td></td></tr></table></div>
+    <div class="sh-note" style="margin-top:6px">Type Length + Mic to count this purchase against the oldest open PO of this supplier with the same length, mic and colour. Leave them empty if it is not against a PO.</div>
     <datalist id="shp-dl">${shItemOptions().map(m=>`<option value="${shEsc(m)}">`).join('')}</datalist>
     <div class="sh-bar"><button class="btn btn-sm btn-primary" onclick="shSaveBill()">${B.id?'Update purchase':'Save purchase'}</button>${B.id?`<button class="btn btn-sm" onclick="shBill=null;renderSheets()">Cancel</button>`:''}<span class="sh-note" id="shp-err" style="color:#b91c1c"></span></div></div>
   <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Supplier, inv. no., sheet or note')}<span class="sh-note">${rows.length} purchase(s) · ${shF2(all.kg)} kg · ${all.rolls} rolls${all.amt?' · ₹'+shF2(all.amt):''}</span></div>
   <div class="sh-scroll"><table class="sh-table"><tr><th>Date</th><th>Supplier</th><th>Inv. no.</th><th>Items</th><th class="n">Kg</th><th class="n">Rolls</th><th class="n">Amount</th><th></th></tr>
     ${rows.map(p=>{ const t=shBillTotals(p); return `<tr><td>${shD(p.date)}</td><td><b>${shEsc(p.supplier||'')}</b></td><td>${shEsc(p.invNo||'')}</td>
-      <td>${(p.items||[]).map(it=>`<span class="sh-pill">${shEsc(it.material)}${it.code?' ('+shEsc(it.code)+')':''} ${shF2(parseFloat(it.kg)||0)}${parseFloat(it.rolls)>0?' · '+it.rolls+' rl':''}${parseFloat(it.rate)>0?' @'+it.rate:''}</span>`).join('')}${p.note?` <span class="sh-note">${shEsc(p.note)}</span>`:''}</td>
+      <td>${(p.items||[]).map(it=>`<span class="sh-pill">${shLM(it.len,it.mic)?shLM(it.len,it.mic)+' ':''}${shEsc(it.material)}${it.code?' ('+shEsc(it.code)+')':''} ${shF2(parseFloat(it.kg)||0)}${parseFloat(it.rolls)>0?' · '+it.rolls+' rl':''}${parseFloat(it.rate)>0?' @'+it.rate:''}</span>`).join('')}${p.note?` <span class="sh-note">${shEsc(p.note)}</span>`:''}</td>
       <td class="n">${shF2(t.kg)}</td><td class="n">${t.rolls||''}</td><td class="n">${t.amt?shF2(t.amt):''}</td>
       <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shEditBill(${p.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="shDelPurchase(${p.id})">Delete</button></td></tr>`; }).join('')||'<tr><td colspan="8" class="sh-muted" style="padding:16px;text-align:center">No purchases entered yet.</td></tr>'}
   </table></div></div>`;
@@ -4433,6 +4454,7 @@ function shBillTotalsDraw(){
   const e=id=>document.getElementById(id);
   if(e('shp-tkg')) e('shp-tkg').textContent=shF2(T.kg); if(e('shp-trl')) e('shp-trl').textContent=T.rolls; if(e('shp-tamt')) e('shp-tamt').textContent=T.amt?shF2(T.amt):'';
   shBill.items.forEach((it,i)=>{ const kg=parseFloat(it.kg)||0, rt=parseFloat(it.rate); const c=e('shp-amt-'+i); if(c) c.textContent=rt>0?shF2(kg*rt):''; });
+  const AG=shDraftAgainst(); AG.forEach((a,i)=>{ const c=e('shp-po-'+i); if(c) c.innerHTML=shAgainstHtml(a); });
 }
 function shSaveBill(){
   if(window._monitorReadOnly) return;
@@ -4448,18 +4470,231 @@ function shSaveBill(){
       it.material=/\d/.test(it.typed)?shSheet(it.typed):it.typed.trim(); it.code='';
     }
     if(!(parseFloat(it.kg)>0)){ err.textContent='Type the kg for '+it.material+'.'; return; }
+    if((parseFloat(it.len)>0)!==(parseFloat(it.mic)>0)){ err.textContent='Type both Length and Mic for '+it.material+' (or leave both empty).'; return; }
   }
   const bill={id:B.id||S.nextId++, date:B.date, supplier:B.supplier.trim(), invNo:B.invNo.trim(), note:(B.note||'').trim(),
-    items:items.map(it=>({material:it.material, code:it.code||'', kg:parseFloat(it.kg), rolls:parseFloat(it.rolls)>0?parseFloat(it.rolls):null, rate:parseFloat(it.rate)>0?parseFloat(it.rate):null}))};
+    items:items.map(it=>({len:parseFloat(it.len)>0?parseFloat(it.len):null, mic:parseFloat(it.mic)>0?parseFloat(it.mic):null, material:it.material, code:it.code||'', kg:parseFloat(it.kg), rolls:parseFloat(it.rolls)>0?parseFloat(it.rolls):null, rate:parseFloat(it.rate)>0?parseFloat(it.rate):null}))};
   const ix=S.purchases.findIndex(p=>p.id===bill.id); if(ix>=0) S.purchases[ix]=bill; else S.purchases.push(bill);
   shBill=null; saveSheets('Purchase saved'); renderSheets();
 }
 function shEditBill(id){
   const p=sh().purchases.find(x=>x.id===id); if(!p) return;
-  shBill={id:p.id,date:p.date,supplier:p.supplier||'',invNo:p.invNo||'',note:p.note||'',items:p.items.map(it=>({material:it.material,code:it.code||'',typed:it.code?it.code+' → '+it.material:it.material,kg:it.kg,rolls:it.rolls==null?'':it.rolls,rate:it.rate==null?'':it.rate}))};
+  shBill={id:p.id,date:p.date,supplier:p.supplier||'',invNo:p.invNo||'',note:p.note||'',items:p.items.map(it=>({len:it.len==null?'':it.len,mic:it.mic==null?'':it.mic,material:it.material,code:it.code||'',typed:it.code?it.code+' → '+it.material:it.material,kg:it.kg,rolls:it.rolls==null?'':it.rolls,rate:it.rate==null?'':it.rate}))};
   renderSheets(); window.scrollTo(0,0);
 }
 function shDelPurchase(id){ if(window._monitorReadOnly) return; const S=sh(); const p=S.purchases.find(x=>x.id===id); if(p&&confirm('Delete purchase '+(p.invNo?'no. '+p.invNo+' ':'')+(p.supplier?'from '+p.supplier+' ':'')+'on '+shD(p.date)+' ('+shF2(shBillTotals(p).kg)+' kg)?')){ S.purchases=S.purchases.filter(x=>x.id!==id); if(shBill&&shBill.id===id) shBill=null; saveSheets(); renderSheets(); } }
+
+// ---- purchase orders (PO) and PO pending ----
+// A PO line is length x mic + colour + kg. Purchases that carry length + mic count against the
+// oldest open PO line of the same supplier, length, mic and colour (PO date on or before the purchase).
+const shLM=(l,m)=>{ const L=parseFloat(l), M=parseFloat(m); return (L>0&&M>0)?(L+'x'+M):''; };
+function shColKey(typed){ const t=String(typed||'').trim(); if(!t) return ''; const r=shItemResolve(t); return shSheet(r?r.material:t); }
+function shPOKey(sup,len,mic,key){ return String(sup||'').trim().toLowerCase()+'|'+shLM(len,mic)+'|'+shSheet(key); }
+function shPODesc(l){ return (shLM(l.len,l.mic)||'?')+' '+String(l.color||'').trim(); }
+function shPOAlloc(excludeBillId){
+  const S=sh(); const lines=[];
+  S.pos.forEach(po=>(po.lines||[]).forEach(l=>{ const kg=parseFloat(l.kg)||0;
+    lines.push({po,l,recd:0,cap:l.closed?Math.min(kg,parseFloat(l.closedKg)||0):kg,k:shPOKey(po.supplier,l.len,l.mic,l.key)}); }));
+  lines.sort((a,b)=>(a.po.date||'').localeCompare(b.po.date||'')||a.po.id-b.po.id);
+  const byK={}; lines.forEach(x=>(byK[x.k]=byK[x.k]||[]).push(x));
+  const rec=[];
+  S.purchases.forEach(p=>{ if(excludeBillId!=null&&p.id===excludeBillId) return; (p.items||[]).forEach(it=>{ if(!shLM(it.len,it.mic)) return;
+    rec.push({date:p.date||'',id:p.id,k:shPOKey(p.supplier,it.len,it.mic,it.material),kg:parseFloat(it.kg)||0}); }); });
+  rec.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  rec.forEach(r=>{ let left=r.kg; for(const x of (byK[r.k]||[])){ if(left<=0.0001) break; if((x.po.date||'')>r.date) continue;
+    const room=x.cap-x.recd; if(room<=0.0001) continue; const t=Math.min(room,left); x.recd+=t; left-=t; } });
+  lines.forEach(x=>{ x.pending=x.l.closed?0:Math.max(0,(parseFloat(x.l.kg)||0)-x.recd); if(x.pending<0.005) x.pending=0; });
+  const byLine={}; lines.forEach(x=>byLine[x.l.id]=x);
+  return {lines,byK,byLine};
+}
+function shPOStatus(po,A){
+  const ls=(po.lines||[]).map(l=>A.byLine[l.id]).filter(Boolean);
+  if(ls.length&&ls.every(x=>x.pending<=0)) return ['done','Complete'];
+  if(ls.some(x=>x.recd>0.005)) return ['part','Part recd.'];
+  return ['open','Open'];
+}
+// live "Against PO" for the purchase bill being typed
+function shDraftAgainst(){
+  const B=shBill; if(!B) return [];
+  const A=shPOAlloc(B.id); const used={};
+  return B.items.map(it=>{
+    if(!shLM(it.len,it.mic)) return null;
+    const r=it.material?{material:it.material}:shItemResolve(it.typed); const mat=r?r.material:String(it.typed||'').trim();
+    if(!mat) return null;
+    if(!B.supplier) return {msg:'choose supplier'};
+    const open=(A.byK[shPOKey(B.supplier,it.len,it.mic,mat)]||[]).filter(x=>!x.l.closed&&(x.po.date||'')<=(B.date||'9999'));
+    const room=x=>x.cap-x.recd-(used[x.l.id]||0);
+    const before=open.reduce((a,x)=>a+Math.max(0,room(x)),0);
+    if(before<=0.005) return {none:true};
+    let left=parseFloat(it.kg)||0; const pos=[];
+    for(const x of open){ const rm=room(x); if(rm<=0.005) continue; if(!pos.includes(x.po.poNo)) pos.push(x.po.poNo); if(left<=0) break; const t=Math.min(rm,left); used[x.l.id]=(used[x.l.id]||0)+t; left-=t; }
+    return {pos,before,after:Math.max(0,before-((parseFloat(it.kg)||0)-left)),extra:left};
+  });
+}
+function shAgainstHtml(a){
+  if(!a) return '';
+  if(a.msg) return `<span class="sh-muted">${a.msg}</span>`;
+  if(a.none) return '<span class="sh-muted">No open PO (fine)</span>';
+  return `<span class="sh-pos">${shEsc(a.pos.join(', '))} · pending ${shF2(a.before)} → ${shF2(a.after)}</span>${a.extra>0.005?`<br><span class="sh-neg">${shF2(a.extra)} kg extra (more than PO)</span>`:''}`;
+}
+
+// supplier colour list
+function shColOwners(key){ return sh().suppliers.filter(sp=>(sp.colors||[]).includes(key)).map(sp=>sp.name); }
+function supColAdd(id){
+  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
+  const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp) return;
+  const v=prompt('Colour / sheet you buy from '+sp.name+' (e.g. Gold, 162 R, OG100):'); if(!v||!v.trim()) return;
+  const k=shColKey(v); if(sp.colors.includes(k)){ alert(k+' is already listed for '+sp.name+'.'); return; }
+  const others=shColOwners(k).filter(n=>n!==sp.name);
+  if(others.length&&!confirm(k+' is already listed for '+others.join(', ')+'. Add it to '+sp.name+' too?')) return;
+  sp.colors.push(k); sp.colors.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  saveSheets('Colour added'); renderSuppliers();
+}
+function supColDel(id,i){
+  if(window._monitorReadOnly){ alert('Monitor mode is view only.'); return; }
+  const S=sh(); const sp=S.suppliers.find(x=>x.id===id); if(!sp||!sp.colors[i]) return;
+  sp.colors.splice(i,1); saveSheets('Colour removed'); renderSuppliers();
+}
+
+let shPO=null; // PO being typed
+function shNextPoNo(){ const n=sh().pos.reduce((a,p)=>Math.max(a,parseInt(String(p.poNo||'').replace(/\D/g,''))||0),0); return 'PO-'+(n+1); }
+function shNewPO(){ return {id:null,poNo:shNextPoNo(),date:today(),supplier:'',note:'',lines:[{id:null,len:'',mic:'',color:'',kg:'',ok:false}]}; }
+function shPOCross(l){ // name(s) of the supplier this colour belongs to, if it is a cross order
+  const B=shPO; if(!B||!B.supplier||!String(l.color||'').trim()||l.ok) return null;
+  const owners=shColOwners(shColKey(l.color)); if(!owners.length||owners.includes(B.supplier)) return null;
+  return owners;
+}
+function shVPO(){
+  const S=sh(); const q=shFilter.trim().toUpperCase(); if(!shPO) shPO=shNewPO();
+  const B=shPO; const A=shPOAlloc(null);
+  const suppliers=shSuppliers().map(x=>x.name); if(B.supplier&&!suppliers.includes(B.supplier)) suppliers.push(B.supplier);
+  const tot=B.lines.reduce((a,l)=>a+(parseFloat(l.kg)||0),0);
+  let rows=S.pos.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.id-a.id);
+  if(q) rows=rows.filter(p=>(p.supplier||'').toUpperCase().includes(q)||(p.poNo||'').toUpperCase().includes(q)||(p.note||'').toUpperCase().includes(q)||(p.lines||[]).some(l=>shPODesc(l).toUpperCase().includes(q)));
+  return `<div class="sh-card"><b>${B.id?'Edit PO':'New PO'}</b>
+    <div class="sh-bar">
+      <select style="width:220px" onchange="shPO.supplier=this.value;renderSheets()"><option value="">— Supplier —</option>${suppliers.map(x=>`<option value="${shEsc(x)}"${x===B.supplier?' selected':''}>${shEsc(x)}</option>`).join('')}</select>
+      <span class="sh-note">PO no.</span><input value="${shEsc(B.poNo)}" style="width:90px" oninput="shPO.poNo=this.value">
+      <input type="date" value="${B.date}" onchange="shPO.date=this.value">
+      <input placeholder="Note (optional)" value="${shEsc(B.note||'')}" style="width:220px" oninput="shPO.note=this.value"></div>
+    <table class="sh-table" style="max-width:900px"><tr><th>#</th><th class="n">Length</th><th class="n">Mic</th><th>Colour</th><th class="n">Qty (kg)</th><th>Description</th>${B.id?'<th class="n">Recd.</th><th class="n">Pending</th>':''}<th></th></tr>
+    ${B.lines.map((l,i)=>{ const cross=shPOCross(l); const x=l.id!=null?A.byLine[l.id]:null; return `<tr><td class="sh-note">${i+1}</td>
+      <td class="n"><input class="sh-lm" id="po-len-${i}" type="number" min="0" step="any" value="${l.len}" placeholder="1000" oninput="shPO.lines[${i}].len=this.value;shPODraw()"></td>
+      <td class="n"><input class="sh-lm" id="po-mic-${i}" type="number" min="0" step="any" value="${l.mic}" placeholder="25" oninput="shPO.lines[${i}].mic=this.value;shPODraw()"></td>
+      <td><input id="po-col-${i}" value="${shEsc(l.color)}" placeholder="Gold / 162 R" style="width:140px" oninput="shPO.lines[${i}].color=this.value;shPO.lines[${i}].ok=false;shPODraw()" onchange="shPOColDone(${i})" onkeydown="if(event.key==='Enter')this.blur()"></td>
+      <td class="n"><input class="sh-num" id="po-kg-${i}" type="number" min="0" step="0.01" value="${l.kg}" oninput="shPO.lines[${i}].kg=this.value;shPODraw()"></td>
+      <td class="sh-desc" id="po-desc-${i}">${shLM(l.len,l.mic)||String(l.color||'').trim()?shEsc(shPODesc(l)):''}</td>
+      ${B.id?`<td class="n">${x?shF2(x.recd):''}</td><td class="n">${l.closed?'<span class="sh-st done">Closed</span>':(x?`<b class="${x.pending>0?'sh-neg':'sh-pos'}">${shF2(x.pending)}</b>`:'')}</td>`:''}
+      <td style="white-space:nowrap">${l.closed?`<button class="btn btn-sm" onclick="shPO.lines[${i}].closed=false;delete shPO.lines[${i}].closedKg;renderSheets()">Reopen</button> `:''}${B.lines.length>1?`<button class="btn btn-sm btn-danger" onclick="shPO.lines.splice(${i},1);renderSheets()">✕</button>`:''}</td></tr>
+      ${cross?`<tr><td></td><td colspan="${B.id?8:6}"><div class="sh-caution"><b>⚠ Cross order.</b> ${shEsc(shColKey(l.color))} usually comes from <b>${shEsc(cross.join(', '))}</b>, not ${shEsc(B.supplier)}.
+        <button class="btn btn-sm" style="margin-left:8px" onclick="shPO.lines[${i}].ok=true;renderSheets()">Order anyway</button>
+        <button class="btn btn-sm btn-danger" onclick="${B.lines.length>1?`shPO.lines.splice(${i},1)`:`shPO.lines[${i}]={id:null,len:'',mic:'',color:'',kg:'',ok:false}`};renderSheets()">Remove line</button></div></td></tr>`:''}`; }).join('')}
+    <tr class="tot"><td></td><td colspan="3"><button class="btn btn-sm" onclick="shPOAddLine()">+ Add item</button></td><td class="n" id="po-tkg">${shF2(tot)}</td><td>Total kg</td>${B.id?'<td></td><td></td>':''}<td></td></tr></table>
+    <div class="sh-bar"><button class="btn btn-sm btn-primary" onclick="shSavePO()">${B.id?'Update PO':'Save PO'}</button>${B.id?`<button class="btn btn-sm" onclick="shPO=null;renderSheets()">Cancel</button>`:''}<span class="sh-note" id="po-err" style="color:#b91c1c"></span></div></div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Supplier, PO no., item or note')}<span class="sh-note">${rows.length} PO(s)</span></div>
+  <div class="sh-scroll"><table class="sh-table"><tr><th>Date</th><th>PO</th><th>Supplier</th><th>Items</th><th class="n">Kg</th><th class="n">Pending</th><th>Status</th><th></th></tr>
+    ${rows.map(p=>{ const kg=(p.lines||[]).reduce((a,l)=>a+(parseFloat(l.kg)||0),0); const pend=(p.lines||[]).reduce((a,l)=>a+(A.byLine[l.id]?A.byLine[l.id].pending:0),0); const st=shPOStatus(p,A);
+      return `<tr><td>${shD(p.date)}</td><td><b>${shEsc(p.poNo)}</b></td><td><b>${shEsc(p.supplier)}</b></td>
+      <td>${(p.lines||[]).map(l=>`<span class="sh-pill">${shEsc(shPODesc(l))} · ${shF2(parseFloat(l.kg)||0)}${l.closed?' · closed':''}</span>`).join('')}${p.note?` <span class="sh-note">${shEsc(p.note)}</span>`:''}</td>
+      <td class="n">${shF2(kg)}</td><td class="n">${pend>0?`<b class="sh-neg">${shF2(pend)}</b>`:'0.00'}</td><td><span class="sh-st ${st[0]}">${st[1]}</span></td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shEditPO(${p.id})">Edit</button> <button class="btn btn-sm" onclick="shPrintPO(${p.id})">Print</button> <button class="btn btn-sm btn-danger" onclick="shDelPO(${p.id})">Delete</button></td></tr>`; }).join('')||'<tr><td colspan="8" class="sh-muted" style="padding:16px;text-align:center">No POs yet.</td></tr>'}
+  </table></div></div>`;
+}
+function shPODraw(){
+  const B=shPO; if(!B) return; const e=id=>document.getElementById(id);
+  B.lines.forEach((l,i)=>{ const d=e('po-desc-'+i); if(d) d.textContent=(shLM(l.len,l.mic)||String(l.color||'').trim())?shPODesc(l):''; });
+  const t=e('po-tkg'); if(t) t.textContent=shF2(B.lines.reduce((a,l)=>a+(parseFloat(l.kg)||0),0));
+}
+function shPOColDone(i){ // re-check caution after the colour is typed, then go on to Qty
+  const had=!!document.querySelector('#sh-view .sh-caution'); const cross=!!shPOCross(shPO.lines[i]);
+  if(cross||had){ renderSheets(); setTimeout(()=>{ const k=document.getElementById('po-kg-'+i); if(k) k.focus(); },0); }
+}
+function shPOAddLine(){
+  const pv=shPO.lines[shPO.lines.length-1]||{};
+  shPO.lines.push({id:null,len:pv.len||'',mic:pv.mic||'',color:'',kg:'',ok:false});
+  renderSheets(); setTimeout(()=>{ const c=document.getElementById('po-col-'+(shPO.lines.length-1)); if(c) c.focus(); },0);
+}
+function shSavePO(){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const B=shPO; const err=document.getElementById('po-err');
+  if(!B.supplier){ err.textContent='Choose the supplier (add new ones in Create → Suppliers).'; return; }
+  if(!B.date){ err.textContent='Pick the date.'; return; }
+  const poNo=String(B.poNo||'').trim(); if(!poNo){ err.textContent='Type the PO no.'; return; }
+  if(S.pos.some(p=>p.id!==B.id&&String(p.poNo).trim().toUpperCase()===poNo.toUpperCase())){ err.textContent=poNo+' is already used. Type another PO no.'; return; }
+  const lines=B.lines.filter(l=>l.len||l.mic||String(l.color||'').trim()||l.kg);
+  if(!lines.length){ err.textContent='Add at least one item.'; return; }
+  for(let i=0;i<lines.length;i++){ const l=lines[i]; const n='line '+(B.lines.indexOf(l)+1);
+    if(!(parseFloat(l.len)>0)){ err.textContent='Type the length on '+n+'.'; return; }
+    if(!(parseFloat(l.mic)>0)){ err.textContent='Type the mic on '+n+'.'; return; }
+    if(!String(l.color||'').trim()){ err.textContent='Type the colour on '+n+'.'; return; }
+    if(!(parseFloat(l.kg)>0)){ err.textContent='Type the qty (kg) on '+n+'.'; return; }
+    if(shPOCross(l)){ err.textContent='Cross order on '+n+' — click "Order anyway" or "Remove line".'; renderSheets(); document.getElementById('po-err').textContent='Cross order on '+n+' — click "Order anyway" or "Remove line".'; return; }
+  }
+  const po={id:B.id||S.nextId++, poNo, date:B.date, supplier:B.supplier, note:String(B.note||'').trim(),
+    lines:lines.map(l=>{ const o={id:l.id!=null?l.id:S.nextId++, len:parseFloat(l.len), mic:parseFloat(l.mic), color:String(l.color).trim(), key:shColKey(l.color), kg:parseFloat(l.kg)};
+      if(l.ok) o.ok=true; if(l.closed){ o.closed=true; o.closedKg=parseFloat(l.closedKg)||0; } return o; })};
+  // colours nobody has yet are added to this supplier's list
+  const sp=S.suppliers.find(x=>x.name===po.supplier);
+  if(sp){ po.lines.forEach(l=>{ if(!shColOwners(l.key).length) sp.colors.push(l.key); }); sp.colors.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})); }
+  const ix=S.pos.findIndex(p=>p.id===po.id); if(ix>=0) S.pos[ix]=po; else S.pos.push(po);
+  shPO=null; saveSheets('PO saved'); renderSheets(); if(tabIsOpen('catalog')) renderSuppliers();
+}
+function shEditPO(id){
+  const p=sh().pos.find(x=>x.id===id); if(!p) return;
+  shPO={id:p.id,poNo:p.poNo,date:p.date,supplier:p.supplier,note:p.note||'',lines:p.lines.map(l=>Object.assign({},l,{ok:!!l.ok}))};
+  shTab='po'; renderSheets(); window.scrollTo(0,0);
+}
+function shDelPO(id){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const p=S.pos.find(x=>x.id===id); if(!p) return;
+  const A=shPOAlloc(null); const recd=(p.lines||[]).reduce((a,l)=>a+(A.byLine[l.id]?A.byLine[l.id].recd:0),0);
+  if(!confirm('Delete '+p.poNo+' ('+p.supplier+', '+shD(p.date)+')?'+(recd>0?'\n\n'+shF2(recd)+' kg already received against it will move to the next open PO of the same item, if any.':''))) return;
+  S.pos=S.pos.filter(x=>x.id!==id); if(shPO&&shPO.id===id) shPO=null; saveSheets('PO deleted'); renderSheets();
+}
+function shPOClose(lineId){
+  if(window._monitorReadOnly) return;
+  const S=sh(); const A=shPOAlloc(null); const x=A.byLine[lineId]; if(!x) return;
+  if(!confirm('Close '+x.po.poNo+' · '+shPODesc(x.l)+'?\n\nPending '+shF2(x.pending)+' kg will be dropped (received '+shF2(x.recd)+' kg stays).')) return;
+  x.l.closed=true; x.l.closedKg=Math.round(x.recd*100)/100; saveSheets('PO line closed'); renderSheets();
+}
+function shVPOPending(){
+  const q=shFilter.trim().toUpperCase(); const A=shPOAlloc(null);
+  let rows=A.lines.filter(x=>x.pending>0);
+  if(q) rows=rows.filter(x=>(x.po.supplier||'').toUpperCase().includes(q)||(x.po.poNo||'').toUpperCase().includes(q)||shPODesc(x.l).toUpperCase().includes(q));
+  const groups={}; rows.forEach(x=>(groups[x.po.supplier]=groups[x.po.supplier]||[]).push(x));
+  const names=Object.keys(groups).sort((a,b)=>a.localeCompare(b));
+  const T=rows.reduce((a,x)=>({o:a.o+(parseFloat(x.l.kg)||0),r:a.r+x.recd,p:a.p+x.pending}),{o:0,r:0,p:0});
+  const age=d=>{ if(!d) return ''; const n=Math.floor((Date.parse(today())-Date.parse(d))/864e5); return n>0?n+' d':'today'; };
+  return `<div class="sh-info">Pending = PO qty − received. Received comes from Purchase entries that have Length + Mic, matched to the oldest open PO of the same supplier, length, mic and colour. Click <b>Close</b> when a supplier sends short and you don't want the rest.</div>
+  <div class="sh-card"><div class="sh-bar" style="margin-top:0">${shFilterBox('Supplier, PO no. or item')}<span class="sh-note">${rows.length} line(s) pending</span></div>
+  <div class="sh-scroll"><table class="sh-table"><tr><th>PO</th><th>Date</th><th>Age</th><th>Description</th><th class="n">Ordered</th><th class="n">Recd.</th><th class="n">Pending</th><th></th></tr>
+    ${names.map(n=>{ const g=groups[n]; const gp=g.reduce((a,x)=>a+x.pending,0);
+      return `<tr><td colspan="6" style="background:#f5f7fb"><b>${shEsc(n)}</b></td><td class="n" style="background:#f5f7fb"><b>${shF2(gp)}</b></td><td style="background:#f5f7fb"></td></tr>`+
+      g.map(x=>`<tr><td><b>${shEsc(x.po.poNo)}</b></td><td>${shD(x.po.date)}</td><td class="sh-note">${age(x.po.date)}</td><td class="sh-desc">${shEsc(shPODesc(x.l))}</td>
+        <td class="n">${shF2(parseFloat(x.l.kg)||0)}</td><td class="n">${shF2(x.recd)}</td><td class="n"><b class="sh-neg">${shF2(x.pending)}</b></td>
+        <td style="white-space:nowrap"><button class="btn btn-sm" onclick="shPOClose(${x.l.id})">Close</button> <button class="btn btn-sm" onclick="shEditPO(${x.po.id})">Edit</button></td></tr>`).join(''); }).join('')||'<tr><td colspan="8" class="sh-muted" style="padding:16px;text-align:center">Nothing pending.</td></tr>'}
+    <tr class="tot"><td colspan="4">Total</td><td class="n">${shF2(T.o)}</td><td class="n">${shF2(T.r)}</td><td class="n">${shF2(T.p)}</td><td></td></tr>
+  </table></div></div>`;
+}
+function shPrintPO(id){
+  const p=sh().pos.find(x=>x.id===id); if(!p) return;
+  const sp=sh().suppliers.find(x=>x.name===p.supplier)||{};
+  const tot=(p.lines||[]).filter(l=>!l.closed).reduce((a,l)=>a+(parseFloat(l.kg)||0),0);
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${shEsc(p.poNo)}</title><style>
+    body{font-family:Arial,sans-serif;margin:18mm 14mm;color:#111}h1{margin:0;font-size:24px}.sub{color:#555;font-size:13px;margin-bottom:16px}
+    .hd{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px;font-size:14px}
+    table{width:100%;border-collapse:collapse;font-size:15px}th,td{border:1px solid #333;padding:8px 10px;text-align:left}th{background:#eee}td.n,th.n{text-align:right}
+    tr.t td{font-weight:bold}.note{margin-top:12px;font-size:13px}@page{size:A4;margin:0}</style></head><body>
+    <h1>Sitara Sequins</h1><div class="sub">Purchase Order</div>
+    <div class="hd"><div><b>To:</b> ${shEsc(p.supplier)}${sp.location?'<br>'+shEsc(sp.location):''}</div><div style="text-align:right"><b>PO no.:</b> ${shEsc(p.poNo)}<br><b>Date:</b> ${shD(p.date)}</div></div>
+    <table><tr><th style="width:40px">#</th><th>Description</th><th class="n" style="width:130px">Qty (kg)</th></tr>
+    ${(p.lines||[]).filter(l=>!l.closed).map((l,i)=>`<tr><td>${i+1}</td><td><b>${shEsc(shPODesc(l))}</b></td><td class="n">${shF2(parseFloat(l.kg)||0)}</td></tr>`).join('')}
+    <tr class="t"><td></td><td>Total</td><td class="n">${shF2(tot)}</td></tr></table>
+    ${p.note?`<div class="note"><b>Note:</b> ${shEsc(p.note)}</div>`:''}</body></html>`;
+  const f=document.createElement('iframe'); f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+  f.contentDocument.open(); f.contentDocument.write(html); f.contentDocument.close();
+  setTimeout(()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} setTimeout(()=>f.remove(),2000); },250);
+}
 
 // ---- ready sequins: counted once per colour+size; sales after the count date come out of it first ----
 function shVReady(){
@@ -7642,7 +7877,8 @@ function renderComparison(){
   const map={};
   fOrders.filter(o=>o.status!=='Cancelled').forEach(o=>o.items.filter(i=>!i.cancelled&&cmpItemMatch(i,color,size)).forEach(i=>{
     const k=i.color+'||'+i.shape;
-    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[],earliest:o.date};
+    if(!map[k])map[k]={color:i.color,shape:i.shape,ordKg:0,supKg:0,ordDates:[],supDates:[],earliest:o.date,parties:[]};
+    if(!map[k].parties.includes(o.party))map[k].parties.push(o.party);
     map[k].ordKg+=parseFloat(i.kg||0);
     if(!map[k].ordDates.includes(o.date))map[k].ordDates.push(o.date);
     if(o.date<map[k].earliest)map[k].earliest=o.date;
@@ -7661,12 +7897,17 @@ function renderComparison(){
     }
   }));
   const items=Object.values(map).sort((a,b)=>a.color.localeCompare(b.color)||a.shape.localeCompare(b.shape));
+  // DUE uses cycle settlement over FULL history for this party+item.
+  // The party box may hold only part of the name (e.g. "surajma"), so use the real
+  // party name(s) of the matching orders — not the typed text.
+  withPwIdx(()=>items.forEach(it=>{ it.due=it.ordKg>0?(it.parties||[]).reduce((a,p)=>a+settledPendingFor(p,it.color,it.shape).due,0):0; }));
+  const matchedParties=[...new Set(fOrders.map(o=>o.party))].sort();
   let tOrd=0,tSup=0,tDue=0;
   const trs=items.map(it=>{
     tOrd+=it.ordKg;tSup+=it.supKg;
     // DUE uses cycle settlement over FULL history for this party+item
     // (surplus from old cycles never reduces a fresh order).
-    const due=it.ordKg>0 ? settledPendingFor(party,it.color,it.shape).due : 0;
+    const due=it.due;
     const isDue=due>=1.0;
     if(isDue)tDue+=due;
     const dueCell=isDue
@@ -7681,14 +7922,14 @@ function renderComparison(){
       <td style="padding:4px 8px;border:1px solid #eee;text-align:right">${dueCell}</td>
     </tr>`;
   }).join('');
-  window._cmpPrintData={type:'comparison',party,rows:items.map(it=>{
-    const due=it.ordKg>0 ? settledPendingFor(party,it.color,it.shape).due : 0;
+  window._cmpPrintData={type:'comparison',party:matchedParties.length===1?matchedParties[0]:party,rows:items.map(it=>{
+    const due=it.due;
     return {item:it.color+' '+it.shape,
       ordDates:it.ordDates.sort().map(fmtDate).join(' '),ordKg:it.ordKg,
       supDates:it.supDates.sort().map(fmtDate).join(' '),supKg:it.supKg,
       dueTxt: due>=1.0?due.toFixed(2):'✓'};
   }),tOrd,tSup,tDue};
-  el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">${items.length} item(s) · ordered vs supplied · old-cycle invoices before an item's first order are ignored</div>
+  el.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:6px">${items.length} item(s)${matchedParties.length===1?' · <b>'+matchedParties[0]+'</b>':matchedParties.length>1?' · <span style="color:#b45309;font-weight:700">'+matchedParties.length+' parties match: '+matchedParties.join(', ')+'</span>':''} · ordered vs supplied · old-cycle invoices before an item's first order are ignored</div>
     <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;background:#fff">
     <tr style="background:#f0f4ff;color:#2563eb">
       <th style="padding:4px 8px;border:1px solid #e0e7ff;text-align:left">ITEM</th>
