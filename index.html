@@ -7173,17 +7173,37 @@ function stkPartyLocation(name){
 // "Ramesh Traders Kolkata", "Ramesh Traders (Kolkata)", "Ramesh Traders - Kolkata".
 // The sticker already prints the location on its own line, so drop it from the
 // name ON THE STICKER ONLY. Saved party names are never changed.
-function stkStickerName(name,loc){
-  const nm=String(name||'').trim(), l=String(loc||'').trim();
-  if(!nm||!l) return nm;
+// Short forms / other spellings of a location used in party names or the location box.
+// Add more here as:  fullname:['short1','short2']
+const STK_LOC_ALIASES={lucknow:['lko'],ludhiana:['ldh'],bareilly:['barelly']};
+function stkCanonLoc(l){
+  const k=String(l||'').trim().toLowerCase().replace(/\s+/g,' ');
+  for(const full in STK_LOC_ALIASES){ if(k===full||STK_LOC_ALIASES[full].includes(k)) return full; }
+  return k;
+}
+// Location as printed on the sticker: the full name for a known short form (LKO -> Lucknow)
+function stkLocLabel(l){
+  const t=String(l||'').trim(), c=stkCanonLoc(t);
+  if(STK_LOC_ALIASES[c] && t.toLowerCase()!==c) return c.replace(/\b\w/g,m=>m.toUpperCase());
+  return t;
+}
+function stkStripLoc(nm,l){
   const re=l.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');
   const sep='[\\s,\\-–—/.:]*';
   let out=nm
     .replace(new RegExp(sep+'[\\(\\[]\\s*'+re+'\\s*[\\)\\]]'+sep+'$','i'),'')   // ... (Kolkata)
     .replace(new RegExp('(^|[\\s,\\-–—/.:])'+sep+re+sep+'$','i'),'')           // ... Kolkata / ...-Kolkata
     .replace(new RegExp('^'+re+'\\s*[,\\-–—/:]+\\s*','i'),'');                    // Kolkata - ... (needs a dash/comma, so "Delhi Lace Centre" stays)
-  out=out.replace(/[\s,\-–—/.:]+$/,'').replace(/^[\s,\-–—/.:]+/,'').trim();
-  return out||nm;   // never print an empty name
+  return out.replace(/[\s,\-–—/.:]+$/,'').replace(/^[\s,\-–—/.:]+/,'').trim();
+}
+function stkStickerName(name,loc){
+  const nm=String(name||'').trim(), l=String(loc||'').trim();
+  if(!nm||!l) return nm;
+  // try the location as typed, then its full name and every short form (Lucknow / LKO)
+  const c=stkCanonLoc(l);
+  const forms=[...new Set([l, c, ...(STK_LOC_ALIASES[c]||[])])].sort((a,b)=>b.length-a.length);
+  for(const f of forms){ const out=stkStripLoc(nm,f); if(out && out!==nm) return out; }
+  return nm;   // never print an empty name
 }
 // Optional per-party sticker name (e.g. "Akhil" for "Akhil Seelampur"). Used on stickers only;
 // the party name itself (invoices, Tally export) never changes.
@@ -7275,7 +7295,7 @@ const STICKER_FONT_B64='d09GMgABAAAAAEisABEAAAAAuAwAAEhJAAEAAAAAAAAAAAAAAAAAAAAA
 // a location is seen, so the same location always prints in the same colour.
 const STICKER_COLORS=['#b71c1c','#0d47a1','#1b5e20','#4a148c','#e65100','#00838f','#880e4f','#006064','#1a237e','#33691e','#bf360c','#311b92',
   '#004d40','#827717','#558b2f','#ad1457','#01579b','#6d4c41','#2e7d32','#6a1b9a','#c62828','#283593','#00695c','#4e342e'];
-function stkNormLoc(l){return String(l||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function stkNormLoc(l){return stkCanonLoc(l);}   // LKO and Lucknow share one colour
 // Kolkata (any area) always prints black; black is never given to any other location
 const STK_BLACK='#000000';
 const STK_RETIRED=['#3e2723','#263238'];
@@ -7309,7 +7329,7 @@ function printStickerSheets(jobs){
   const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const all=[];
   jobs.forEach(j=>{ const col=stkColorForLocation(j.location);
-    for(let i=1;i<=j.count;i++) all.push(`<div class="st" style="--c:${col}"><div class="z nm"><span>${esc(stkPrintName(j.party,j.location))}</span></div>${j.location?`<div class="z lc"><span>${esc(j.location)}</span></div>`:''}<div class="z bg"><span class="ring" style="--d:${String(j.count).length}">${j.count}</span></div></div>`); });
+    for(let i=1;i<=j.count;i++) all.push(`<div class="st" style="--c:${col}"><div class="z nm"><span>${esc(stkPrintName(j.party,j.location))}</span></div>${j.location?`<div class="z lc"><span>${esc(stkLocLabel(j.location))}</span></div>`:''}<div class="z bg"><span class="ring" style="--d:${String(j.count).length}">${j.count}</span></div></div>`); });
   let pages='';
   for(let p=0;p<all.length;p+=4){
     let cells=all.slice(p,p+4).join('');
