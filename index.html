@@ -7159,11 +7159,27 @@ function printOrderPOS(id){
 // ============================================================
 let currentPosInvId=null;
 
-// ── Packing stickers: 4 per A4 page, one per bag (party name + location + bag no.) ──
+// ── Packing stickers: 4 per A4 page, one per bag (party name + location + total bags in a circle) ──
 function stkPartyLocation(name){
   const pt=String(name||'').trim().toLowerCase();
   const p=parties.find(x=>x.name.trim().toLowerCase()===pt);
   return p&&p.location?p.location:'';
+}
+// Party names are often saved with the location in them (same as in Tally), e.g.
+// "Ramesh Traders Kolkata", "Ramesh Traders (Kolkata)", "Ramesh Traders - Kolkata".
+// The sticker already prints the location on its own line, so drop it from the
+// name ON THE STICKER ONLY. Saved party names are never changed.
+function stkStickerName(name,loc){
+  const nm=String(name||'').trim(), l=String(loc||'').trim();
+  if(!nm||!l) return nm;
+  const re=l.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');
+  const sep='[\\s,\\-–—/.:]*';
+  let out=nm
+    .replace(new RegExp(sep+'[\\(\\[]\\s*'+re+'\\s*[\\)\\]]'+sep+'$','i'),'')   // ... (Kolkata)
+    .replace(new RegExp('(^|[\\s,\\-–—/.:])'+sep+re+sep+'$','i'),'')           // ... Kolkata / ...-Kolkata
+    .replace(new RegExp('^'+re+'\\s*[,\\-–—/:]+\\s*','i'),'');                    // Kolkata - ... (needs a dash/comma, so "Delhi Lace Centre" stays)
+  out=out.replace(/[\s,\-–—/.:]+$/,'').replace(/^[\s,\-–—/.:]+/,'').trim();
+  return out||nm;   // never print an empty name
 }
 function openStickerModal(){
   if(stkEnsureLocColors()){ saveAll(); renderParties(); }
@@ -7192,7 +7208,7 @@ function renderStickerList(){
     return `<tr style="border-bottom:1px solid #f0f0f0">
       <td style="padding:6px 8px;text-align:center"><input type="checkbox" class="stk-chk" data-id="${inv.id}" onchange="updateStickerSummary()"></td>
       <td style="padding:6px 4px;color:#888;font-size:11px">${String(inv.serial).padStart(4,'0')}</td>
-      <td style="padding:6px 4px;font-weight:600">${esc(inv.party)}</td>
+      <td style="padding:6px 4px;font-weight:600">${(()=>{const s=stkStickerName(inv.party,loc);return s!==String(inv.party||'').trim()?`${esc(s)}<div style="font-size:10px;color:#aaa;font-weight:400" title="Saved name — location is removed on the sticker only">${esc(inv.party)}</div>`:esc(inv.party);})()}</td>
       <td style="padding:6px 4px;font-size:12px;${loc?'color:'+stkColorForLocation(loc)+';font-weight:700':'color:#dc2626'}">${loc?esc(loc):'no location'}</td>
       <td style="padding:6px 8px;text-align:center"><input type="number" min="0" class="stk-cnt" data-id="${inv.id}" value="${bags}" oninput="updateStickerSummary()" style="width:52px;padding:3px 5px;border:1px solid #ddd;border-radius:5px;text-align:center"></td>
     </tr>`;
@@ -7270,7 +7286,7 @@ function printStickerSheets(jobs){
   const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const all=[];
   jobs.forEach(j=>{ const col=stkColorForLocation(j.location);
-    for(let i=1;i<=j.count;i++) all.push(`<div class="st" style="--c:${col}"><div class="z nm"><span>${esc(j.party)}</span></div>${j.location?`<div class="z lc"><span>${esc(j.location)}</span></div>`:''}<div class="z bg"><span>${i}/${j.count}</span></div></div>`); });
+    for(let i=1;i<=j.count;i++) all.push(`<div class="st" style="--c:${col}"><div class="z nm"><span>${esc(stkStickerName(j.party,j.location))}</span></div>${j.location?`<div class="z lc"><span>${esc(j.location)}</span></div>`:''}<div class="z bg"><span class="ring" style="--d:${String(j.count).length}">${j.count}</span></div></div>`); });
   let pages='';
   for(let p=0;p<all.length;p+=4){
     let cells=all.slice(p,p+4).join('');
@@ -7284,21 +7300,25 @@ function printStickerSheets(jobs){
     '<style>@font-face{font-family:StkBlack;src:url(data:font/woff2;base64,'+STICKER_FONT_B64+') format("woff2");font-weight:400 900}'+
     '@page{size:A4 landscape;margin:0}*{margin:0;padding:0;box-sizing:border-box}'+
     'body{font-family:StkBlack,"Arial Black",Impact,sans-serif;color:#000}'+
-    '.sheet{display:grid;grid-template-columns:148.5mm 148.5mm;grid-template-rows:104.5mm 104.5mm;width:297mm;height:209mm;overflow:hidden;page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto;break-after:auto}'+
-    '.st{border:3mm solid var(--c,#000);color:var(--c,#000);display:flex;flex-direction:column;padding:4mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
-    '.st.blank{border-color:transparent}'+
+    '.sheet{position:relative;display:grid;grid-template-columns:148.5mm 148.5mm;grid-template-rows:104.5mm 104.5mm;width:297mm;height:209mm;overflow:hidden;page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto;break-after:auto}'+
+    '.st{color:var(--c,#000);display:flex;flex-direction:column;padding:6mm 6mm 5mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    '.st.blank{visibility:hidden}'+
+    // no border: just a faint dotted cutting guide down the middle and across
+    '.sheet:before,.sheet:after{content:"";position:absolute;border:0 dotted #bbb}.sheet:before{left:148.5mm;top:0;bottom:0;border-left-width:0.3mm}.sheet:after{top:104.5mm;left:0;right:0;border-top-width:0.3mm}'+
     '.z{display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;width:100%;line-height:1.02;word-break:normal;overflow-wrap:normal}'+
-    '.nm{flex:0 0 38%}.lc{flex:0 0 20%}.bg{flex:1 1 auto}'+
+    '.nm{flex:0 0 36%}.lc{flex:0 0 19%}.bg{flex:1 1 auto}'+
     '.st:not(:has(.lc)) .nm{flex-basis:55%}'+
+    // total bags in a circle (every bag of the party shows the same number)
+    '.ring{display:inline-flex;align-items:center;justify-content:center;line-height:1;height:1.16em;width:calc(0.62em + 0.58em * var(--d,1));border:0.075em solid currentColor;border-radius:50%;padding-top:0.04em}'+
     '@media screen{body{background:#eee}.sheet{background:#fff;margin:10px auto}}'+
     '</style></head><body>'+pages+
     '<script>'+
     'function fit(z,start){var sp=z.firstChild,f=start;sp.style.fontSize=f+"pt";'+
     'while(f>8&&(sp.offsetWidth>z.clientWidth||sp.offsetHeight>z.clientHeight||z.scrollWidth>z.clientWidth)){f-=2;sp.style.fontSize=f+"pt";}}'+
     'function go(){document.querySelectorAll(".st:not(.blank)").forEach(function(st){'+
-    'st.querySelectorAll(".nm").forEach(function(z){fit(z,90)});'+
-    'st.querySelectorAll(".lc").forEach(function(z){fit(z,60)});'+
-    'st.querySelectorAll(".bg").forEach(function(z){fit(z,190)});});'+
+    'st.querySelectorAll(".nm").forEach(function(z){fit(z,150)});'+
+    'st.querySelectorAll(".lc").forEach(function(z){fit(z,110)});'+
+    'st.querySelectorAll(".bg").forEach(function(z){fit(z,320)});});'+
     'setTimeout(function(){window.print();},300);}'+
     '(document.fonts?document.fonts.ready:Promise.resolve()).then(go);<\/script>'+
     '</body></html>');
