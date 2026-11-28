@@ -927,6 +927,7 @@ tr:hover td{background:#f8faff}
         <span style="width:1px;height:20px;background:#eee"></span>
         <button onclick="pwReturnAll()" style="padding:5px 13px;border:1.5px solid #b45309;border-radius:7px;font-size:11px;font-weight:700;color:#fff;background:#b45309;cursor:pointer">↩ Return ALL to To Give</button>
       </span>
+      <span id="pw-sgroups" style="display:none;align-items:center;gap:6px;flex-wrap:wrap"></span>
       <span id="pw-checkall-wrap" style="display:flex;align-items:center;gap:8px">
         <span style="width:1px;height:20px;background:#eee"></span>
         <button onclick="pwCheckAll()" style="padding:5px 12px;border:1.5px solid #16a34a;border-radius:7px;font-size:11px;font-weight:600;color:#16a34a;background:#fff;cursor:pointer">✓ Check All</button>
@@ -2491,12 +2492,14 @@ function toGiveFor(party,color,shape){
   });
   return {due:+due.toFixed(3), inProc:+inProc.toFixed(3), toGive:+Math.max(0,due-inProc).toFixed(3)};
 }
-function allocateToProcessItem(color,shape,kg){
+function allocateToProcessItem(color,shape,kg,onlyParties){
   let left=parseFloat(kg)||0;
   if(left<=0) return 0;
   // Oldest order first, across all parties waiting for this colour+size
+  // (or only the given parties, when a Size Grid group is selected)
+  const only=onlyParties?new Set(onlyParties):null;
   let pool=[];
-  partiesPendingForItem(color,shape).forEach(party=>{
+  partiesPendingForItem(color,shape).filter(p=>!only||only.has(p)).forEach(party=>{
     perOrderRemaining(party,color,shape).forEach(r=>{ pool.push({...r,party}); });
   });
   pool.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.oid-b.oid));
@@ -2518,11 +2521,12 @@ function allocateToProcessItem(color,shape,kg){
   }
   return +done.toFixed(3);
 }
-function deallocateFromProcessItem(color,shape,kg){
+function deallocateFromProcessItem(color,shape,kg,onlyParties){
   let left=parseFloat(kg)||0;
   if(left<=0) return 0;
+  const only=onlyParties?new Set(onlyParties):null;
   let pool=[];
-  partiesPendingForItem(color,shape).forEach(party=>{
+  partiesPendingForItem(color,shape).filter(p=>!only||only.has(p)).forEach(party=>{
     perOrderRemaining(party,color,shape).forEach(r=>{ pool.push({...r,party}); });
   });
   pool.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.oid-a.oid)); // newest first
@@ -6115,17 +6119,18 @@ function pwCommitProcess(){
   // Show exactly what will move, so a stale or mistaken tick can never slip through
   const plan=entries.map(([id,v])=>{
     const t=pwItemIndex[id];
-    return t?{id,color:t.color,shape:t.shape,want:parseFloat(v)}:null;
+    return t?{id,color:t.color,shape:t.shape,want:parseFloat(v),parties:t.parties||null}:null;
   }).filter(Boolean);
   if(!plan.length){alert('Nothing on this view is staged. Tick a box on the To Give list first.');return;}
   const planTotal=plan.reduce((a,b)=>a+b.want,0);
   const lines=plan.slice(0,15).map(x=>`  ${x.color} ${x.shape}  ${x.want.toFixed(2)} kg`).join('\n')
     +(plan.length>15?`\n  ...and ${plan.length-15} more`:'');
-  if(!confirm(`Send to In Process:\n\n${lines}\n\nTOTAL: ${planTotal.toFixed(2)} kg across ${plan.length} item(s)`)) return;
+  const grpNote=plan.some(x=>x.parties)?`Group: ${pwSizeGroup} (only these parties)\n\n`:'';
+  if(!confirm(`Send to In Process:\n\n${grpNote}${lines}\n\nTOTAL: ${planTotal.toFixed(2)} kg across ${plan.length} item(s)`)) return;
   let moved=0, count=0;
   const failed=[], partial=[];
   plan.forEach(x=>{
-    const got=allocateToProcessItem(x.color,x.shape,x.want);
+    const got=allocateToProcessItem(x.color,x.shape,x.want,x.parties);
     if(got<=0.0001){ failed.push(`${x.color} ${x.shape}`); return; }
     moved+=got; count++;
     if(got < x.want-0.01) partial.push(`${x.color} ${x.shape}: ${got.toFixed(2)} of ${x.want.toFixed(2)}`);
@@ -6167,7 +6172,8 @@ function pwUndoProcess(color,shape,maxKg){
   if(v===null) return;
   const kg=parseFloat(v);
   if(!kg||kg<=0) return;
-  const done=deallocateFromProcessItem(color,shape,Math.min(kg,maxKg));
+  const sg=prodView==='shape'?pwSizeGroupSet():null;
+  const done=deallocateFromProcessItem(color,shape,Math.min(kg,maxKg),sg?[...sg]:null);
   if(!done){alert('Nothing to return.');return;}
   saveAll();
   showSaveToast(`${done.toFixed(2)} kg returned to To Give`);
@@ -6249,6 +6255,35 @@ function pwRenderGroups(){
     gs.map(chip).join('')+
     (ro?'':`<button onclick="gotoTab('catalog');setTimeout(()=>{const s=document.getElementById('grp-list');if(s)s.scrollIntoView({block:'center'});},100)" title="Create and edit groups in the Create tab" style="padding:5px 8px;border:0;background:none;font-size:11px;color:#6366f1;cursor:pointer;text-decoration:underline">${gs.length?'Edit groups':'+ Make print groups'}</button>`);
   if(act>=0) window._pwLastGroup=act;
+}
+// ── Size Grid groups: same saved party groups, used as a filter on the Size Grid.
+// '' = all parties. Send to Process / undo then touch only that group's parties. ──
+let pwSizeGroup='';
+function pwSizeGroupSet(){
+  if(!pwSizeGroup) return null;
+  const g=pwGroups().find(x=>x.name===pwSizeGroup);
+  if(!g){ pwSizeGroup=''; return null; }   // group was deleted/renamed
+  return new Set(g.parties);
+}
+function pwSetSizeGroup(name){
+  pwProcInputs={};   // staged qty is per-view; never carry it across a context change
+  pwSizeGroup = (pwSizeGroup===name) ? '' : name;
+  renderProduction();
+}
+function pwRenderSizeGroups(){
+  const el=document.getElementById('pw-sgroups'); if(!el) return;
+  if(prodView!=='shape'){ el.style.display='none'; return; }
+  el.style.display='flex';
+  const ro=!!window._monitorReadOnly, gs=pwGroups();
+  if(!gs.length){
+    el.innerHTML=ro?'':`<span style="width:1px;height:20px;background:#eee"></span><button onclick="gotoTab('catalog');setTimeout(()=>{const s=document.getElementById('grp-list');if(s)s.scrollIntoView({block:'center'});},100)" style="padding:5px 8px;border:0;background:none;font-size:11px;color:#6366f1;cursor:pointer;text-decoration:underline">+ Make party groups</button>`;
+    return;
+  }
+  const btn=(label,name,on,count,title)=>`<button onclick="${name===null?"pwSizeGroup='';pwProcInputs={};renderProduction()":`pwSetSizeGroup('${name.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')`}" title="${(title||'').replace(/"/g,'&quot;')}" style="padding:5px 10px;border:1.5px solid ${on?'#4338ca':'#c7d2fe'};border-radius:7px;background:${on?'#4338ca':'#eef2ff'};font-size:11px;font-weight:700;color:${on?'#fff':'#3730a3'};cursor:pointer">${label}${count!==undefined?` <span style="font-weight:400;opacity:.75">${count}</span>`:''}</button>`;
+  el.innerHTML='<span style="width:1px;height:20px;background:#eee"></span><span style="font-size:11px;color:#888;font-weight:600">Groups:</span>'+
+    btn('All',null,!pwSizeGroup,undefined,'All parties')+
+    gs.map(g=>btn(g.name,g.name,pwSizeGroup===g.name,g.parties.length,g.parties.join(', '))).join('')+
+    (ro?'':`<button onclick="gotoTab('catalog');setTimeout(()=>{const s=document.getElementById('grp-list');if(s)s.scrollIntoView({block:'center'});},100)" style="padding:5px 8px;border:0;background:none;font-size:11px;color:#6366f1;cursor:pointer;text-decoration:underline">Edit groups</button>`);
 }
 // ── Date filter for Pending Work: 'till' = all pending as of today (normal),
 // 'today' = only items that have at least one order placed today,
@@ -6438,6 +6473,7 @@ function pwCancelOldSelected(){
 }
 function pwClearFilters(){
   pwProcInputs={};   // staged qty is per-view; never carry it across a context change
+  pwSizeGroup='';
   ['pw-party-filter','pw-color-filter','pw-size-filter'].forEach(id=>{
     const el=document.getElementById(id); if(el)el.value='';
   });
@@ -6702,13 +6738,15 @@ function renderProductionInner(){
   }
   if(pwSize)  rawCards=rawCards.filter(c=>c.shape.toLowerCase().includes(pwSize));
   if(pwColor) rawCards=rawCards.filter(c=>c.color.toLowerCase().includes(pwColor)||pwAlias(c.color).toLowerCase().includes(pwColor));
-  if(pwParty){
+  // Size Grid group chip: keep only the parties in the chosen group
+  const sgSet = prodView==='shape' ? pwSizeGroupSet() : null;
+  if(pwParty || sgSet){
     // Keep only matching parties inside each card, drop cards with none
     rawCards=rawCards.map(c=>{
       const parties={};
       let net=0, proc=0, hit=false;
       Object.entries(c.parties).forEach(([p,kg])=>{
-        if(p.toLowerCase().includes(pwParty)){
+        if((!pwParty || p.toLowerCase().includes(pwParty)) && (!sgSet || sgSet.has(p))){
           parties[p]=kg;net+=kg;hit=true;
           const b=window._pwBoth[p+'||'+c.color+'||'+c.shape];
           proc+=b?b.inProc:0;
@@ -6737,6 +6775,7 @@ function renderProductionInner(){
   const checkNote=document.getElementById('pw-checkall-note');
   if(checkNote) checkNote.textContent=pwExcludedParties.size?pwExcludedParties.size+' party(ies) skipped in Print/POS/WA':'';
   if(prodView==='partygrid') pwRenderGroups();
+  pwRenderSizeGroups();
   pwUpdateSortButtons();
   // Populate filter datalists
   const dlSh=document.getElementById('dl-pw-shapes');
@@ -6821,7 +6860,7 @@ function renderProductionInner(){
     });
   });
   // Save for A4 print (skip parties unchecked above, partygrid mode only)
-  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (pwMode==='compiled'?' (Compiled)':'') + (pwDateMode==='today'?' (Today)':pwDateMode==='date'?` (${pwCustomDate})`:'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
+  const printTitle = (prodView==='color'?'Color-wise' : prodView==='shape'?'Size-wise' : 'Party-wise') + (sgSet?' · '+pwSizeGroup:'') + (pwMode==='compiled'?' (Compiled)':'') + (pwDateMode==='today'?' (Today)':pwDateMode==='date'?` (${pwCustomDate})`:'');  const printRows = rows.filter(([key])=>!(prodView==='partygrid'&&pwExcludedParties.has(key)));
   window._gridPrintData={mode:printTitle,rows:printRows.map(([key,g])=>({
     key, alias:g.alias||'', total:g.total,
     items:g.items.map(i=>({label:i.plainLabel,net:i.net,proc:i.proc||0})),
@@ -6843,7 +6882,7 @@ function renderProductionInner(){
           const full=i.net.toFixed(2);
           const staged=pwProcInputs[id];
           const isFull=staged!==undefined && staged!=='' && Math.abs(parseFloat(staged)-i.net)<0.005;
-          pwItemIndex[id]={color:i.color,shape:i.shape,kg:i.net};
+          pwItemIndex[id]={color:i.color,shape:i.shape,kg:i.net,parties:sgSet?[...sgSet]:null};
           ctrl=`<input type="checkbox" id="ptk-${id}" ${isFull?'checked':''} title="Tick = send full ${full} kg"
               onchange="pwTickFull('${id}',${i.net},this.checked)"
               style="width:14px;height:14px;cursor:pointer;flex:none;accent-color:#4338ca">`
@@ -6893,7 +6932,7 @@ function renderProductionInner(){
     ? (canEdit?'With labour now · <b>undo</b> pushes qty back to To Give':'With labour now · switch to Size Grid to undo')
     : (canEdit?'Type kg → <b>Send to Process</b> · spread across parties, oldest order first':'Switch to Size Grid to send qty to process');
   summary.innerHTML=
-    `<div style="font-size:11px;color:#888;margin-bottom:8px">${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders":pwDateMode==='date'?`Only items with orders on ${pwCustomDate}`:'Till date'} · ${hint}</div>`+
+    `<div style="font-size:11px;color:#888;margin-bottom:8px">${sgSet?`<b style="color:#4338ca">Group: ${pwSizeGroup}</b> · `:''}${rows.length} ${prodView==='color'?'color(s)':prodView==='shape'?'size(s)':'part'+(rows.length===1?'y':'ies')} · ${pwDateMode==='today'?"Only items with today's orders":pwDateMode==='date'?`Only items with orders on ${pwCustomDate}`:'Till date'} · ${hint}</div>`+
     `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${prodView==='partygrid'?'200px':prodView==='shape'?'215px':'170px'},1fr));gap:6px">${cardHtml}</div>`;
 }
 
